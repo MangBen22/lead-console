@@ -1,0 +1,54 @@
+.lc-wrap .lc-brand {
+  color: #0466c8;
+  font-weight: 600;
+}
+
+.lc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+}
+
+.lc-card {
+  background: #fff;
+  border: 1px solid #dcdcde;
+  border-left: 4px solid #0466c8;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.lc-form-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.lc-form-grid input,
+.lc-form-grid select,
+.lc-form-grid textarea {
+  width: 100%;
+}
+
+.lc-filter-row {
+  margin: 12px 0;
+  display: flex;
+  gap: 8px;
+}
+
+.lc-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: #f0f0f1;
+}
+
+.lc-status-ready,
+.lc-status-won {
+  background: #d1f2d2;
+}
+
+.lc-status-do-not-contact,
+.lc-status-lost {
+  background: #ffd9d9;
+}
