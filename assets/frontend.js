@@ -54,6 +54,18 @@
     });
   });
 
+  root.querySelectorAll(".lc-settings-link").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("#")) return;
+      const target = root.querySelector(href);
+      if (!target) return;
+      event.preventDefault();
+      activateTab("settings");
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 

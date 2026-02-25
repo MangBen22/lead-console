@@ -345,10 +345,21 @@ class LC_Frontend
 
         echo '</section>';
         echo '<section class="lc-tab-panel" data-tab="leads">';
-        echo '<div class="lc-fe-card" id="lc-section-leads">';
-        echo '<p class="lc-card-kicker">// LEADS</p>';
+        echo '<div class="lc-fe-grid lc-leads-io" id="lc-section-leads">';
+        echo '<article class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// EXPORT</p>';
+        echo '<h3>Lead Export</h3>';
+        echo '<p>Download outreach CSV for Ready and Verified leads.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+        wp_nonce_field('lc_export_ready');
+        echo '<input type="hidden" name="action" value="lc_export_ready" />';
+        echo '<button type="submit">Download CSV</button>';
+        echo '</form>';
+        echo '</article>';
+        echo '<article class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// IMPORT</p>';
         echo '<h3>Lead Import</h3>';
-        echo '<p>Import leads using CSV, TSV, TXT, JSON, or XLSX. The system maps fields automatically when possible and skips unreadable rows.</p>';
+        echo '<p>Import CSV, TSV, TXT, JSON, or XLSX. The system maps fields automatically and skips unreadable rows.</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form" enctype="multipart/form-data">';
         wp_nonce_field('lc_frontend_import_leads');
         echo '<input type="hidden" name="action" value="lc_frontend_import_leads" />';
@@ -357,6 +368,7 @@ class LC_Frontend
         echo '<button type="submit">Import Leads</button>';
         echo '</form>';
         echo '<p><small>Supported fields: business_name, city, category, address, website, phone, email, rating, review_count, status, notes, source_url.</small></p>';
+        echo '</article>';
         echo '</div>';
         echo '<div class="lc-fe-card">';
         echo '<h3>Recent Leads</h3>';
@@ -419,44 +431,60 @@ class LC_Frontend
         $status_rows = $wpdb->get_results("SELECT status, COUNT(*) AS total FROM {$this->table('lc_leads')} GROUP BY status ORDER BY total DESC");
         $run_rows = $wpdb->get_results("SELECT status, COUNT(*) AS total FROM {$this->table('lc_runs')} GROUP BY status ORDER BY total DESC");
 
+        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card lc-settings-nav-card" id="lc-section-settings-nav">';
+        echo '<p class="lc-card-kicker">// SETTINGS MENU</p>';
+        echo '<div class="lc-settings-nav" role="navigation" aria-label="Settings sections">';
+        if ($is_primary_admin) {
+            echo '<a href="#lc-section-settings" class="lc-settings-link">System</a>';
+        }
+        echo '<a href="#lc-section-users" class="lc-settings-link">Users</a>';
+        echo '<a href="#lc-section-logs" class="lc-settings-link">Logs</a>';
+        if ($is_primary_admin) {
+            echo '<a href="#lc-section-suppression" class="lc-settings-link">Suppression</a>';
+            echo '<a href="#lc-section-intelligence" class="lc-settings-link">Intelligence</a>';
+            echo '<a href="#lc-section-reports" class="lc-settings-link">Reports</a>';
+        }
+        echo '</div>';
+        echo '</div></section>';
+
         if ($is_primary_admin) {
         echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-settings">';
         echo '<p class="lc-card-kicker">// SETTINGS</p>';
         echo '<h3>System Settings</h3>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-settings-form">';
         wp_nonce_field('lc_frontend_save_settings');
         echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
-        echo '<label>Domain fragment<input type="text" name="lc_settings[domain_fragment]" value="' . esc_attr((string) ($settings['domain_fragment'] ?? '')) . '" /></label>';
-        echo '<label>Max places per run<input type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) ($settings['max_places_per_run'] ?? 25)) . '" /></label>';
-        echo '<label class="lc-check"><input type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enable live API calls</label>';
-        echo '<label>Google Places API key<input type="text" name="lc_settings[google_places_api_key]" value="' . esc_attr((string) ($settings['google_places_api_key'] ?? '')) . '" /></label>';
-        echo '<label>Discovery mode<select name="lc_settings[discovery_mode]">';
+        echo '<label class="lc-col-6">Domain fragment<input type="text" name="lc_settings[domain_fragment]" value="' . esc_attr((string) ($settings['domain_fragment'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-3">Max places per run<input type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) ($settings['max_places_per_run'] ?? 25)) . '" /></label>';
+        echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enable live API calls</label>';
+        echo '<label class="lc-col-6">Google Places API key<input type="text" name="lc_settings[google_places_api_key]" value="' . esc_attr((string) ($settings['google_places_api_key'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-3">Discovery mode<select name="lc_settings[discovery_mode]">';
         echo '<option value="hybrid" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'hybrid', false) . '>Hybrid</option>';
         echo '<option value="google_only" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'google_only', false) . '>Google only</option>';
         echo '<option value="directory_only" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'directory_only', false) . '>Directory only</option>';
         echo '</select></label>';
-        echo '<label>Social discovery mode<select name="lc_settings[social_discovery_mode]">';
+        echo '<label class="lc-col-3">Social discovery mode<select name="lc_settings[social_discovery_mode]">';
         echo '<option value="off" ' . selected($settings['social_discovery_mode'] ?? 'off', 'off', false) . '>Off</option>';
         echo '<option value="url_discovery_only" ' . selected($settings['social_discovery_mode'] ?? 'off', 'url_discovery_only', false) . '>URL discovery only</option>';
         echo '<option value="official_api_enabled" ' . selected($settings['social_discovery_mode'] ?? 'off', 'official_api_enabled', false) . '>Official API enabled</option>';
         echo '</select></label>';
-        echo '<label>Google CSE API key<input type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr((string) ($settings['google_cse_api_key'] ?? '')) . '" /></label>';
-        echo '<label>Google CSE cx<input type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr((string) ($settings['google_cse_cx'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-6">Google CSE API key<input type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr((string) ($settings['google_cse_api_key'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-6">Google CSE cx<input type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr((string) ($settings['google_cse_cx'] ?? '')) . '" /></label>';
         echo '<label>Directory sources<textarea name="lc_settings[directory_sources]" rows="5">' . esc_textarea((string) ($settings['directory_sources'] ?? '')) . '</textarea></label>';
-        echo '<label class="lc-check"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';
-        echo '<label>SMTP Host<input type="text" name="lc_settings[smtp_host]" value="' . esc_attr((string) ($settings['smtp_host'] ?? '')) . '" /></label>';
-        echo '<label>SMTP Port<input type="number" min="1" name="lc_settings[smtp_port]" value="' . esc_attr((string) ($settings['smtp_port'] ?? 587)) . '" /></label>';
-        echo '<label>SMTP Encryption<select name="lc_settings[smtp_encryption]">';
+        echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';
+        echo '<label class="lc-col-5">SMTP Host<input type="text" name="lc_settings[smtp_host]" value="' . esc_attr((string) ($settings['smtp_host'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-2">SMTP Port<input type="number" min="1" name="lc_settings[smtp_port]" value="' . esc_attr((string) ($settings['smtp_port'] ?? 587)) . '" /></label>';
+        echo '<label class="lc-col-2">SMTP Encryption<select name="lc_settings[smtp_encryption]">';
         echo '<option value="tls" ' . selected($settings['smtp_encryption'] ?? 'tls', 'tls', false) . '>TLS</option>';
         echo '<option value="ssl" ' . selected($settings['smtp_encryption'] ?? 'tls', 'ssl', false) . '>SSL</option>';
         echo '<option value="none" ' . selected($settings['smtp_encryption'] ?? 'tls', 'none', false) . '>None</option>';
         echo '</select></label>';
-        echo '<label class="lc-check"><input type="checkbox" name="lc_settings[smtp_auth]" value="1" ' . checked(!empty($settings['smtp_auth']), true, false) . ' /> Use SMTP auth</label>';
-        echo '<label>SMTP Username<input type="text" name="lc_settings[smtp_username]" value="' . esc_attr((string) ($settings['smtp_username'] ?? '')) . '" /></label>';
-        echo '<label>SMTP Password<input type="password" name="lc_settings[smtp_password]" value="' . esc_attr((string) ($settings['smtp_password'] ?? '')) . '" /></label>';
-        echo '<label>SMTP From Email<input type="email" name="lc_settings[smtp_from_email]" value="' . esc_attr((string) ($settings['smtp_from_email'] ?? '')) . '" /></label>';
-        echo '<label>SMTP From Name<input type="text" name="lc_settings[smtp_from_name]" value="' . esc_attr((string) ($settings['smtp_from_name'] ?? '')) . '" /></label>';
+        echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_auth]" value="1" ' . checked(!empty($settings['smtp_auth']), true, false) . ' /> Use SMTP auth</label>';
+        echo '<label class="lc-col-3">SMTP Username<input type="text" name="lc_settings[smtp_username]" value="' . esc_attr((string) ($settings['smtp_username'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-3">SMTP Password<input type="password" name="lc_settings[smtp_password]" value="' . esc_attr((string) ($settings['smtp_password'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-3">SMTP From Email<input type="email" name="lc_settings[smtp_from_email]" value="' . esc_attr((string) ($settings['smtp_from_email'] ?? '')) . '" /></label>';
+        echo '<label class="lc-col-3">SMTP From Name<input type="text" name="lc_settings[smtp_from_name]" value="' . esc_attr((string) ($settings['smtp_from_name'] ?? '')) . '" /></label>';
         echo '<label>Template: Reset Subject<input type="text" name="lc_settings[email_template_reset_subject]" value="' . esc_attr((string) ($settings['email_template_reset_subject'] ?? '')) . '" /></label>';
         echo '<label>Template: Reset Body<textarea name="lc_settings[email_template_reset_body]" rows="4">' . esc_textarea((string) ($settings['email_template_reset_body'] ?? '')) . '</textarea></label>';
         echo '<label>Template: Registration Admin Subject<input type="text" name="lc_settings[email_template_registration_admin_subject]" value="' . esc_attr((string) ($settings['email_template_registration_admin_subject'] ?? '')) . '" /></label>';
@@ -705,16 +733,6 @@ class LC_Frontend
         echo '</div>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-exports">';
-        echo '<p class="lc-card-kicker">// EXPORTS</p>';
-        echo '<h3>Exports</h3>';
-        echo '<p>Download outreach CSV for Ready/Verified leads.</p>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
-        wp_nonce_field('lc_export_ready');
-        echo '<input type="hidden" name="action" value="lc_export_ready" />';
-        echo '<button type="submit">Download CSV</button>';
-        echo '</form>';
-        echo '</div></section>';
     }
 
     private function tutorial_markup()
