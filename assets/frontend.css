@@ -153,6 +153,22 @@
   margin: 14px 0;
 }
 
+.lc-auth-switches {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.lc-auth-switches .lc-auth-toggle {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.lc-auth-panel {
+  margin-top: 8px;
+}
+
 .lc-fe button,
 .lc-fe a.lc-btn {
   border: 0;
@@ -205,11 +221,59 @@
   text-decoration: none;
 }
 
-.lc-fe-nav {
-  display: flex;
-  flex-wrap: wrap;
+.lc-app-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.lc-side-tabs {
+  position: sticky;
+  top: 14px;
+  display: grid;
   gap: 8px;
-  margin: 0 0 12px;
+}
+
+.lc-tab-btn {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #dce4fa !important;
+  font-size: 13px;
+  border-radius: 12px !important;
+}
+
+.lc-tab-btn.is-active {
+  background: #f59d1f !important;
+  border-color: #f59d1f !important;
+  color: #fff !important;
+}
+
+.lc-tab-content {
+  min-width: 0;
+}
+
+.lc-tab-panel {
+  display: none;
+}
+
+.lc-tab-panel.is-active {
+  display: block;
+}
+
+.lc-tab-panel .lc-fe-card {
+  margin-bottom: 10px;
+}
+
+.lc-tab-panel .lc-fe-card:last-child {
+  margin-bottom: 0;
+}
+
+.lc-side-tabs .lc-tab-btn:hover {
+  transform: none;
+  filter: brightness(1.08);
 }
 
 .lc-fe-nav a {
@@ -368,6 +432,23 @@
   .lc-fe-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .lc-app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .lc-side-tabs {
+    position: static;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(130px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .lc-side-tabs .lc-tab-btn {
+    white-space: nowrap;
+    text-align: center;
   }
 
   .lc-logo-hero {

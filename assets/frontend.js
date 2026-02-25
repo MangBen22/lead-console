@@ -14,6 +14,35 @@
     });
   });
 
+  const tabButtons = root.querySelectorAll(".lc-tab-btn");
+  const tabPanels = root.querySelectorAll(".lc-tab-panel");
+  const activateTab = (tab) => {
+    tabButtons.forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.tab === tab);
+    });
+    tabPanels.forEach((panel) => {
+      panel.classList.toggle("is-active", panel.dataset.tab === tab);
+    });
+  };
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      if (!tab) return;
+      activateTab(tab);
+    });
+  });
+
+  const authToggles = root.querySelectorAll(".lc-auth-toggle");
+  const authPanels = root.querySelectorAll(".lc-auth-panel");
+  authToggles.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.target || "";
+      authPanels.forEach((panel) => {
+        panel.hidden = panel.dataset.authPanel !== target;
+      });
+    });
+  });
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 
@@ -65,6 +94,9 @@
     if (step.selector) {
       const target = root.querySelector(step.selector);
       if (target) {
+        const panel = target.closest(".lc-tab-panel");
+        const tab = panel?.dataset?.tab;
+        if (tab) activateTab(tab);
         target.classList.add("lc-step-focus");
         target.scrollIntoView({ behavior: "smooth", block: "center" });
       }

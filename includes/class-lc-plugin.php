@@ -157,6 +157,29 @@ class LC_Plugin
             'social_discovery_mode' => 'off',
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
+            'smtp_enabled' => 0,
+            'smtp_host' => '',
+            'smtp_port' => 587,
+            'smtp_encryption' => 'tls',
+            'smtp_auth' => 1,
+            'smtp_username' => '',
+            'smtp_password' => '',
+            'smtp_from_email' => '',
+            'smtp_from_name' => '',
+            'email_template_reset_subject' => '5N2 Digital Lead Console Core Password Reset',
+            'email_template_reset_body' => "Hello {first_name},\n\nA password reset was requested for your account.\n\nReset link (valid for 5 minutes):\n{reset_link}\n\nIf you did not request this, ignore this email.\n\n{site_name}",
+            'email_template_password_changed_subject' => 'Your 5N2 Digital Lead Console Core password was changed',
+            'email_template_password_changed_body' => "Hello {first_name},\n\nYour password was changed.\n\nIf this was not you, click this revoke link within 5 minutes:\n{revoke_link}\n\n{site_name}",
+            'email_template_admin_password_changed_subject' => 'Lead Console Alert: Password changed',
+            'email_template_admin_password_changed_body' => "User password changed.\n\nUser: {user_email}\nTime: {current_time}\n\nRevoke window: 5 minutes.",
+            'email_template_registration_received_subject' => 'Registration request received',
+            'email_template_registration_received_body' => "Hello {first_name},\n\nYour registration request was received and is pending admin approval.\n\n{site_name}",
+            'email_template_registration_admin_subject' => 'New registration request pending approval',
+            'email_template_registration_admin_body' => "A new user registration request was submitted.\n\nName: {full_name}\nEmail: {user_email}\nCompany: {company}\nPhone: {phone}\n\nPlease review in Users tab.",
+            'email_template_registration_approved_subject' => 'Registration approved',
+            'email_template_registration_approved_body' => "Hello {first_name},\n\nYour account is now approved. You can sign in.\n\n{site_name}",
+            'email_template_registration_rejected_subject' => 'Registration declined',
+            'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ]);
         update_option('lc_schema_version', '4');
     }
@@ -187,7 +210,10 @@ class LC_Plugin
         add_action('admin_post_lc_admin_reset_user_password', [$this, 'handle_admin_reset_user_password']);
         add_action('admin_post_lc_admin_lock_user', [$this, 'handle_admin_lock_user']);
         add_action('admin_post_lc_admin_unlock_user', [$this, 'handle_admin_unlock_user']);
+        add_action('admin_post_lc_admin_approve_user', [$this, 'handle_admin_approve_user']);
+        add_action('admin_post_lc_admin_reject_user', [$this, 'handle_admin_reject_user']);
         add_action('admin_post_lc_frontend_save_settings', [$this, 'handle_frontend_save_settings']);
+        add_action('phpmailer_init', [$this, 'configure_smtp_mailer']);
         add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
         add_action('shutdown', [$this, 'capture_shutdown_errors']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
@@ -201,7 +227,7 @@ class LC_Plugin
 
         $capability = 'manage_options';
 
-        add_menu_page('Lead Console', 'Lead Console', $capability, 'lc_dashboard', [$this, 'render_dashboard'], 'dashicons-chart-line', 30);
+        add_menu_page('5N2 Digital Lead Console Core', '5N2 Lead Console Core', $capability, 'lc_dashboard', [$this, 'render_dashboard'], 'dashicons-chart-line', 30);
         add_submenu_page('lc_dashboard', 'Dashboard', 'Dashboard', $capability, 'lc_dashboard', [$this, 'render_dashboard']);
         add_submenu_page('lc_dashboard', 'Leads', 'Leads', $capability, 'lc_leads', [$this, 'render_leads']);
         add_submenu_page('lc_dashboard', 'Runs', 'Runs', $capability, 'lc_runs', [$this, 'render_runs']);
@@ -250,6 +276,29 @@ class LC_Plugin
             'social_discovery_mode' => $social_mode,
             'google_cse_api_key' => sanitize_text_field($settings['google_cse_api_key'] ?? ''),
             'google_cse_cx' => sanitize_text_field($settings['google_cse_cx'] ?? ''),
+            'smtp_enabled' => !empty($settings['smtp_enabled']) ? 1 : 0,
+            'smtp_host' => sanitize_text_field($settings['smtp_host'] ?? ''),
+            'smtp_port' => max(1, absint($settings['smtp_port'] ?? 587)),
+            'smtp_encryption' => in_array(($settings['smtp_encryption'] ?? 'tls'), ['none', 'ssl', 'tls'], true) ? sanitize_text_field($settings['smtp_encryption']) : 'tls',
+            'smtp_auth' => !empty($settings['smtp_auth']) ? 1 : 0,
+            'smtp_username' => sanitize_text_field($settings['smtp_username'] ?? ''),
+            'smtp_password' => sanitize_text_field($settings['smtp_password'] ?? ''),
+            'smtp_from_email' => sanitize_email($settings['smtp_from_email'] ?? ''),
+            'smtp_from_name' => sanitize_text_field($settings['smtp_from_name'] ?? ''),
+            'email_template_reset_subject' => sanitize_text_field($settings['email_template_reset_subject'] ?? ''),
+            'email_template_reset_body' => wp_kses_post($settings['email_template_reset_body'] ?? ''),
+            'email_template_password_changed_subject' => sanitize_text_field($settings['email_template_password_changed_subject'] ?? ''),
+            'email_template_password_changed_body' => wp_kses_post($settings['email_template_password_changed_body'] ?? ''),
+            'email_template_admin_password_changed_subject' => sanitize_text_field($settings['email_template_admin_password_changed_subject'] ?? ''),
+            'email_template_admin_password_changed_body' => wp_kses_post($settings['email_template_admin_password_changed_body'] ?? ''),
+            'email_template_registration_received_subject' => sanitize_text_field($settings['email_template_registration_received_subject'] ?? ''),
+            'email_template_registration_received_body' => wp_kses_post($settings['email_template_registration_received_body'] ?? ''),
+            'email_template_registration_admin_subject' => sanitize_text_field($settings['email_template_registration_admin_subject'] ?? ''),
+            'email_template_registration_admin_body' => wp_kses_post($settings['email_template_registration_admin_body'] ?? ''),
+            'email_template_registration_approved_subject' => sanitize_text_field($settings['email_template_registration_approved_subject'] ?? ''),
+            'email_template_registration_approved_body' => wp_kses_post($settings['email_template_registration_approved_body'] ?? ''),
+            'email_template_registration_rejected_subject' => sanitize_text_field($settings['email_template_registration_rejected_subject'] ?? ''),
+            'email_template_registration_rejected_body' => wp_kses_post($settings['email_template_registration_rejected_body'] ?? ''),
         ];
     }
 
@@ -279,6 +328,11 @@ class LC_Plugin
 
         $script = basename((string) ($_SERVER['PHP_SELF'] ?? ''));
         if (in_array($script, ['admin-post.php', 'async-upload.php'], true)) {
+            return;
+        }
+
+        // Allow the primary admin to access wp-admin for plugin/site maintenance.
+        if ($this->is_allowed_admin_user()) {
             return;
         }
 
@@ -503,15 +557,110 @@ class LC_Plugin
             'social_discovery_mode' => 'off',
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
+            'smtp_enabled' => 0,
+            'smtp_host' => '',
+            'smtp_port' => 587,
+            'smtp_encryption' => 'tls',
+            'smtp_auth' => 1,
+            'smtp_username' => '',
+            'smtp_password' => '',
+            'smtp_from_email' => '',
+            'smtp_from_name' => '',
+            'email_template_reset_subject' => '5N2 Digital Lead Console Core Password Reset',
+            'email_template_reset_body' => "Hello {first_name},\n\nA password reset was requested for your account.\n\nReset link (valid for 5 minutes):\n{reset_link}\n\nIf you did not request this, ignore this email.\n\n{site_name}",
+            'email_template_password_changed_subject' => 'Your 5N2 Digital Lead Console Core password was changed',
+            'email_template_password_changed_body' => "Hello {first_name},\n\nYour password was changed.\n\nIf this was not you, click this revoke link within 5 minutes:\n{revoke_link}\n\n{site_name}",
+            'email_template_admin_password_changed_subject' => 'Lead Console Alert: Password changed',
+            'email_template_admin_password_changed_body' => "User password changed.\n\nUser: {user_email}\nTime: {current_time}\n\nRevoke window: 5 minutes.",
+            'email_template_registration_received_subject' => 'Registration request received',
+            'email_template_registration_received_body' => "Hello {first_name},\n\nYour registration request was received and is pending admin approval.\n\n{site_name}",
+            'email_template_registration_admin_subject' => 'New registration request pending approval',
+            'email_template_registration_admin_body' => "A new user registration request was submitted.\n\nName: {full_name}\nEmail: {user_email}\nCompany: {company}\nPhone: {phone}\n\nPlease review in Users tab.",
+            'email_template_registration_approved_subject' => 'Registration approved',
+            'email_template_registration_approved_body' => "Hello {first_name},\n\nYour account is now approved. You can sign in.\n\n{site_name}",
+            'email_template_registration_rejected_subject' => 'Registration declined',
+            'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ];
 
         return wp_parse_args(get_option('lc_settings', []), $defaults);
     }
 
+    public function configure_smtp_mailer($phpmailer)
+    {
+        $settings = $this->get_settings();
+        if (empty($settings['smtp_enabled']) || empty($settings['smtp_host'])) {
+            return;
+        }
+
+        $phpmailer->isSMTP();
+        $phpmailer->Host = (string) $settings['smtp_host'];
+        $phpmailer->Port = (int) $settings['smtp_port'];
+        $phpmailer->SMTPAuth = !empty($settings['smtp_auth']);
+        $phpmailer->Username = (string) ($settings['smtp_username'] ?? '');
+        $phpmailer->Password = (string) ($settings['smtp_password'] ?? '');
+
+        $encryption = (string) ($settings['smtp_encryption'] ?? 'tls');
+        if ($encryption === 'none') {
+            $phpmailer->SMTPSecure = '';
+            $phpmailer->SMTPAutoTLS = false;
+        } elseif ($encryption === 'ssl') {
+            $phpmailer->SMTPSecure = 'ssl';
+        } else {
+            $phpmailer->SMTPSecure = 'tls';
+        }
+
+        $from_email = sanitize_email((string) ($settings['smtp_from_email'] ?? ''));
+        $from_name = sanitize_text_field((string) ($settings['smtp_from_name'] ?? get_bloginfo('name')));
+        if ($from_email !== '') {
+            $phpmailer->setFrom($from_email, $from_name, false);
+        }
+    }
+
+    public function send_templated_email($to, $template_key, $vars = [], $fallback_subject = '', $fallback_body = '')
+    {
+        $to = sanitize_email((string) $to);
+        if ($to === '') {
+            return false;
+        }
+
+        $settings = $this->get_settings();
+        $subject_key = 'email_template_' . $template_key . '_subject';
+        $body_key = 'email_template_' . $template_key . '_body';
+        $subject = (string) ($settings[$subject_key] ?? '');
+        $body = (string) ($settings[$body_key] ?? '');
+        if ($subject === '') {
+            $subject = $fallback_subject;
+        }
+        if ($body === '') {
+            $body = $fallback_body;
+        }
+
+        $subject = $this->render_email_template($subject, $vars);
+        $body = nl2br($this->render_email_template($body, $vars));
+        $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+        return wp_mail($to, $subject, $body, $headers);
+    }
+
+    private function render_email_template($template, $vars = [])
+    {
+        $base = [
+            'site_name' => get_bloginfo('name'),
+            'site_url' => home_url('/'),
+            'current_time' => current_time('mysql'),
+        ];
+        $all = array_merge($base, is_array($vars) ? $vars : []);
+        $replace = [];
+        foreach ($all as $k => $v) {
+            $replace['{' . sanitize_key((string) $k) . '}'] = (string) $v;
+        }
+        return strtr((string) $template, $replace);
+    }
+
     private function render_wrap_start($title)
     {
         echo '<div class="wrap lc-wrap">';
-        echo '<h1><span class="lc-brand">5N2 Lead Console</span> - ' . esc_html($title) . '</h1>';
+        echo '<h1><span class="lc-brand">5N2 Digital Lead Console Core</span> - ' . esc_html($title) . '</h1>';
     }
 
     private function render_wrap_end()
@@ -1807,12 +1956,18 @@ class LC_Plugin
         wp_set_password($new_password, $user_id);
         update_user_meta($user_id, 'lc_locked', 0);
 
-        $subject = '5N2 Lead Console Password Reset by Admin';
-        $message = "Your password was reset by an administrator.\n\n";
-        $message .= "Username: {$user->user_login}\n";
-        $message .= "Temporary/New Password: {$new_password}\n\n";
-        $message .= "Please log in and change it immediately.";
-        wp_mail($user->user_email, $subject, $message);
+        $this->send_templated_email(
+            $user->user_email,
+            'password_changed',
+            [
+                'first_name' => (string) get_user_meta($user_id, 'first_name', true),
+                'user_email' => $user->user_email,
+                'new_password' => $new_password,
+                'username' => $user->user_login,
+            ],
+            '5N2 Digital Lead Console Core Password Reset by Admin',
+            "Your password was reset by an administrator.\n\nUsername: {username}\nTemporary/New Password: {new_password}\n\nPlease log in and change it immediately."
+        );
 
         $this->redirect_after_action('user_reset_done', 'lc_users');
     }
@@ -1851,6 +2006,66 @@ class LC_Plugin
 
         update_user_meta($user_id, 'lc_locked', 0);
         $this->redirect_after_action('user_unlock_done', 'lc_users');
+    }
+
+    public function handle_admin_approve_user()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_approve_user');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            $this->redirect_after_action('user_action_error', 'lc_users');
+        }
+
+        update_user_meta($user_id, 'lc_pending_approval', 0);
+        update_user_meta($user_id, 'lc_registration_status', 'approved');
+        update_user_meta($user_id, 'lc_locked', 0);
+
+        $this->send_templated_email(
+            $user->user_email,
+            'registration_approved',
+            [
+                'first_name' => (string) get_user_meta($user_id, 'first_name', true),
+                'user_email' => $user->user_email,
+            ],
+            'Registration approved',
+            "Hello {first_name},\n\nYour account is now approved. You can sign in."
+        );
+
+        $this->log_system_event('users', 'info', 'User registration approved by admin.', ['user_id' => $user_id]);
+        $this->redirect_after_action('user_unlock_done', 'lc_users');
+    }
+
+    public function handle_admin_reject_user()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_reject_user');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            $this->redirect_after_action('user_action_error', 'lc_users');
+        }
+
+        update_user_meta($user_id, 'lc_pending_approval', 0);
+        update_user_meta($user_id, 'lc_registration_status', 'rejected');
+        update_user_meta($user_id, 'lc_locked', 1);
+
+        $this->send_templated_email(
+            $user->user_email,
+            'registration_rejected',
+            [
+                'first_name' => (string) get_user_meta($user_id, 'first_name', true),
+                'user_email' => $user->user_email,
+            ],
+            'Registration declined',
+            "Hello {first_name},\n\nYour registration request was declined. Please contact admin."
+        );
+
+        $this->log_system_event('users', 'warning', 'User registration rejected by admin.', ['user_id' => $user_id]);
+        $this->redirect_after_action('user_lock_done', 'lc_users');
     }
 
     public function handle_frontend_save_settings()
@@ -1899,12 +2114,14 @@ class LC_Plugin
         echo '</div>';
 
         echo '<table class="widefat striped">';
-        echo '<thead><tr><th>Photo</th><th>User</th><th>Role</th><th>Status</th><th>Manual Password Reset</th><th>Lock Controls</th></tr></thead><tbody>';
+        echo '<thead><tr><th>Photo</th><th>User</th><th>Role</th><th>Status</th><th>Approval</th><th>Manual Password Reset</th><th>Lock Controls</th></tr></thead><tbody>';
 
         foreach ($users as $user) {
             $roles = implode(', ', array_map('sanitize_text_field', $user->roles));
             $locked = !empty(get_user_meta($user->ID, 'lc_locked', true));
             $is_primary = strtolower((string) $user->user_email) === $this->get_primary_admin_email();
+            $is_pending = !empty(get_user_meta($user->ID, 'lc_pending_approval', true));
+            $reg_status = (string) get_user_meta($user->ID, 'lc_registration_status', true);
 
             echo '<tr>';
             echo '<td>' . get_avatar($user->ID, 48) . '</td>';
@@ -1913,6 +2130,27 @@ class LC_Plugin
             echo '<small>Email: ' . esc_html($user->user_email) . '</small></td>';
             echo '<td>' . esc_html($roles ?: 'subscriber') . '</td>';
             echo '<td>' . ($locked ? '<span style="color:#b10000;font-weight:600;">Locked</span>' : '<span style="color:#0a7a0a;font-weight:600;">Active</span>') . ($is_primary ? '<br/><small>Primary Admin</small>' : '') . '</td>';
+
+            echo '<td>';
+            if ($is_primary) {
+                echo '<em>Auto-approved</em>';
+            } elseif ($is_pending || $reg_status === 'pending') {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-right:6px;">';
+                wp_nonce_field('lc_admin_approve_user');
+                echo '<input type="hidden" name="action" value="lc_admin_approve_user" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+                submit_button('Approve', 'small', 'submit', false);
+                echo '</form>';
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;">';
+                wp_nonce_field('lc_admin_reject_user');
+                echo '<input type="hidden" name="action" value="lc_admin_reject_user" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+                submit_button('Reject', 'small', 'submit', false);
+                echo '</form>';
+            } else {
+                echo '<em>' . esc_html($reg_status !== '' ? ucfirst($reg_status) : 'Approved') . '</em>';
+            }
+            echo '</td>';
 
             echo '<td>';
             echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-form-grid">';
@@ -1950,7 +2188,7 @@ class LC_Plugin
         }
 
         if (empty($users)) {
-            echo '<tr><td colspan="6">No users found.</td></tr>';
+            echo '<tr><td colspan="7">No users found.</td></tr>';
         }
 
         echo '</tbody></table>';
@@ -2356,6 +2594,33 @@ class LC_Plugin
         echo '</select></td></tr>';
         echo '<tr><th scope="row"><label for="lc_google_cse_key">Google Programmable Search API key</label></th><td><input id="lc_google_cse_key" type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr($settings['google_cse_api_key']) . '" class="regular-text" /></td></tr>';
         echo '<tr><th scope="row"><label for="lc_google_cse_cx">Google Programmable Search Engine ID (cx)</label></th><td><input id="lc_google_cse_cx" type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr($settings['google_cse_cx']) . '" class="regular-text code" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_enabled">Enable SMTP</label></th><td><label><input id="lc_smtp_enabled" type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enabled</label></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_host">SMTP host</label></th><td><input id="lc_smtp_host" type="text" name="lc_settings[smtp_host]" value="' . esc_attr($settings['smtp_host']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_port">SMTP port</label></th><td><input id="lc_smtp_port" type="number" min="1" name="lc_settings[smtp_port]" value="' . esc_attr((string) $settings['smtp_port']) . '" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_encryption">SMTP encryption</label></th><td><select id="lc_smtp_encryption" name="lc_settings[smtp_encryption]">';
+        echo '<option value="tls" ' . selected($settings['smtp_encryption'], 'tls', false) . '>TLS</option>';
+        echo '<option value="ssl" ' . selected($settings['smtp_encryption'], 'ssl', false) . '>SSL</option>';
+        echo '<option value="none" ' . selected($settings['smtp_encryption'], 'none', false) . '>None</option>';
+        echo '</select></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_auth">SMTP auth</label></th><td><label><input id="lc_smtp_auth" type="checkbox" name="lc_settings[smtp_auth]" value="1" ' . checked(!empty($settings['smtp_auth']), true, false) . ' /> Use username/password</label></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_username">SMTP username</label></th><td><input id="lc_smtp_username" type="text" name="lc_settings[smtp_username]" value="' . esc_attr($settings['smtp_username']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_password">SMTP password</label></th><td><input id="lc_smtp_password" type="password" name="lc_settings[smtp_password]" value="' . esc_attr($settings['smtp_password']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_from_email">From email</label></th><td><input id="lc_smtp_from_email" type="email" name="lc_settings[smtp_from_email]" value="' . esc_attr($settings['smtp_from_email']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_smtp_from_name">From name</label></th><td><input id="lc_smtp_from_name" type="text" name="lc_settings[smtp_from_name]" value="' . esc_attr($settings['smtp_from_name']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reset_subject">Reset email subject</label></th><td><input id="lc_tmpl_reset_subject" type="text" name="lc_settings[email_template_reset_subject]" value="' . esc_attr($settings['email_template_reset_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reset_body">Reset email body</label></th><td><textarea id="lc_tmpl_reset_body" name="lc_settings[email_template_reset_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_reset_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_admin_subject">Admin registration alert subject</label></th><td><input id="lc_tmpl_reg_admin_subject" type="text" name="lc_settings[email_template_registration_admin_subject]" value="' . esc_attr($settings['email_template_registration_admin_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_admin_body">Admin registration alert body</label></th><td><textarea id="lc_tmpl_reg_admin_body" name="lc_settings[email_template_registration_admin_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_registration_admin_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_recv_subject">Registration received subject</label></th><td><input id="lc_tmpl_reg_recv_subject" type="text" name="lc_settings[email_template_registration_received_subject]" value="' . esc_attr($settings['email_template_registration_received_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_recv_body">Registration received body</label></th><td><textarea id="lc_tmpl_reg_recv_body" name="lc_settings[email_template_registration_received_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_registration_received_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_ok_subject">Registration approved subject</label></th><td><input id="lc_tmpl_reg_ok_subject" type="text" name="lc_settings[email_template_registration_approved_subject]" value="' . esc_attr($settings['email_template_registration_approved_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_ok_body">Registration approved body</label></th><td><textarea id="lc_tmpl_reg_ok_body" name="lc_settings[email_template_registration_approved_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_registration_approved_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_no_subject">Registration rejected subject</label></th><td><input id="lc_tmpl_reg_no_subject" type="text" name="lc_settings[email_template_registration_rejected_subject]" value="' . esc_attr($settings['email_template_registration_rejected_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_reg_no_body">Registration rejected body</label></th><td><textarea id="lc_tmpl_reg_no_body" name="lc_settings[email_template_registration_rejected_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_registration_rejected_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_pwd_changed_subject">Password changed subject</label></th><td><input id="lc_tmpl_pwd_changed_subject" type="text" name="lc_settings[email_template_password_changed_subject]" value="' . esc_attr($settings['email_template_password_changed_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_pwd_changed_body">Password changed body</label></th><td><textarea id="lc_tmpl_pwd_changed_body" name="lc_settings[email_template_password_changed_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_password_changed_body']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_pwd_admin_subject">Admin password alert subject</label></th><td><input id="lc_tmpl_pwd_admin_subject" type="text" name="lc_settings[email_template_admin_password_changed_subject]" value="' . esc_attr($settings['email_template_admin_password_changed_subject']) . '" class="large-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_tmpl_pwd_admin_body">Admin password alert body</label></th><td><textarea id="lc_tmpl_pwd_admin_body" name="lc_settings[email_template_admin_password_changed_body]" class="large-text code" rows="5">' . esc_textarea((string) $settings['email_template_admin_password_changed_body']) . '</textarea></td></tr>';
         echo '</tbody></table>';
 
         submit_button('Save Settings');
@@ -2402,6 +2667,7 @@ class LC_Plugin
         echo '</div>';
 
         echo '<p><strong>Ownership:</strong> This software is proprietary and owned by 5N2 Digital.</p>';
+        echo '<p><strong>Email template shortcodes:</strong> {first_name}, {full_name}, {user_email}, {username}, {new_password}, {reset_link}, {revoke_link}, {company}, {phone}, {site_name}, {site_url}, {current_time}</p>';
 
         $this->render_wrap_end();
     }
