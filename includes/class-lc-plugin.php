@@ -75,6 +75,12 @@ class LC_Plugin
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             query_text VARCHAR(255) NOT NULL,
             city VARCHAR(120) DEFAULT '',
+            country VARCHAR(120) DEFAULT '',
+            radius_miles INT DEFAULT 0,
+            niche VARCHAR(190) DEFAULT '',
+            services TEXT NULL,
+            min_rating DECIMAL(3,1) DEFAULT 0,
+            min_reviews INT DEFAULT 0,
             max_places INT DEFAULT 25,
             status VARCHAR(20) DEFAULT 'queued',
             started_at DATETIME NULL,
@@ -181,7 +187,7 @@ class LC_Plugin
             'email_template_registration_rejected_subject' => 'Registration declined',
             'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ]);
-        update_option('lc_schema_version', '4');
+        update_option('lc_schema_version', '5');
     }
 
     public static function deactivate()
@@ -480,7 +486,7 @@ class LC_Plugin
     public function maybe_upgrade_schema()
     {
         $version = get_option('lc_schema_version', '1');
-        if ($version === '4') {
+        if ($version === '5') {
             return;
         }
 
@@ -544,7 +550,25 @@ class LC_Plugin
         ) {$charset};";
         dbDelta($sql_system_logs);
 
-        update_option('lc_schema_version', '4');
+        $runs_table = $this->db_table('lc_runs');
+        $run_columns = $wpdb->get_col("DESC {$runs_table}", 0);
+        if (!empty($run_columns) && is_array($run_columns)) {
+            $run_column_sql = [
+                'country' => "ALTER TABLE {$runs_table} ADD COLUMN country VARCHAR(120) DEFAULT ''",
+                'radius_miles' => "ALTER TABLE {$runs_table} ADD COLUMN radius_miles INT DEFAULT 0",
+                'niche' => "ALTER TABLE {$runs_table} ADD COLUMN niche VARCHAR(190) DEFAULT ''",
+                'services' => "ALTER TABLE {$runs_table} ADD COLUMN services TEXT NULL",
+                'min_rating' => "ALTER TABLE {$runs_table} ADD COLUMN min_rating DECIMAL(3,1) DEFAULT 0",
+                'min_reviews' => "ALTER TABLE {$runs_table} ADD COLUMN min_reviews INT DEFAULT 0",
+            ];
+            foreach ($run_column_sql as $column => $sql) {
+                if (!in_array($column, $run_columns, true)) {
+                    $wpdb->query($sql);
+                }
+            }
+        }
+
+        update_option('lc_schema_version', '5');
     }
 
     private function get_settings()
@@ -831,6 +855,12 @@ class LC_Plugin
         $wpdb->insert($this->db_table('lc_runs'), [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
             'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'country' => sanitize_text_field($_POST['country'] ?? ''),
+            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
+            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+            'services' => sanitize_textarea_field($_POST['services'] ?? ''),
+            'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
+            'min_reviews' => absint($_POST['min_reviews'] ?? 0),
             'max_places' => min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']),
             'status' => 'queued',
         ]);
@@ -838,6 +868,9 @@ class LC_Plugin
         $this->log_system_event('runs', 'info', 'Run queued from admin.', [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
             'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'country' => sanitize_text_field($_POST['country'] ?? ''),
+            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
+            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
         ]);
 
         wp_safe_redirect(admin_url('admin.php?page=lc_runs&message=queued'));
@@ -902,6 +935,9 @@ class LC_Plugin
             'run_id' => (int) $run->id,
             'query_text' => (string) $run->query_text,
             'city' => (string) $run->city,
+            'country' => (string) ($run->country ?? ''),
+            'radius_miles' => (int) ($run->radius_miles ?? 0),
+            'niche' => (string) ($run->niche ?? ''),
         ]);
 
         $wpdb->update($runs_table, [
@@ -915,7 +951,7 @@ class LC_Plugin
         $wpdb->insert($logs_table, [
             'run_id' => $run->id,
             'level' => 'info',
-            'message' => 'Run started in ' . $mode . ' mode. Query: ' . $run->query_text,
+            'message' => 'Run started in ' . $mode . ' mode. Query: ' . $this->run_search_text($run) . ' | Location: ' . $this->run_location_text($run),
         ]);
 
         $created = 0;
@@ -965,7 +1001,9 @@ class LC_Plugin
 
         $api_key = $settings['google_places_api_key'] ?? '';
         $max_places = max(1, (int) $run->max_places);
-        $query = trim($run->query_text . ' ' . $run->city);
+        $query = trim($this->run_search_text($run) . ' ' . $this->run_location_text($run));
+        $min_rating = max(0, min(5, (float) ($run->min_rating ?? 0)));
+        $min_reviews = max(0, (int) ($run->min_reviews ?? 0));
 
         $url = add_query_arg([
             'query' => $query,
@@ -1009,18 +1047,21 @@ class LC_Plugin
             if (!$name) {
                 continue;
             }
+            if ($rating < $min_rating || $review_count < $min_reviews) {
+                continue;
+            }
 
             $inserted = $this->insert_discovered_lead([
                 'business_name' => $name,
                 'city' => sanitize_text_field($run->city),
-                'category' => sanitize_text_field($run->query_text),
+                'category' => sanitize_text_field((string) ($run->niche ?: $run->query_text)),
                 'address' => $address,
                 'website' => $website,
                 'phone' => $phone,
                 'email' => $email,
                 'review_count' => $review_count,
                 'rating' => $rating,
-                'source_url' => 'https://maps.google.com/?q=' . rawurlencode($name . ' ' . $run->city),
+                'source_url' => 'https://maps.google.com/?q=' . rawurlencode($name . ' ' . $this->run_location_text($run)),
                 'notes' => 'Imported from Google Places API',
             ]);
 
@@ -1045,6 +1086,9 @@ class LC_Plugin
         $sources = $this->get_directory_sources($settings);
         $max_places = max(1, (int) $run->max_places);
         $added = 0;
+        $location = $this->run_location_text($run);
+        $min_rating = max(0, min(5, (float) ($run->min_rating ?? 0)));
+        $min_reviews = max(0, (int) ($run->min_reviews ?? 0));
 
         foreach ($sources as $source) {
             if ($added >= $max_places) {
@@ -1053,7 +1097,7 @@ class LC_Plugin
 
             $search_url = str_replace(
                 ['{query}', '{city}'],
-                [rawurlencode($run->query_text), rawurlencode($run->city)],
+                [rawurlencode($this->run_search_text($run)), rawurlencode($location)],
                 $source['search_url']
             );
 
@@ -1091,7 +1135,7 @@ class LC_Plugin
                 $inserted = $this->insert_discovered_lead([
                     'business_name' => $name,
                     'city' => sanitize_text_field($run->city),
-                    'category' => sanitize_text_field($run->query_text),
+                    'category' => sanitize_text_field((string) ($run->niche ?: $run->query_text)),
                     'address' => '',
                     'website' => '',
                     'phone' => '',
@@ -1099,7 +1143,7 @@ class LC_Plugin
                     'review_count' => 0,
                     'rating' => 0,
                     'source_url' => esc_url_raw($search_url),
-                    'notes' => sprintf('Imported via directory fallback: %s (quality:%d)', $source['name'], (int) $source['quality_score']),
+                    'notes' => sprintf('Imported via directory fallback: %s (quality:%d, requested filters rating>=%.1f, reviews>=%d)', $source['name'], (int) $source['quality_score'], $min_rating, $min_reviews),
                 ]);
 
                 if ($inserted) {
@@ -1494,6 +1538,42 @@ class LC_Plugin
         return in_array($access, $allowed, true) ? $access : 'standard';
     }
 
+    private function run_location_text($run)
+    {
+        $city = trim((string) ($run->city ?? ''));
+        $country = trim((string) ($run->country ?? ''));
+        $radius = max(0, (int) ($run->radius_miles ?? 0));
+
+        $location = $city;
+        if ($country !== '') {
+            $location = trim($location . ', ' . $country, ', ');
+        }
+        if ($location === '') {
+            $location = $country;
+        }
+        if ($location === '') {
+            $location = 'unspecified location';
+        }
+        if ($radius > 0) {
+            $location .= ' within ' . $radius . ' miles';
+        }
+
+        return $location;
+    }
+
+    private function run_search_text($run)
+    {
+        $query = trim((string) ($run->query_text ?? ''));
+        $niche = trim((string) ($run->niche ?? ''));
+        $services = trim((string) ($run->services ?? ''));
+
+        $parts = array_filter([$query, $niche, $services], static function ($v) {
+            return trim((string) $v) !== '';
+        });
+
+        return implode(' ', $parts);
+    }
+
     private function user_avatar_html($user_id, $size, $label)
     {
         $size = max(24, absint($size));
@@ -1736,18 +1816,26 @@ class LC_Plugin
         echo '<input type="hidden" name="action" value="lc_queue_run" />';
         echo '<input type="text" name="query_text" placeholder="Search query (e.g. dentists)" required />';
         echo '<input type="text" name="city" placeholder="City" required />';
+        echo '<input type="text" name="country" placeholder="Country (e.g. United States)" />';
+        echo '<input type="number" min="0" name="radius_miles" placeholder="Radius miles (0 = city only)" />';
+        echo '<input type="text" name="niche" placeholder="Niche (e.g. Cosmetic Dentistry)" />';
+        echo '<textarea name="services" rows="2" placeholder="Services (comma separated: implants, whitening, emergency)"></textarea>';
+        echo '<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="Min rating (0-5)" />';
+        echo '<input type="number" min="0" name="min_reviews" placeholder="Min reviews" />';
         echo '<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" placeholder="Max places" />';
         submit_button('Queue Run', 'primary', 'submit', false);
         echo '</form>';
         echo '</div>';
 
         echo '<h2>Run Queue</h2>';
-        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Query</th><th>City</th><th>Max</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+        echo '<table class="widefat striped"><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Niche/Services</th><th>Filters</th><th>Max</th><th>Status</th><th>Created</th></tr></thead><tbody>';
         foreach ($rows as $row) {
             echo '<tr>';
             echo '<td>' . esc_html((string) $row->id) . '</td>';
             echo '<td>' . esc_html($row->query_text) . '</td>';
-            echo '<td>' . esc_html($row->city) . '</td>';
+            echo '<td>' . esc_html($this->run_location_text($row)) . '</td>';
+            echo '<td>' . esc_html((string) ($row->niche ?: '-')) . '<br/><small>' . esc_html((string) ($row->services ?: '-')) . '</small></td>';
+            echo '<td>Rating >= ' . esc_html(number_format((float) ($row->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($row->min_reviews ?? 0)) . '</small></td>';
             echo '<td>' . esc_html((string) $row->max_places) . '</td>';
             echo '<td>' . esc_html($row->status) . '</td>';
             echo '<td>' . esc_html($row->created_at) . '</td>';
@@ -1755,7 +1843,7 @@ class LC_Plugin
         }
 
         if (empty($rows)) {
-            echo '<tr><td colspan="6">No runs queued yet.</td></tr>';
+            echo '<tr><td colspan="8">No runs queued yet.</td></tr>';
         }
 
         echo '</tbody></table>';

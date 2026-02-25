@@ -235,7 +235,7 @@ class LC_Frontend
         $queued_runs = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$runs_table} WHERE status='queued'");
 
         $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status FROM {$leads_table} ORDER BY id DESC LIMIT 20");
-        $run_rows = $wpdb->get_results("SELECT id,query_text,city,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
+        $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
 
         $settings = $this->settings();
         $user = wp_get_current_user();
@@ -317,6 +317,12 @@ class LC_Frontend
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label>Search Query<input type="text" name="query_text" required /></label>';
         echo '<label>City<input type="text" name="city" required /></label>';
+        echo '<label>Country<input type="text" name="country" placeholder="United States" /></label>';
+        echo '<label>Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
+        echo '<label>Niche<input type="text" name="niche" placeholder="Cosmetic Dentistry" /></label>';
+        echo '<label>Services<textarea name="services" rows="2" placeholder="implants, whitening, emergency"></textarea></label>';
+        echo '<label>Minimum Rating<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="0 to 5" /></label>';
+        echo '<label>Minimum Reviews<input type="number" min="0" name="min_reviews" placeholder="0+" /></label>';
         echo '<label>Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<button type="submit">Queue Run</button>';
         echo '</form>';
@@ -360,12 +366,22 @@ class LC_Frontend
         echo '<div class="lc-fe-card">';
         echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
         echo '<h3>Recent Runs</h3>';
-        echo '<table><thead><tr><th>ID</th><th>Query</th><th>City</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Niche/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
         foreach ($run_rows as $run) {
-            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($run->city) . '</td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
+            $location = trim((string) $run->city);
+            if (!empty($run->country)) {
+                $location = trim($location . ', ' . (string) $run->country, ', ');
+            }
+            if ((int) ($run->radius_miles ?? 0) > 0) {
+                $location .= ' within ' . (int) $run->radius_miles . ' miles';
+            }
+            if ($location === '') {
+                $location = 'Unspecified';
+            }
+            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
         }
         if (empty($run_rows)) {
-            echo '<tr><td colspan="5">No runs queued yet.</td></tr>';
+            echo '<tr><td colspan="7">No runs queued yet.</td></tr>';
         }
         echo '</tbody></table>';
         echo '</div>';
@@ -1103,11 +1119,23 @@ class LC_Frontend
         $wpdb->insert($this->table('lc_runs'), [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
             'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'country' => sanitize_text_field($_POST['country'] ?? ''),
+            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
+            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+            'services' => sanitize_textarea_field($_POST['services'] ?? ''),
+            'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
+            'min_reviews' => absint($_POST['min_reviews'] ?? 0),
             'max_places' => $max_places,
             'status' => 'queued',
         ]);
 
-        $this->log_event('runs', 'info', 'Run queued from frontend.', ['query' => sanitize_text_field($_POST['query_text'] ?? ''), 'city' => sanitize_text_field($_POST['city'] ?? '')]);
+        $this->log_event('runs', 'info', 'Run queued from frontend.', [
+            'query' => sanitize_text_field($_POST['query_text'] ?? ''),
+            'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'country' => sanitize_text_field($_POST['country'] ?? ''),
+            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
+            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+        ]);
         $this->redirect_with_msg('run_queued');
     }
 

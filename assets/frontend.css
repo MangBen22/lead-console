@@ -123,7 +123,8 @@
 }
 
 .lc-fe-form input,
-.lc-fe-form select {
+.lc-fe-form select,
+.lc-fe-form textarea {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   padding: 11px 12px;
