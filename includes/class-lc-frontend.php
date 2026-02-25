@@ -250,6 +250,7 @@ class LC_Frontend
         $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT 20");
         $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
         $run_locations = $wpdb->get_results("SELECT DISTINCT country, city FROM {$runs_table} WHERE city <> '' ORDER BY country ASC, city ASC LIMIT 800");
+        $fallback_city_map = $this->load_city_dataset();
         $run_city_map = [];
         foreach ($run_locations as $location_row) {
             $country_key = trim((string) ($location_row->country ?? ''));
@@ -331,6 +332,7 @@ class LC_Frontend
         echo '<div class="lc-run-inline-note lc-run-city-country-note" hidden>Selecting a country with the city improves targeting and search quality.</div>';
         echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage.</div>';
         echo '<script type="application/json" class="lc-run-city-map-data">' . wp_json_encode($run_city_map) . '</script>';
+        echo '<script type="application/json" class="lc-run-city-fallback-data">' . wp_json_encode($fallback_city_map) . '</script>';
         echo '</form>';
         echo '</article>';
         echo '</div>';
@@ -1439,6 +1441,51 @@ class LC_Frontend
             'email_template_registration_rejected_body' => '',
         ];
         return wp_parse_args(get_option('lc_settings', []), $defaults);
+    }
+
+    private function load_city_dataset()
+    {
+        static $cache = null;
+        if (is_array($cache)) {
+            return $cache;
+        }
+
+        $cache = [];
+        $path = LC_PLUGIN_PATH . 'assets/cities-by-country.json';
+        if (!file_exists($path)) {
+            return $cache;
+        }
+
+        $raw = file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            return $cache;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return $cache;
+        }
+
+        foreach ($decoded as $country => $cities) {
+            $country_name = sanitize_text_field((string) $country);
+            if ($country_name === '' || !is_array($cities)) {
+                continue;
+            }
+
+            $clean_cities = [];
+            foreach ($cities as $city) {
+                $city_name = sanitize_text_field((string) $city);
+                if ($city_name !== '' && !in_array($city_name, $clean_cities, true)) {
+                    $clean_cities[] = $city_name;
+                }
+            }
+
+            if (!empty($clean_cities)) {
+                $cache[$country_name] = $clean_cities;
+            }
+        }
+
+        return $cache;
     }
 
     private function normalize_status($status)

@@ -73,20 +73,19 @@
     const cityCountryNote = runForm.querySelector(".lc-run-city-country-note");
     const countryScopeNote = runForm.querySelector(".lc-run-country-scope-note");
     const cityMapNode = runForm.querySelector(".lc-run-city-map-data");
+    const fallbackMapNode = runForm.querySelector(".lc-run-city-fallback-data");
     let runCityMap = {};
+    let fallbackCityMap = {};
     try {
       runCityMap = JSON.parse(cityMapNode?.textContent || "{}");
     } catch (_err) {
       runCityMap = {};
     }
-
-    const fallbackCityMap = {
-      "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Dallas", "Miami"],
-      Canada: ["Toronto", "Vancouver", "Montreal", "Calgary"],
-      Australia: ["Sydney", "Melbourne", "Brisbane", "Perth"],
-      "United Kingdom": ["London", "Manchester", "Birmingham", "Liverpool"],
-      Philippines: ["Manila", "Cebu City", "Davao City", "Quezon City"],
-    };
+    try {
+      fallbackCityMap = JSON.parse(fallbackMapNode?.textContent || "{}");
+    } catch (_err) {
+      fallbackCityMap = {};
+    }
 
     const toTitleCase = (value) =>
       value
