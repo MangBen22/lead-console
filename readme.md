@@ -20,6 +20,7 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 - Dashboard with pipeline and run metrics.
 - Leads page (create, import CSV, filter/search, status updates).
 - Runs page (queue discovery runs and monitor outputs).
+- Intelligence page (build profile dossiers per lead).
 - Duplicates page (review likely duplicates by phone/domain).
 - Exports page (download outreach-ready CSV).
 - Suppression page (manage email/phone/domain/name blocklist).
@@ -145,3 +146,29 @@ Use the `Directory sources` setting to override list entries with this format:
 - No direct LinkedIn scraping.
 - No automated login/bot actions on social networks.
 - Official API mode is reserved for future provider-approved OAuth integrations.
+
+## Lead Intelligence Dossier (Person + Company Context)
+- New table: `lc_lead_profiles`
+- Captures enriched lead-level intelligence:
+  - possible emails (list)
+  - selected primary email (single best candidate)
+  - social profile URLs (LinkedIn/Facebook/Instagram/X/YouTube)
+  - likely people/positions when discoverable (e.g. Founder/Owner/CEO patterns)
+  - company profile signals from website metadata
+  - review signals (Google Places, if available)
+  - hiring/job signals (Indeed signal via search)
+  - completeness and confidence scoring
+
+### How To Use Intelligence (Step by Step)
+1. Open `Lead Console -> Intelligence`.
+2. Click `Enrich 25 Most Recent Leads` or enrich one lead at a time.
+3. Wait for enrichment to complete.
+4. Review:
+   - Primary email selected from all discovered emails
+   - Social URLs
+   - Completeness and confidence scores
+5. Re-run enrichment after updating API keys/settings for better results.
+
+### Data Availability Expectations
+- Some leads will have complete profiles, others partial profiles.
+- Output depends on public web availability and configured APIs.

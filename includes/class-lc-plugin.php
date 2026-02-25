@@ -105,10 +105,28 @@ class LC_Plugin
             KEY value (value)
         ) {$charset};";
 
+        $sql_profiles = "CREATE TABLE {$prefix}lc_lead_profiles (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            possible_emails LONGTEXT NULL,
+            primary_email VARCHAR(190) DEFAULT '',
+            socials_json LONGTEXT NULL,
+            people_json LONGTEXT NULL,
+            company_json LONGTEXT NULL,
+            reviews_json LONGTEXT NULL,
+            jobs_json LONGTEXT NULL,
+            completeness_score TINYINT UNSIGNED DEFAULT 0,
+            confidence_score TINYINT UNSIGNED DEFAULT 0,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY lead_id (lead_id)
+        ) {$charset};";
+
         dbDelta($sql_leads);
         dbDelta($sql_runs);
         dbDelta($sql_logs);
         dbDelta($sql_suppression);
+        dbDelta($sql_profiles);
 
         if (!wp_next_scheduled('lc_process_run')) {
             wp_schedule_event(time(), 'hourly', 'lc_process_run');
@@ -125,7 +143,7 @@ class LC_Plugin
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
         ]);
-        update_option('lc_schema_version', '2');
+        update_option('lc_schema_version', '3');
     }
 
     public static function deactivate()
@@ -145,6 +163,8 @@ class LC_Plugin
         add_action('admin_post_lc_queue_run', [$this, 'handle_queue_run']);
         add_action('admin_post_lc_add_suppression', [$this, 'handle_add_suppression']);
         add_action('admin_post_lc_export_ready', [$this, 'handle_export_ready']);
+        add_action('admin_post_lc_enrich_lead', [$this, 'handle_enrich_lead']);
+        add_action('admin_post_lc_enrich_recent', [$this, 'handle_enrich_recent']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
     }
 
@@ -159,6 +179,7 @@ class LC_Plugin
         add_submenu_page('lc_dashboard', 'Duplicates', 'Duplicates', $capability, 'lc_duplicates', [$this, 'render_duplicates']);
         add_submenu_page('lc_dashboard', 'Exports', 'Exports', $capability, 'lc_exports', [$this, 'render_exports']);
         add_submenu_page('lc_dashboard', 'Suppression', 'Suppression', $capability, 'lc_suppression', [$this, 'render_suppression']);
+        add_submenu_page('lc_dashboard', 'Intelligence', 'Intelligence', $capability, 'lc_intelligence', [$this, 'render_intelligence']);
         add_submenu_page('lc_dashboard', 'Reports', 'Reports', $capability, 'lc_reports', [$this, 'render_reports']);
         add_submenu_page('lc_dashboard', 'Settings', 'Settings', $capability, 'lc_settings', [$this, 'render_settings']);
     }
@@ -217,7 +238,7 @@ class LC_Plugin
     public function maybe_upgrade_schema()
     {
         $version = get_option('lc_schema_version', '1');
-        if ($version === '2') {
+        if ($version === '3') {
             return;
         }
 
@@ -244,7 +265,28 @@ class LC_Plugin
             }
         }
 
-        update_option('lc_schema_version', '2');
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        $charset = $wpdb->get_charset_collate();
+        $profiles_table = $this->db_table('lc_lead_profiles');
+        $sql_profiles = "CREATE TABLE {$profiles_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            possible_emails LONGTEXT NULL,
+            primary_email VARCHAR(190) DEFAULT '',
+            socials_json LONGTEXT NULL,
+            people_json LONGTEXT NULL,
+            company_json LONGTEXT NULL,
+            reviews_json LONGTEXT NULL,
+            jobs_json LONGTEXT NULL,
+            completeness_score TINYINT UNSIGNED DEFAULT 0,
+            confidence_score TINYINT UNSIGNED DEFAULT 0,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY lead_id (lead_id)
+        ) {$charset};";
+        dbDelta($sql_profiles);
+
+        update_option('lc_schema_version', '3');
     }
 
     private function get_settings()
@@ -854,6 +896,10 @@ class LC_Plugin
 
     private function discover_social_profiles_for_lead($lead, $cse_key, $cse_cx)
     {
+        if (trim((string) $cse_key) === '' || trim((string) $cse_cx) === '') {
+            return ['data' => [], 'confidence' => 0];
+        }
+
         $business = sanitize_text_field($lead->business_name ?? '');
         $city = sanitize_text_field($lead->city ?? '');
         if ($business === '') {
@@ -919,7 +965,7 @@ class LC_Plugin
         }
 
         return [
-            'link' => sanitize_text_field($payload['items'][0]['link'] ?? ''),
+            'link' => esc_url_raw($payload['items'][0]['link'] ?? ''),
             'title' => sanitize_text_field($payload['items'][0]['title'] ?? ''),
             'snippet' => sanitize_textarea_field($payload['items'][0]['snippet'] ?? ''),
         ];
@@ -1075,6 +1121,8 @@ class LC_Plugin
             'status_updated' => 'Lead status updated.',
             'queued' => 'Run queued successfully.',
             'added' => 'Suppression entry added.',
+            'enriched' => 'Lead intelligence profile updated.',
+            'enriched_recent' => 'Recent leads enriched successfully.',
             'invalid_headers' => 'CSV headers do not match expected format.',
             'missing_file' => 'Please select a CSV file to import.',
             'import_error' => 'CSV import failed.',
@@ -1422,6 +1470,388 @@ class LC_Plugin
         echo '</tbody></table>';
 
         $this->render_wrap_end();
+    }
+
+    public function handle_enrich_lead()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_enrich_lead');
+
+        $lead_id = absint($_POST['lead_id'] ?? 0);
+        if ($lead_id > 0) {
+            $this->enrich_single_lead_profile($lead_id);
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=lc_intelligence&message=enriched'));
+        exit;
+    }
+
+    public function handle_enrich_recent()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_enrich_recent');
+
+        global $wpdb;
+        $ids = $wpdb->get_col("SELECT id FROM {$this->db_table('lc_leads')} ORDER BY id DESC LIMIT 25");
+        foreach ($ids as $lead_id) {
+            $this->enrich_single_lead_profile((int) $lead_id);
+        }
+
+        wp_safe_redirect(admin_url('admin.php?page=lc_intelligence&message=enriched_recent'));
+        exit;
+    }
+
+    public function render_intelligence()
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results("
+            SELECT l.id, l.business_name, l.city, l.category, l.website, l.phone, l.email, l.status,
+                   p.primary_email, p.completeness_score, p.confidence_score, p.updated_at
+            FROM {$this->db_table('lc_leads')} l
+            LEFT JOIN {$this->db_table('lc_lead_profiles')} p ON p.lead_id = l.id
+            ORDER BY l.id DESC
+            LIMIT 100
+        ");
+
+        $this->render_wrap_start('Intelligence');
+        $this->message_notice();
+
+        echo '<div class="lc-card" style="margin-bottom:16px;">';
+        echo '<h2>Profile Enrichment</h2>';
+        echo '<p>Build richer lead dossiers with social profiles, possible emails, selected primary email, likely roles/owners, review signals, and job-posting signals.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin-top:8px;">';
+        wp_nonce_field('lc_enrich_recent');
+        echo '<input type="hidden" name="action" value="lc_enrich_recent" />';
+        submit_button('Enrich 25 Most Recent Leads', 'primary', 'submit', false);
+        echo '</form>';
+        echo '</div>';
+
+        echo '<table class="widefat striped">';
+        echo '<thead><tr><th>ID</th><th>Lead</th><th>Primary Email</th><th>Completeness</th><th>Confidence</th><th>Updated</th><th>Actions</th></tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $row->id) . '</td>';
+            echo '<td><strong>' . esc_html($row->business_name) . '</strong><br/><small>' . esc_html($row->city) . ' | ' . esc_html($row->category) . ' | ' . esc_html($row->status) . '</small></td>';
+            echo '<td>' . esc_html($row->primary_email ?: '-') . '</td>';
+            echo '<td>' . esc_html((string) ($row->completeness_score ?? 0)) . '%</td>';
+            echo '<td>' . esc_html((string) ($row->confidence_score ?? 0)) . '%</td>';
+            echo '<td>' . esc_html($row->updated_at ?: '-') . '</td>';
+            echo '<td>';
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            wp_nonce_field('lc_enrich_lead');
+            echo '<input type="hidden" name="action" value="lc_enrich_lead" />';
+            echo '<input type="hidden" name="lead_id" value="' . esc_attr((string) $row->id) . '" />';
+            submit_button('Enrich', 'small', 'submit', false);
+            echo '</form>';
+            echo '</td>';
+            echo '</tr>';
+        }
+
+        if (empty($rows)) {
+            echo '<tr><td colspan="7">No leads available.</td></tr>';
+        }
+
+        echo '</tbody></table>';
+        $this->render_wrap_end();
+    }
+
+    private function enrich_single_lead_profile($lead_id)
+    {
+        global $wpdb;
+        $lead = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->db_table('lc_leads')} WHERE id = %d", $lead_id));
+        if (!$lead) {
+            return false;
+        }
+
+        $settings = $this->get_settings();
+        $website = trim((string) $lead->website);
+
+        $emails = [];
+        $socials = [
+            'linkedin_url' => (string) ($lead->linkedin_url ?? ''),
+            'facebook_url' => (string) ($lead->facebook_url ?? ''),
+            'instagram_url' => (string) ($lead->instagram_url ?? ''),
+            'x_url' => (string) ($lead->x_url ?? ''),
+            'youtube_url' => (string) ($lead->youtube_url ?? ''),
+        ];
+        $people = [];
+        $company = [
+            'business_name' => $lead->business_name,
+            'city' => $lead->city,
+            'category' => $lead->category,
+            'website' => $lead->website,
+        ];
+        $reviews = [];
+        $jobs = [];
+
+        if (!empty($website)) {
+            $crawl = $this->crawl_website_profile_signals($website);
+            $emails = array_merge($emails, $crawl['emails']);
+            $socials = array_merge($socials, $crawl['socials']);
+            $people = array_merge($people, $crawl['people']);
+            $company = array_merge($company, $crawl['company']);
+        }
+
+        $social_discovery = $this->discover_social_profiles_for_lead(
+            (object) [
+                'business_name' => $lead->business_name,
+                'city' => $lead->city,
+                'linkedin_url' => $socials['linkedin_url'] ?? '',
+                'facebook_url' => $socials['facebook_url'] ?? '',
+                'instagram_url' => $socials['instagram_url'] ?? '',
+                'x_url' => $socials['x_url'] ?? '',
+                'youtube_url' => $socials['youtube_url'] ?? '',
+            ],
+            (string) ($settings['google_cse_api_key'] ?? ''),
+            (string) ($settings['google_cse_cx'] ?? '')
+        );
+        if (!empty($social_discovery['data'])) {
+            $socials = array_merge($socials, $social_discovery['data']);
+        }
+
+        $emails = array_values(array_unique(array_filter(array_map('sanitize_email', $emails))));
+        $primary_email = $this->select_primary_email($emails, $website);
+
+        $review_signal = $this->discover_review_signals($lead, $settings);
+        if (!empty($review_signal)) {
+            $reviews[] = $review_signal;
+        }
+
+        $jobs = $this->discover_job_signals($lead, $settings);
+
+        $completeness = $this->compute_profile_completeness($emails, $primary_email, $socials, $people, $reviews, $jobs);
+        $confidence = $this->compute_profile_confidence($primary_email, $social_discovery['confidence'] ?? 0, $reviews);
+
+        $profile_data = [
+            'possible_emails' => wp_json_encode($emails),
+            'primary_email' => $primary_email,
+            'socials_json' => wp_json_encode($socials),
+            'people_json' => wp_json_encode($people),
+            'company_json' => wp_json_encode($company),
+            'reviews_json' => wp_json_encode($reviews),
+            'jobs_json' => wp_json_encode($jobs),
+            'completeness_score' => $completeness,
+            'confidence_score' => $confidence,
+        ];
+
+        $profiles_table = $this->db_table('lc_lead_profiles');
+        $exists = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$profiles_table} WHERE lead_id = %d", $lead_id));
+        if ($exists) {
+            $wpdb->update($profiles_table, $profile_data, ['lead_id' => $lead_id]);
+        } else {
+            $profile_data['lead_id'] = $lead_id;
+            $wpdb->insert($profiles_table, $profile_data);
+        }
+
+        $wpdb->update($this->db_table('lc_leads'), [
+            'email' => $primary_email ?: $lead->email,
+            'linkedin_url' => esc_url_raw($socials['linkedin_url'] ?? ''),
+            'facebook_url' => esc_url_raw($socials['facebook_url'] ?? ''),
+            'instagram_url' => esc_url_raw($socials['instagram_url'] ?? ''),
+            'x_url' => esc_url_raw($socials['x_url'] ?? ''),
+            'youtube_url' => esc_url_raw($socials['youtube_url'] ?? ''),
+            'social_confidence' => $confidence,
+            'social_source' => 'website+cse',
+        ], ['id' => $lead_id]);
+
+        return true;
+    }
+
+    private function crawl_website_profile_signals($website)
+    {
+        $result = [
+            'emails' => [],
+            'socials' => [
+                'linkedin_url' => '',
+                'facebook_url' => '',
+                'instagram_url' => '',
+                'x_url' => '',
+                'youtube_url' => '',
+            ],
+            'people' => [],
+            'company' => [],
+        ];
+
+        $response = wp_remote_get($website, ['timeout' => 15]);
+        if (is_wp_error($response)) {
+            return $result;
+        }
+
+        $html = (string) wp_remote_retrieve_body($response);
+        if ($html === '') {
+            return $result;
+        }
+
+        preg_match_all('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $html, $emails);
+        $result['emails'] = $emails[0] ?? [];
+
+        $social_patterns = [
+            'linkedin_url' => '/https?:\/\/(?:www\.)?linkedin\.com\/[^\s"\'<>]+/i',
+            'facebook_url' => '/https?:\/\/(?:www\.)?facebook\.com\/[^\s"\'<>]+/i',
+            'instagram_url' => '/https?:\/\/(?:www\.)?instagram\.com\/[^\s"\'<>]+/i',
+            'x_url' => '/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[^\s"\'<>]+/i',
+            'youtube_url' => '/https?:\/\/(?:www\.)?youtube\.com\/[^\s"\'<>]+/i',
+        ];
+        foreach ($social_patterns as $field => $pattern) {
+            if (preg_match($pattern, $html, $m)) {
+                $result['socials'][$field] = esc_url_raw($m[0]);
+            }
+        }
+
+        if (preg_match('/<title>(.*?)<\/title>/is', $html, $title)) {
+            $result['company']['page_title'] = sanitize_text_field(wp_strip_all_tags($title[1]));
+        }
+        if (preg_match('/<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\']/i', $html, $meta)) {
+            $result['company']['meta_description'] = sanitize_text_field($meta[1]);
+        }
+
+        $role_patterns = [
+            '/(Founder|Owner|CEO|President|Director)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i',
+            '/([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s*,\s*(Founder|Owner|CEO|President|Director)/i',
+        ];
+        foreach ($role_patterns as $pattern) {
+            if (preg_match_all($pattern, $html, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $person = [
+                        'name' => sanitize_text_field($match[2] ?? $match[1] ?? ''),
+                        'position' => sanitize_text_field($match[1] ?? $match[2] ?? ''),
+                        'source' => 'website',
+                    ];
+                    if (!empty($person['name'])) {
+                        $result['people'][] = $person;
+                    }
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    private function select_primary_email($emails, $website)
+    {
+        if (empty($emails)) {
+            return '';
+        }
+
+        $domain = $this->normalize_domain($website);
+        $best = '';
+        $best_score = -1;
+        foreach ($emails as $email) {
+            $score = 10;
+            $parts = explode('@', $email);
+            $local = strtolower($parts[0] ?? '');
+            $email_domain = strtolower($parts[1] ?? '');
+
+            if ($domain && strpos($email_domain, $domain) !== false) {
+                $score += 40;
+            }
+            if (in_array($local, ['info', 'contact', 'hello', 'support', 'sales', 'admin'], true)) {
+                $score += 25;
+            }
+            if (strpos($local, 'noreply') !== false || strpos($local, 'no-reply') !== false) {
+                $score -= 30;
+            }
+            if (preg_match('/\d{4,}/', $local)) {
+                $score -= 10;
+            }
+
+            if ($score > $best_score) {
+                $best_score = $score;
+                $best = $email;
+            }
+        }
+
+        return $best;
+    }
+
+    private function discover_review_signals($lead, $settings)
+    {
+        if (empty($settings['google_places_api_key'])) {
+            return [];
+        }
+
+        $query = trim($lead->business_name . ' ' . $lead->city);
+        $url = add_query_arg([
+            'query' => $query,
+            'key' => $settings['google_places_api_key'],
+        ], 'https://maps.googleapis.com/maps/api/place/textsearch/json');
+        $response = wp_remote_get($url, ['timeout' => 15]);
+        if (is_wp_error($response)) {
+            return [];
+        }
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (empty($payload['results'][0])) {
+            return [];
+        }
+        $top = $payload['results'][0];
+        return [
+            'provider' => 'google_places',
+            'rating' => (float) ($top['rating'] ?? 0),
+            'review_count' => absint($top['user_ratings_total'] ?? 0),
+            'source_url' => 'https://maps.google.com/?q=' . rawurlencode($query),
+        ];
+    }
+
+    private function discover_job_signals($lead, $settings)
+    {
+        $key = trim((string) ($settings['google_cse_api_key'] ?? ''));
+        $cx = trim((string) ($settings['google_cse_cx'] ?? ''));
+        if ($key === '' || $cx === '') {
+            return [];
+        }
+
+        $query = sprintf('site:indeed.com "%s" "%s"', $lead->business_name, $lead->city);
+        $first = $this->google_cse_search($query, $key, $cx);
+        if (empty($first['link'])) {
+            return [];
+        }
+
+        return [
+            [
+                'platform' => 'Indeed',
+                'url' => esc_url_raw($first['link']),
+                'title' => sanitize_text_field($first['title'] ?? ''),
+            ],
+        ];
+    }
+
+    private function compute_profile_completeness($emails, $primary_email, $socials, $people, $reviews, $jobs)
+    {
+        $score = 0;
+        if (!empty($emails)) {
+            $score += 20;
+        }
+        if (!empty($primary_email)) {
+            $score += 20;
+        }
+        if (!empty(array_filter($socials))) {
+            $score += 20;
+        }
+        if (!empty($people)) {
+            $score += 20;
+        }
+        if (!empty($reviews)) {
+            $score += 10;
+        }
+        if (!empty($jobs)) {
+            $score += 10;
+        }
+        return max(0, min(100, $score));
+    }
+
+    private function compute_profile_confidence($primary_email, $social_confidence, $reviews)
+    {
+        $score = 35;
+        if (!empty($primary_email)) {
+            $score += 25;
+        }
+        $score += (int) min(30, max(0, $social_confidence / 3));
+        if (!empty($reviews)) {
+            $score += 10;
+        }
+        return max(0, min(100, $score));
     }
 
     public function render_reports()
