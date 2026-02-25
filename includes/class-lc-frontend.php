@@ -122,6 +122,7 @@ class LC_Frontend
             'import_error' => 'Import failed. File could not be parsed or rows were incomplete.',
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
+            'run_compliance_required' => 'Please confirm the run compliance checklist before queuing a run.',
             'status_updated' => 'Lead status updated.',
             'not_allowed' => 'You are not authorized to perform that action.',
         ];
@@ -292,38 +293,35 @@ class LC_Frontend
         echo '<article class="lc-fe-card" id="lc-section-runs">';
         echo '<p class="lc-card-kicker">// RUNS</p>';
         echo '<h3>Queue Discovery Run</h3>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-run-form">';
         wp_nonce_field('lc_frontend_queue_run');
         echo '<input type="hidden" name="action" value="lc_frontend_queue_run" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
-        echo '<label>Search Query<input type="text" name="query_text" required /></label>';
-        echo '<label>City<input type="text" name="city" required /></label>';
-        echo '<label>Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
-        echo '<div class="lc-run-advanced" hidden>';
-        echo '<label>Country<input type="text" name="country" placeholder="United States" /></label>';
-        echo '<label>Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
-        echo '<label>Niche<input type="text" name="niche" placeholder="Cosmetic Dentistry" /></label>';
-        echo '<label>Services<textarea name="services" rows="2" placeholder="implants, whitening, emergency"></textarea></label>';
-        echo '<label>Website Focus<select name="website_focus"><option value="any">Any</option><option value="no_website">No Website Listed</option><option value="has_website">Has Website</option></select></label>';
-        echo '<label>Minimum Rating<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="0 to 5" /></label>';
-        echo '<label>Minimum Reviews<input type="number" min="0" name="min_reviews" placeholder="0+" /></label>';
+        echo '<label class="lc-col-6">Search Query<input type="text" name="query_text" required /></label>';
+        echo '<label class="lc-col-3">City<input type="text" name="city" required /></label>';
+        echo '<label class="lc-col-3">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
+        echo '<details class="lc-run-advanced-wrap lc-col-12">';
+        echo '<summary>Advanced Options</summary>';
+        echo '<div class="lc-run-advanced">';
+        echo '<label class="lc-col-4">Country<input type="text" name="country" placeholder="United States" /></label>';
+        echo '<label class="lc-col-2">Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
+        echo '<label class="lc-col-6">Service Focus<input type="text" name="niche" placeholder="Cosmetic Dentistry" /></label>';
+        echo '<label class="lc-col-12">Services<textarea name="services" rows="2" placeholder="implants, whitening, emergency"></textarea></label>';
+        echo '<label class="lc-col-4">Website Focus<select name="website_focus"><option value="any">Any</option><option value="no_website">No Website Listed</option><option value="has_website">Has Website</option></select></label>';
+        echo '<label class="lc-col-4">Minimum Rating<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="0 to 5" /></label>';
+        echo '<label class="lc-col-4">Minimum Reviews<input type="number" min="0" name="min_reviews" placeholder="0+" /></label>';
         echo '</div>';
-        echo '<button type="button" class="lc-open-run-advanced">Advanced Options</button>';
-        echo '<button type="submit">Queue Run</button>';
+        echo '</details>';
+        echo '<label class="lc-check lc-col-12"><input type="checkbox" name="run_compliance_confirmed" value="1" required /> I confirm this run follows the compliance checklist in Settings.</label>';
+        echo '<button type="submit" class="lc-col-12">Queue Run</button>';
         echo '</form>';
         echo '</article>';
-        echo '</div>';
-
-        echo '<div class="lc-fe-card" id="lc-section-compliance" style="margin-bottom:10px;">';
-        echo '<p class="lc-card-kicker">// COMPLIANCE</p>';
-        echo '<h3>Compliance Guidance</h3>';
-        echo '<p>Use only lawful/public data and provider-approved APIs. Do not use prohibited scraping or unauthorized automation on third-party platforms.</p>';
         echo '</div>';
 
         echo '<div class="lc-fe-card">';
         echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
         echo '<h3>Recent Runs</h3>';
-        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Niche/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Service Focus/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
         foreach ($run_rows as $run) {
             $location = trim((string) $run->city);
             if (!empty($run->country)) {
@@ -434,6 +432,7 @@ class LC_Frontend
         echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card lc-settings-nav-card" id="lc-section-settings-nav">';
         echo '<p class="lc-card-kicker">// SETTINGS MENU</p>';
         echo '<div class="lc-settings-nav" role="navigation" aria-label="Settings sections">';
+        echo '<a href="#lc-section-run-checklist" class="lc-settings-link">Run Checklist</a>';
         if ($is_primary_admin) {
             echo '<a href="#lc-section-settings" class="lc-settings-link">System</a>';
         }
@@ -445,6 +444,16 @@ class LC_Frontend
             echo '<a href="#lc-section-reports" class="lc-settings-link">Reports</a>';
         }
         echo '</div>';
+        echo '</div></section>';
+
+        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-run-checklist">';
+        echo '<p class="lc-card-kicker">// COMPLIANCE</p>';
+        echo '<h3>Run Compliance Checklist</h3>';
+        echo '<label class="lc-check"><input type="checkbox" checked disabled /> Use only lawful/public data sources and provider-approved APIs.</label>';
+        echo '<label class="lc-check"><input type="checkbox" checked disabled /> Do not use prohibited scraping or unauthorized automation.</label>';
+        echo '<label class="lc-check"><input type="checkbox" checked disabled /> Respect platform terms and privacy obligations (including GDPR and internal policy).</label>';
+        echo '<label class="lc-check"><input type="checkbox" checked disabled /> Queue runs only for approved business workflows.</label>';
+        echo '<p><small>Each run requires confirmation from the Queue Discovery Run form.</small></p>';
         echo '</div></section>';
 
         if ($is_primary_admin) {
@@ -1227,6 +1236,9 @@ class LC_Frontend
     {
         $this->ensure_frontend_user();
         check_admin_referer('lc_frontend_queue_run');
+        if (empty($_POST['run_compliance_confirmed'])) {
+            $this->redirect_with_msg('run_compliance_required');
+        }
 
         global $wpdb;
         $settings = $this->settings();

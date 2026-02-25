@@ -43,17 +43,6 @@
     });
   });
 
-  root.querySelectorAll(".lc-open-run-advanced").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const form = btn.closest("form");
-      const panel = form?.querySelector(".lc-run-advanced");
-      if (!panel) return;
-      const open = panel.hidden;
-      panel.hidden = !open;
-      btn.textContent = open ? "Hide Advanced Options" : "Advanced Options";
-    });
-  });
-
   root.querySelectorAll(".lc-settings-link").forEach((link) => {
     link.addEventListener("click", (event) => {
       const href = link.getAttribute("href") || "";
@@ -96,8 +85,8 @@
       text: "Runs section: queue a discovery run by entering search query and city, then set max places. Example: Query 'Plumber', City 'Dallas', Max 25.",
     },
     {
-      selector: "#lc-section-compliance",
-      text: "Compliance section: use only lawful/public sources and approved APIs. Avoid prohibited scraping or unauthorized automation.",
+      selector: "#lc-section-run-checklist",
+      text: "Run checklist: review compliance requirements in Settings and confirm them before each queued run.",
     },
   ];
 
