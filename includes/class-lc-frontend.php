@@ -289,7 +289,7 @@ class LC_Frontend
         $this->metric('Queued Runs', $queued_runs);
         echo '</div>';
 
-        echo '<div>';
+        echo '<div class="lc-runs-wrap">';
         echo '<article class="lc-fe-card" id="lc-section-runs">';
         echo '<p class="lc-card-kicker">// RUNS</p>';
         echo '<h3>Queue Discovery Run</h3>';
@@ -297,14 +297,14 @@ class LC_Frontend
         wp_nonce_field('lc_frontend_queue_run');
         echo '<input type="hidden" name="action" value="lc_frontend_queue_run" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
-        echo '<label class="lc-col-6">Search Query<input type="text" name="query_text" required /></label>';
+        echo '<label class="lc-col-4">Search Query<input type="text" name="query_text" required /></label>';
         echo '<label class="lc-col-3">City<input type="text" name="city" required /></label>';
-        echo '<label class="lc-col-3">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
+        echo '<label class="lc-col-3">Country<input type="text" name="country" placeholder="United States" /></label>';
+        echo '<label class="lc-col-2">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
         echo '<summary><span>Advanced Options</span></summary>';
         echo '<div class="lc-run-advanced">';
-        echo '<label class="lc-col-4">Country<input type="text" name="country" placeholder="United States" /></label>';
-        echo '<label class="lc-col-2">Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
+        echo '<label class="lc-col-3">Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
         echo '<label class="lc-col-6">Service Focus<input type="text" name="niche" placeholder="Cosmetic Dentistry" /></label>';
         echo '<label class="lc-col-12">Services<textarea name="services" rows="2" placeholder="implants, whitening, emergency"></textarea></label>';
         echo '<label class="lc-col-4">Website Focus<select name="website_focus"><option value="any">Any</option><option value="no_website">No Website Listed</option><option value="has_website">Has Website</option></select></label>';
@@ -430,22 +430,22 @@ class LC_Frontend
 
         echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card lc-settings-nav-card" id="lc-section-settings-nav">';
         echo '<p class="lc-card-kicker">// SETTINGS MENU</p>';
-        echo '<div class="lc-settings-nav" role="navigation" aria-label="Settings sections">';
-        echo '<a href="#lc-section-run-checklist" class="lc-settings-link">Run Checklist</a>';
+        echo '<div class="lc-settings-nav" role="tablist" aria-label="Settings sections">';
+        echo '<button type="button" class="lc-settings-btn is-active" data-settings-target="run-checklist">Run Checklist</button>';
         if ($is_primary_admin) {
-            echo '<a href="#lc-section-settings" class="lc-settings-link">System</a>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="system">System</button>';
         }
-        echo '<a href="#lc-section-users" class="lc-settings-link">Users</a>';
-        echo '<a href="#lc-section-logs" class="lc-settings-link">Logs</a>';
+        echo '<button type="button" class="lc-settings-btn" data-settings-target="users">Users</button>';
+        echo '<button type="button" class="lc-settings-btn" data-settings-target="logs">Logs</button>';
         if ($is_primary_admin) {
-            echo '<a href="#lc-section-suppression" class="lc-settings-link">Suppression</a>';
-            echo '<a href="#lc-section-intelligence" class="lc-settings-link">Intelligence</a>';
-            echo '<a href="#lc-section-reports" class="lc-settings-link">Reports</a>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="suppression">Suppression</button>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="intelligence">Intelligence</button>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="reports">Reports</button>';
         }
         echo '</div>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-run-checklist">';
+        echo '<section class="lc-tab-panel lc-settings-panel is-settings-active" data-tab="settings" data-settings-panel="run-checklist"><div class="lc-fe-card" id="lc-section-run-checklist">';
         echo '<p class="lc-card-kicker">// COMPLIANCE</p>';
         echo '<h3>Run Compliance Checklist</h3>';
         echo '<label class="lc-check"><input type="checkbox" checked disabled /> Use only lawful/public data sources and provider-approved APIs.</label>';
@@ -456,7 +456,7 @@ class LC_Frontend
         echo '</div></section>';
 
         if ($is_primary_admin) {
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-settings">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="system"><div class="lc-fe-card" id="lc-section-settings">';
         echo '<p class="lc-card-kicker">// SETTINGS</p>';
         echo '<h3>System Settings</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-settings-form">';
@@ -513,7 +513,7 @@ class LC_Frontend
         echo '</div></section>';
         }
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-logs">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="logs"><div class="lc-fe-card" id="lc-section-logs">';
         echo '<p class="lc-card-kicker">// LOGS</p>';
         echo '<h3>' . ($is_primary_admin ? 'Latest System Logs' : 'Your Activity Logs') . '</h3>';
         echo '<table><thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Message</th></tr></thead><tbody>';
@@ -531,7 +531,7 @@ class LC_Frontend
         echo '</tbody></table>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-users">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="users"><div class="lc-fe-card" id="lc-section-users">';
         echo '<p class="lc-card-kicker">// USERS</p>';
         echo '<h3>User Settings</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" enctype="multipart/form-data" class="lc-fe-form" style="margin-bottom:10px;">';
@@ -664,7 +664,7 @@ class LC_Frontend
         echo '</tbody></table>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-suppression">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="suppression"><div class="lc-fe-card" id="lc-section-suppression">';
         echo '<p class="lc-card-kicker">// SUPPRESSION</p>';
         echo '<h3>Suppression Management</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
@@ -686,7 +686,7 @@ class LC_Frontend
         echo '</tbody></table>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-intelligence">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="intelligence"><div class="lc-fe-card" id="lc-section-intelligence">';
         echo '<p class="lc-card-kicker">// INTELLIGENCE</p>';
         echo '<h3>Lead Intelligence</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form" style="margin-bottom:10px;">';
@@ -718,7 +718,7 @@ class LC_Frontend
         echo '</tbody></table>';
         echo '</div></section>';
 
-        echo '<section class="lc-tab-panel" data-tab="settings"><div class="lc-fe-card" id="lc-section-reports">';
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="reports"><div class="lc-fe-card" id="lc-section-reports">';
         echo '<p class="lc-card-kicker">// REPORTS</p>';
         echo '<h3>Funnel and Run Reports</h3>';
         echo '<div class="lc-fe-grid">';

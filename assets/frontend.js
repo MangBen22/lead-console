@@ -32,6 +32,24 @@
     });
   });
 
+  const settingsButtons = root.querySelectorAll(".lc-settings-btn");
+  const settingsPanels = root.querySelectorAll(".lc-settings-panel");
+  const activateSettingsPanel = (target) => {
+    if (!target) return;
+    settingsButtons.forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.settingsTarget === target);
+    });
+    settingsPanels.forEach((panel) => {
+      panel.classList.toggle("is-settings-active", panel.dataset.settingsPanel === target);
+    });
+  };
+  settingsButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activateTab("settings");
+      activateSettingsPanel(btn.dataset.settingsTarget || "");
+    });
+  });
+
   const authToggles = root.querySelectorAll(".lc-auth-toggle");
   const authPanels = root.querySelectorAll(".lc-auth-panel");
   authToggles.forEach((btn) => {
@@ -43,17 +61,10 @@
     });
   });
 
-  root.querySelectorAll(".lc-settings-link").forEach((link) => {
-    link.addEventListener("click", (event) => {
-      const href = link.getAttribute("href") || "";
-      if (!href.startsWith("#")) return;
-      const target = root.querySelector(href);
-      if (!target) return;
-      event.preventDefault();
-      activateTab("settings");
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  });
+  const initialSettings = root.querySelector(".lc-settings-btn.is-active") || settingsButtons[0];
+  if (initialSettings) {
+    activateSettingsPanel(initialSettings.dataset.settingsTarget || "");
+  }
 
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
@@ -109,6 +120,9 @@
         const panel = target.closest(".lc-tab-panel");
         const tab = panel?.dataset?.tab;
         if (tab) activateTab(tab);
+        if (step.selector === "#lc-section-run-checklist") {
+          activateSettingsPanel("run-checklist");
+        }
         target.classList.add("lc-step-focus");
         target.scrollIntoView({ behavior: "smooth", block: "center" });
       }
