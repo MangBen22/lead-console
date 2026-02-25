@@ -94,7 +94,6 @@ class LC_Frontend
             'login_failed' => 'Login failed. Please check your username and password.',
             'user_locked' => 'This user is temporarily locked. Please contact the super admin.',
             'gdpr_required' => 'Please accept the GDPR notice to continue.',
-            'gdpr_saved' => 'GDPR consent recorded.',
             'reset_email_not_found' => 'Email not found in user database.',
             'reset_sent' => 'Password reset email sent. The link is valid for 5 minutes.',
             'reset_link_invalid' => 'Reset link is invalid or expired.',
@@ -201,17 +200,17 @@ class LC_Frontend
 
         $settings = $this->settings();
         $user = wp_get_current_user();
+        $first_name = $this->first_name($user);
 
         echo '<header class="lc-fe-hero">';
         echo '<div>';
         echo '<img class="lc-logo lc-logo-hero" src="https://5n2digital.com/wp-content/uploads/2024/01/Untitled-1-1.png" alt="5N2 Digital logo" />';
-        echo '<p class="lc-badge">// FRONTEND CONSOLE</p>';
-        echo '<h1>Hello, ' . esc_html($user->display_name ?: $user->user_login) . '</h1>';
-        echo '<p class="lc-hero-sub">w e  b r i d g e  c r e a t i v i t y  a n d  s t r u c t u r e  i n t o  a c t i o n a b l e  s y s t e m s.</p>';
-        echo '<p>Welcome to your frontend lead operations console.</p>';
+        echo '<h1>Hello, ' . esc_html($first_name) . '</h1>';
+        echo '<p class="lc-hero-sub">We bridge creativity and structure into actionable systems.</p>';
+        echo '<p>Welcome to 5N2 Digital Lead Console.</p>';
         echo '</div>';
         echo '<div class="lc-fe-actions">';
-        echo '<button type="button" class="lc-open-tutorial">Start Tutorial</button>';
+        echo '<button type="button" class="lc-open-tutorial lc-btn-tutorial">Start Tutorial</button>';
         echo '<a href="' . esc_url(wp_logout_url($this->current_url())) . '">Log Out</a>';
         echo '</div>';
         echo '</header>';
@@ -224,7 +223,7 @@ class LC_Frontend
         echo '</div>';
 
         echo '<div class="lc-fe-grid">';
-        echo '<article class="lc-fe-card">';
+        echo '<article class="lc-fe-card" id="lc-section-leads">';
         echo '<p class="lc-card-kicker">// LEADS</p>';
         echo '<h3>Add Lead</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
@@ -241,7 +240,7 @@ class LC_Frontend
         echo '</form>';
         echo '</article>';
 
-        echo '<article class="lc-fe-card">';
+        echo '<article class="lc-fe-card" id="lc-section-runs">';
         echo '<p class="lc-card-kicker">// RUNS</p>';
         echo '<h3>Queue Discovery Run</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
@@ -254,6 +253,12 @@ class LC_Frontend
         echo '<button type="submit">Queue Run</button>';
         echo '</form>';
         echo '</article>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-compliance" style="margin-bottom:10px;">';
+        echo '<p class="lc-card-kicker">// COMPLIANCE</p>';
+        echo '<h3>Compliance Guidance</h3>';
+        echo '<p>Use only lawful/public data and provider-approved APIs. Do not use prohibited scraping or unauthorized automation on third-party platforms.</p>';
         echo '</div>';
 
         echo '<div class="lc-fe-card">';
@@ -304,8 +309,10 @@ class LC_Frontend
     {
         echo '<div class="lc-tutorial" hidden aria-hidden="true">';
         echo '<div class="lc-tutorial-panel">';
-        echo '<button type="button" class="lc-tutorial-close" aria-label="Close tutorial">x</button>';
+        echo '<div class="lc-tutorial-head">';
         echo '<h2>Quick Tutorial</h2>';
+        echo '<button type="button" class="lc-tutorial-close" aria-label="Close tutorial">x</button>';
+        echo '</div>';
         echo '<p class="lc-step-copy"></p>';
         echo '<label class="lc-check"><input type="checkbox" class="lc-step-check" /> I understand this step.</label>';
         echo '<div class="lc-tutorial-progress"></div>';
@@ -344,6 +351,7 @@ class LC_Frontend
 
         $identifier = sanitize_text_field($_POST['log'] ?? '');
         if ($identifier === '') {
+            $this->log_event('auth', 'warning', 'Login failed: empty username.', []);
             $this->redirect_with_msg('login_failed');
         }
 
@@ -363,18 +371,23 @@ class LC_Frontend
 
         $user = wp_signon($creds, is_ssl());
         if (is_wp_error($user)) {
+            $this->log_event('auth', 'warning', 'Login failed for identifier.', ['identifier' => $identifier]);
             $this->redirect_with_msg('login_failed');
         }
 
         if ($this->is_locked_user((int) $user->ID)) {
             wp_logout();
+            $this->log_event('auth', 'warning', 'Login blocked for locked user.', ['user_id' => (int) $user->ID]);
             $this->redirect_with_msg('user_locked');
         }
 
         update_user_meta((int) $user->ID, 'lc_gdpr_accepted', 1);
         update_user_meta((int) $user->ID, 'lc_gdpr_accepted_at', current_time('mysql'));
+        $this->log_event('compliance', 'info', 'GDPR consent captured on login.', ['user_id' => (int) $user->ID]);
+        $this->log_event('auth', 'info', 'Login successful.', ['user_id' => (int) $user->ID]);
 
-        $this->redirect_with_msg('gdpr_saved');
+        wp_safe_redirect($this->redirect_target());
+        exit;
     }
 
     public function handle_forgot_password()
@@ -383,11 +396,13 @@ class LC_Frontend
 
         $email = sanitize_email($_POST['email'] ?? '');
         if (!$email) {
+            $this->log_event('auth', 'warning', 'Forgot password failed: invalid email.', []);
             $this->redirect_with_msg('reset_email_not_found');
         }
 
         $user = get_user_by('email', $email);
         if (!$user) {
+            $this->log_event('auth', 'warning', 'Forgot password failed: email not found.', ['email' => $email]);
             $this->redirect_with_msg('reset_email_not_found');
         }
 
@@ -403,6 +418,7 @@ class LC_Frontend
         $message .= "Reset link (valid for 5 minutes):\n" . esc_url_raw($reset_link) . "\n\n";
         $message .= "If you did not request this, ignore this email.";
         wp_mail($user->user_email, $subject, $message);
+        $this->log_event('auth', 'info', 'Forgot password email sent.', ['user_id' => (int) $user->ID]);
 
         $this->redirect_with_msg('reset_sent');
     }
@@ -416,17 +432,20 @@ class LC_Frontend
         $new_password = (string) ($_POST['new_password'] ?? '');
 
         if (strlen($new_password) < 8) {
+            $this->log_event('auth', 'warning', 'Reset password failed: password too short.', []);
             $this->redirect_with_msg('reset_link_invalid');
         }
 
         $record = $this->consume_timed_token('lc_reset_token_', $selector, $token);
         if (!$record) {
+            $this->log_event('auth', 'warning', 'Reset password failed: invalid or expired token.', []);
             $this->redirect_with_msg('reset_link_invalid');
         }
 
         $user_id = (int) ($record['user_id'] ?? 0);
         $user = get_user_by('id', $user_id);
         if (!$user) {
+            $this->log_event('auth', 'error', 'Reset password failed: missing user record.', ['user_id' => $user_id]);
             $this->redirect_with_msg('reset_link_invalid');
         }
 
@@ -451,6 +470,7 @@ class LC_Frontend
         $message_admin = "User password changed:\nEmail: {$user->user_email}\nTime: " . current_time('mysql') . "\n";
         $message_admin .= "Revoke window: 5 minutes.";
         wp_mail($admin_email, $subject_admin, $message_admin);
+        $this->log_event('auth', 'info', 'Password reset successful.', ['user_id' => $user_id]);
 
         $this->redirect_with_msg('reset_success');
     }
@@ -462,6 +482,7 @@ class LC_Frontend
 
         $record = $this->consume_timed_token('lc_revoke_token_', $selector, $token);
         if (!$record) {
+            $this->log_event('auth', 'warning', 'Password revoke failed: invalid or expired token.', []);
             $target = add_query_arg('lc_msg', 'reset_link_invalid', home_url('/'));
             wp_safe_redirect($target);
             exit;
@@ -479,6 +500,7 @@ class LC_Frontend
             $message .= "User: {$user->user_email}\n";
             $message .= "Account locked. Super admin manual reset is required.";
             wp_mail($admin_email, $subject, $message);
+            $this->log_event('auth', 'critical', 'Password change revoked and account locked.', ['user_id' => $user_id]);
         }
 
         $target = add_query_arg('lc_msg', 'reset_revoke_success', home_url('/'));
@@ -497,7 +519,9 @@ class LC_Frontend
 
         update_user_meta(get_current_user_id(), 'lc_gdpr_accepted', 1);
         update_user_meta(get_current_user_id(), 'lc_gdpr_accepted_at', current_time('mysql'));
-        $this->redirect_with_msg('gdpr_saved');
+        $this->log_event('compliance', 'info', 'GDPR consent updated.', ['user_id' => get_current_user_id()]);
+        wp_safe_redirect($this->redirect_target());
+        exit;
     }
 
     public function handle_add_lead()
@@ -529,6 +553,7 @@ class LC_Frontend
             'lead_type' => $this->compute_lead_type($website, $score),
         ]);
 
+        $this->log_event('leads', 'info', 'Lead added from frontend.', ['business_name' => sanitize_text_field($_POST['business_name'] ?? '')]);
         $this->redirect_with_msg('lead_added');
     }
 
@@ -544,6 +569,7 @@ class LC_Frontend
             ['id' => absint($_POST['lead_id'] ?? 0)]
         );
 
+        $this->log_event('leads', 'info', 'Lead status updated from frontend.', ['lead_id' => absint($_POST['lead_id'] ?? 0)]);
         $this->redirect_with_msg('status_updated');
     }
 
@@ -564,6 +590,7 @@ class LC_Frontend
             'status' => 'queued',
         ]);
 
+        $this->log_event('runs', 'info', 'Run queued from frontend.', ['query' => sanitize_text_field($_POST['query_text'] ?? ''), 'city' => sanitize_text_field($_POST['city'] ?? '')]);
         $this->redirect_with_msg('run_queued');
     }
 
@@ -738,6 +765,28 @@ class LC_Frontend
     private function is_locked_user($user_id)
     {
         return !empty(get_user_meta((int) $user_id, 'lc_locked', true));
+    }
+
+    private function first_name($user)
+    {
+        $first = trim((string) get_user_meta((int) $user->ID, 'first_name', true));
+        if ($first !== '') {
+            return $first;
+        }
+
+        $display = trim((string) ($user->display_name ?? ''));
+        if ($display !== '' && strpos($display, '@') === false) {
+            $parts = preg_split('/\s+/', $display);
+            return $parts[0] ?? $display;
+        }
+
+        $login = (string) ($user->user_login ?? 'User');
+        return explode('@', $login)[0];
+    }
+
+    private function log_event($category, $level, $message, $context = [])
+    {
+        do_action('lc_log_event', (string) $category, (string) $level, (string) $message, (array) $context);
     }
 
     private function current_url()

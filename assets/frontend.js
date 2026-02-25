@@ -19,6 +19,8 @@
 
   const openBtn = root.querySelector(".lc-open-tutorial");
   const closeBtn = modal.querySelector(".lc-tutorial-close");
+  const panel = modal.querySelector(".lc-tutorial-panel");
+  const head = modal.querySelector(".lc-tutorial-head");
   const nextBtn = modal.querySelector(".lc-next-step");
   const prevBtn = modal.querySelector(".lc-prev-step");
   const copy = modal.querySelector(".lc-step-copy");
@@ -29,22 +31,44 @@
   const storageKey = `lcTutorialComplete_${userId}`;
 
   const steps = [
-    "Welcome: this console is for secure lead operations by authorized users only.",
-    "Leads: use Add Lead to capture business details, then keep status current.",
-    "Runs: queue discovery jobs with sensible max-place limits to protect API usage.",
-    "Compliance: only process approved records and follow GDPR obligations at all times.",
+    {
+      selector: null,
+      text: "Welcome to 5N2 Digital Lead Console. You can manage leads, run discovery jobs, monitor outputs, and operate within compliance guardrails.",
+    },
+    {
+      selector: "#lc-section-leads",
+      text: "Leads section: add a business name, city, category, website, phone, and email. Example query later: 'Dentist' in 'Austin'.",
+    },
+    {
+      selector: "#lc-section-runs",
+      text: "Runs section: queue a discovery run by entering search query and city, then set max places. Example: Query 'Plumber', City 'Dallas', Max 25.",
+    },
+    {
+      selector: "#lc-section-compliance",
+      text: "Compliance section: use only lawful/public sources and approved APIs. Avoid prohibited scraping or unauthorized automation.",
+    },
   ];
 
   let index = 0;
   let completion = new Array(steps.length).fill(false);
 
   const renderStep = () => {
-    copy.textContent = steps[index];
+    root.querySelectorAll(".lc-step-focus").forEach((el) => el.classList.remove("lc-step-focus"));
+    const step = steps[index];
+    copy.textContent = step.text;
     check.checked = completion[index];
     progress.textContent = `Step ${index + 1} of ${steps.length}`;
     prevBtn.disabled = index === 0;
     nextBtn.textContent = index === steps.length - 1 ? "Finish" : "Next";
     nextBtn.disabled = !check.checked;
+
+    if (step.selector) {
+      const target = root.querySelector(step.selector);
+      if (target) {
+        target.classList.add("lc-step-focus");
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
   };
 
   const open = () => {
@@ -82,6 +106,32 @@
 
   closeBtn.addEventListener("click", close);
   openBtn?.addEventListener("click", open);
+
+  window.addEventListener("keydown", (event) => {
+    if (modal.hidden) return;
+    if (event.key === "ArrowRight" && !nextBtn.disabled) nextBtn.click();
+    if (event.key === "ArrowLeft" && !prevBtn.disabled) prevBtn.click();
+  });
+
+  let dragOn = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+  head?.addEventListener("mousedown", (event) => {
+    dragOn = true;
+    const rect = panel.getBoundingClientRect();
+    dragOffsetX = event.clientX - rect.left;
+    dragOffsetY = event.clientY - rect.top;
+    panel.style.position = "fixed";
+    panel.style.margin = "0";
+  });
+  window.addEventListener("mousemove", (event) => {
+    if (!dragOn) return;
+    panel.style.left = `${Math.max(8, event.clientX - dragOffsetX)}px`;
+    panel.style.top = `${Math.max(8, event.clientY - dragOffsetY)}px`;
+  });
+  window.addEventListener("mouseup", () => {
+    dragOn = false;
+  });
 
   if (!localStorage.getItem(storageKey)) {
     open();

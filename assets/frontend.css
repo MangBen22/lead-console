@@ -157,7 +157,7 @@
 .lc-fe a.lc-btn {
   border: 0;
   border-radius: 10px;
-  background: linear-gradient(90deg, var(--lc-red), var(--lc-orange) 52%, var(--lc-blue));
+  background: #f59d1f;
   color: #fff;
   padding: 10px 14px;
   font-weight: 700;
@@ -169,7 +169,11 @@
 .lc-fe button:hover,
 .lc-fe a.lc-btn:hover {
   transform: translateY(-1px);
-  filter: brightness(1.05);
+  filter: brightness(1.04);
+}
+
+.lc-btn-tutorial {
+  background: #1b73e8 !important;
 }
 
 .lc-check {
@@ -223,10 +227,11 @@
 
 .lc-card-kicker {
   margin: 0 0 8px !important;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #88a8ff !important;
+  color: #f5b031 !important;
 }
 
 .lc-fe-grid {
@@ -281,10 +286,21 @@
   position: relative;
 }
 
+.lc-tutorial-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: move;
+  margin-bottom: 8px;
+}
+
+.lc-step-focus {
+  outline: 2px solid rgba(245, 176, 49, 0.95);
+  box-shadow: 0 0 0 3px rgba(245, 176, 49, 0.2);
+}
+
 .lc-tutorial-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   width: 32px;
   height: 32px;
   padding: 0;

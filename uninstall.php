@@ -10,6 +10,7 @@ $tables = [
     $wpdb->prefix . 'lc_lead_profiles',
     $wpdb->prefix . 'lc_runs',
     $wpdb->prefix . 'lc_run_logs',
+    $wpdb->prefix . 'lc_system_logs',
     $wpdb->prefix . 'lc_suppression',
 ];
 

@@ -122,11 +122,26 @@ class LC_Plugin
             UNIQUE KEY lead_id (lead_id)
         ) {$charset};";
 
+        $sql_system_logs = "CREATE TABLE {$prefix}lc_system_logs (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            category VARCHAR(40) DEFAULT 'system',
+            level VARCHAR(20) DEFAULT 'info',
+            message TEXT NOT NULL,
+            context_json LONGTEXT NULL,
+            user_id BIGINT UNSIGNED DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY level (level),
+            KEY category (category),
+            KEY user_id (user_id)
+        ) {$charset};";
+
         dbDelta($sql_leads);
         dbDelta($sql_runs);
         dbDelta($sql_logs);
         dbDelta($sql_suppression);
         dbDelta($sql_profiles);
+        dbDelta($sql_system_logs);
 
         if (!wp_next_scheduled('lc_process_run')) {
             wp_schedule_event(time(), 'hourly', 'lc_process_run');
@@ -143,7 +158,7 @@ class LC_Plugin
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
         ]);
-        update_option('lc_schema_version', '3');
+        update_option('lc_schema_version', '4');
     }
 
     public static function deactivate()
@@ -170,6 +185,8 @@ class LC_Plugin
         add_action('admin_post_lc_admin_reset_user_password', [$this, 'handle_admin_reset_user_password']);
         add_action('admin_post_lc_admin_lock_user', [$this, 'handle_admin_lock_user']);
         add_action('admin_post_lc_admin_unlock_user', [$this, 'handle_admin_unlock_user']);
+        add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
+        add_action('shutdown', [$this, 'capture_shutdown_errors']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
     }
 
@@ -190,6 +207,7 @@ class LC_Plugin
         add_submenu_page('lc_dashboard', 'Suppression', 'Suppression', $capability, 'lc_suppression', [$this, 'render_suppression']);
         add_submenu_page('lc_dashboard', 'Intelligence', 'Intelligence', $capability, 'lc_intelligence', [$this, 'render_intelligence']);
         add_submenu_page('lc_dashboard', 'Users', 'Users', $capability, 'lc_users', [$this, 'render_users']);
+        add_submenu_page('lc_dashboard', 'Logs', 'Logs', $capability, 'lc_logs', [$this, 'render_logs']);
         add_submenu_page('lc_dashboard', 'Reports', 'Reports', $capability, 'lc_reports', [$this, 'render_reports']);
         add_submenu_page('lc_dashboard', 'Settings', 'Settings', $capability, 'lc_settings', [$this, 'render_settings']);
     }
@@ -329,10 +347,53 @@ class LC_Plugin
         return $wpdb->prefix . $name;
     }
 
+    public function handle_external_log_event($category, $level, $message, $context = [])
+    {
+        $this->log_system_event((string) $category, (string) $level, (string) $message, (array) $context);
+    }
+
+    private function log_system_event($category, $level, $message, $context = [])
+    {
+        global $wpdb;
+
+        $allowed_levels = ['debug', 'info', 'warning', 'error', 'critical'];
+        if (!in_array($level, $allowed_levels, true)) {
+            $level = 'info';
+        }
+
+        $wpdb->insert($this->db_table('lc_system_logs'), [
+            'category' => sanitize_text_field($category ?: 'system'),
+            'level' => sanitize_text_field($level),
+            'message' => sanitize_textarea_field($message),
+            'context_json' => wp_json_encode($context),
+            'user_id' => get_current_user_id() ? (int) get_current_user_id() : 0,
+        ]);
+    }
+
+    public function capture_shutdown_errors()
+    {
+        $error = error_get_last();
+        if (!$error || !is_array($error)) {
+            return;
+        }
+
+        $fatal_types = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        if (!in_array((int) ($error['type'] ?? 0), $fatal_types, true)) {
+            return;
+        }
+
+        $this->log_system_event('system', 'critical', 'Fatal runtime error captured.', [
+            'type' => (int) ($error['type'] ?? 0),
+            'message' => (string) ($error['message'] ?? ''),
+            'file' => (string) ($error['file'] ?? ''),
+            'line' => (int) ($error['line'] ?? 0),
+        ]);
+    }
+
     public function maybe_upgrade_schema()
     {
         $version = get_option('lc_schema_version', '1');
-        if ($version === '3') {
+        if ($version === '4') {
             return;
         }
 
@@ -380,7 +441,23 @@ class LC_Plugin
         ) {$charset};";
         dbDelta($sql_profiles);
 
-        update_option('lc_schema_version', '3');
+        $system_logs_table = $this->db_table('lc_system_logs');
+        $sql_system_logs = "CREATE TABLE {$system_logs_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            category VARCHAR(40) DEFAULT 'system',
+            level VARCHAR(20) DEFAULT 'info',
+            message TEXT NOT NULL,
+            context_json LONGTEXT NULL,
+            user_id BIGINT UNSIGNED DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY level (level),
+            KEY category (category),
+            KEY user_id (user_id)
+        ) {$charset};";
+        dbDelta($sql_system_logs);
+
+        update_option('lc_schema_version', '4');
     }
 
     private function get_settings()
@@ -425,6 +502,9 @@ class LC_Plugin
         $email = sanitize_email($_POST['email'] ?? '');
 
         if ($this->is_suppressed($email, $phone, $website, $_POST['business_name'] ?? '')) {
+            $this->log_system_event('leads', 'warning', 'Lead blocked by suppression rule.', [
+                'business_name' => sanitize_text_field($_POST['business_name'] ?? ''),
+            ]);
             wp_safe_redirect(admin_url('admin.php?page=lc_leads&message=suppressed'));
             exit;
         }
@@ -448,6 +528,10 @@ class LC_Plugin
             'lead_type' => $lead_type,
             'source_url' => esc_url_raw($_POST['source_url'] ?? ''),
             'notes' => sanitize_textarea_field($_POST['notes'] ?? ''),
+        ]);
+
+        $this->log_system_event('leads', 'info', 'Lead added from admin.', [
+            'business_name' => sanitize_text_field($_POST['business_name'] ?? ''),
         ]);
 
         wp_safe_redirect(admin_url('admin.php?page=lc_leads&message=lead_added'));
@@ -569,6 +653,11 @@ class LC_Plugin
             'status' => 'queued',
         ]);
 
+        $this->log_system_event('runs', 'info', 'Run queued from admin.', [
+            'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
+            'city' => sanitize_text_field($_POST['city'] ?? ''),
+        ]);
+
         wp_safe_redirect(admin_url('admin.php?page=lc_runs&message=queued'));
         exit;
     }
@@ -624,6 +713,12 @@ class LC_Plugin
             return;
         }
 
+        $this->log_system_event('runs', 'info', 'Run processing started.', [
+            'run_id' => (int) $run->id,
+            'query_text' => (string) $run->query_text,
+            'city' => (string) $run->city,
+        ]);
+
         $wpdb->update($runs_table, [
             'status' => 'processing',
             'started_at' => current_time('mysql'),
@@ -671,6 +766,12 @@ class LC_Plugin
             'status' => 'completed',
             'finished_at' => current_time('mysql'),
         ], ['id' => $run->id]);
+
+        $this->log_system_event('runs', 'info', 'Run processing completed.', [
+            'run_id' => (int) $run->id,
+            'leads_created' => (int) $created,
+            'social_updated' => (int) $social_updated,
+        ]);
     }
 
     private function discover_with_google_places_api($run, $settings, $logs_table)
@@ -1800,6 +1901,38 @@ class LC_Plugin
             echo '<tr><td colspan="6">No users found.</td></tr>';
         }
 
+        echo '</tbody></table>';
+        $this->render_wrap_end();
+    }
+
+    public function render_logs()
+    {
+        $this->ensure_permissions();
+        global $wpdb;
+
+        $rows = $wpdb->get_results("SELECT * FROM {$this->db_table('lc_system_logs')} ORDER BY id DESC LIMIT 500");
+
+        $this->render_wrap_start('Logs');
+        echo '<div class="lc-card" style="margin-bottom:16px;">';
+        echo '<h2>System and Behavior Logs</h2>';
+        echo '<p>This page captures auth events, compliance confirmations, run/activity changes, and runtime errors. Visible to super admin only.</p>';
+        echo '</div>';
+
+        echo '<table class="widefat striped">';
+        echo '<thead><tr><th>Time</th><th>Level</th><th>Category</th><th>User ID</th><th>Message</th><th>Context</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . esc_html($row->created_at) . '</td>';
+            echo '<td>' . esc_html(strtoupper((string) $row->level)) . '</td>';
+            echo '<td>' . esc_html($row->category) . '</td>';
+            echo '<td>' . esc_html((string) $row->user_id) . '</td>';
+            echo '<td>' . esc_html($row->message) . '</td>';
+            echo '<td><code style="white-space:pre-wrap;">' . esc_html((string) $row->context_json) . '</code></td>';
+            echo '</tr>';
+        }
+        if (empty($rows)) {
+            echo '<tr><td colspan="6">No logs yet.</td></tr>';
+        }
         echo '</tbody></table>';
         $this->render_wrap_end();
     }

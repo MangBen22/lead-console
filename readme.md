@@ -186,3 +186,7 @@ Use the `Directory sources` setting to override list entries with this format:
 ### Data Availability Expectations
 - Some leads will have complete profiles, others partial profiles.
 - Output depends on public web availability and configured APIs.
+
+## Documentation
+- Full guide: `docs/USER_GUIDE.md`
+- Screenshot references: `docs/screenshots/`
