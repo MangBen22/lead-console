@@ -54,6 +54,13 @@ class LC_Plugin
             status VARCHAR(30) DEFAULT 'New',
             score TINYINT UNSIGNED DEFAULT 0,
             lead_type CHAR(1) DEFAULT 'C',
+            linkedin_url VARCHAR(255) DEFAULT '',
+            facebook_url VARCHAR(255) DEFAULT '',
+            instagram_url VARCHAR(255) DEFAULT '',
+            x_url VARCHAR(255) DEFAULT '',
+            youtube_url VARCHAR(255) DEFAULT '',
+            social_confidence TINYINT UNSIGNED DEFAULT 0,
+            social_source VARCHAR(80) DEFAULT '',
             source_url VARCHAR(255) DEFAULT '',
             notes TEXT,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -114,7 +121,11 @@ class LC_Plugin
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
             'directory_sources' => '',
+            'social_discovery_mode' => 'off',
+            'google_cse_api_key' => '',
+            'google_cse_cx' => '',
         ]);
+        update_option('lc_schema_version', '2');
     }
 
     public static function deactivate()
@@ -124,6 +135,7 @@ class LC_Plugin
 
     private function __construct()
     {
+        add_action('init', [$this, 'maybe_upgrade_schema']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
@@ -171,6 +183,10 @@ class LC_Plugin
         if (!in_array($mode, ['hybrid', 'google_only', 'directory_only'], true)) {
             $mode = 'hybrid';
         }
+        $social_mode = sanitize_text_field($settings['social_discovery_mode'] ?? 'off');
+        if (!in_array($social_mode, ['off', 'url_discovery_only', 'official_api_enabled'], true)) {
+            $social_mode = 'off';
+        }
 
         return [
             'domain_fragment' => sanitize_text_field($settings['domain_fragment'] ?? ''),
@@ -179,6 +195,9 @@ class LC_Plugin
             'google_places_api_key' => sanitize_text_field($settings['google_places_api_key'] ?? ''),
             'discovery_mode' => $mode,
             'directory_sources' => sanitize_textarea_field($settings['directory_sources'] ?? ''),
+            'social_discovery_mode' => $social_mode,
+            'google_cse_api_key' => sanitize_text_field($settings['google_cse_api_key'] ?? ''),
+            'google_cse_cx' => sanitize_text_field($settings['google_cse_cx'] ?? ''),
         ];
     }
 
@@ -195,6 +214,39 @@ class LC_Plugin
         return $wpdb->prefix . $name;
     }
 
+    public function maybe_upgrade_schema()
+    {
+        $version = get_option('lc_schema_version', '1');
+        if ($version === '2') {
+            return;
+        }
+
+        global $wpdb;
+        $table = $this->db_table('lc_leads');
+        $columns = $wpdb->get_col("DESC {$table}", 0);
+        if (empty($columns) || !is_array($columns)) {
+            return;
+        }
+
+        $column_sql = [
+            'linkedin_url' => "ALTER TABLE {$table} ADD COLUMN linkedin_url VARCHAR(255) DEFAULT ''",
+            'facebook_url' => "ALTER TABLE {$table} ADD COLUMN facebook_url VARCHAR(255) DEFAULT ''",
+            'instagram_url' => "ALTER TABLE {$table} ADD COLUMN instagram_url VARCHAR(255) DEFAULT ''",
+            'x_url' => "ALTER TABLE {$table} ADD COLUMN x_url VARCHAR(255) DEFAULT ''",
+            'youtube_url' => "ALTER TABLE {$table} ADD COLUMN youtube_url VARCHAR(255) DEFAULT ''",
+            'social_confidence' => "ALTER TABLE {$table} ADD COLUMN social_confidence TINYINT UNSIGNED DEFAULT 0",
+            'social_source' => "ALTER TABLE {$table} ADD COLUMN social_source VARCHAR(80) DEFAULT ''",
+        ];
+
+        foreach ($column_sql as $column => $sql) {
+            if (!in_array($column, $columns, true)) {
+                $wpdb->query($sql);
+            }
+        }
+
+        update_option('lc_schema_version', '2');
+    }
+
     private function get_settings()
     {
         $defaults = [
@@ -204,6 +256,9 @@ class LC_Plugin
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
             'directory_sources' => '',
+            'social_discovery_mode' => 'off',
+            'google_cse_api_key' => '',
+            'google_cse_cx' => '',
         ];
 
         return wp_parse_args(get_option('lc_settings', []), $defaults);
@@ -467,11 +522,13 @@ class LC_Plugin
             $created += $this->discover_with_directory_fallback($run, $settings, $logs_table);
         }
 
+        $social_updated = $this->enrich_leads_with_social_urls($run, $settings, $logs_table);
+
         $summary = $used_api ? 'Google API + fallback processing complete.' : 'Fallback directory processing complete.';
         $wpdb->insert($logs_table, [
             'run_id' => $run->id,
             'level' => 'info',
-            'message' => sprintf('%s Leads created: %d.', $summary, $created),
+            'message' => sprintf('%s Leads created: %d. Social profiles updated: %d.', $summary, $created, $social_updated),
         ]);
 
         $wpdb->update($runs_table, [
@@ -725,6 +782,168 @@ class LC_Plugin
             ['name' => 'Chamber of Commerce', 'search_url' => 'https://www.chamberofcommerce.com/search?what={query}&where={city}', 'quality_score' => 79],
             ['name' => 'Manta', 'search_url' => 'https://www.manta.com/search?search={query}+{city}', 'quality_score' => 72],
         ];
+    }
+
+    private function enrich_leads_with_social_urls($run, $settings, $logs_table)
+    {
+        global $wpdb;
+
+        $mode = $settings['social_discovery_mode'] ?? 'off';
+        if ($mode === 'off') {
+            return 0;
+        }
+
+        if ($mode === 'official_api_enabled') {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'warning',
+                'message' => 'Official social APIs mode selected but provider-specific OAuth integration is not configured yet. Falling back to URL discovery only.',
+            ]);
+        }
+
+        $cse_key = trim((string) ($settings['google_cse_api_key'] ?? ''));
+        $cse_cx = trim((string) ($settings['google_cse_cx'] ?? ''));
+        if ($cse_key === '' || $cse_cx === '') {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'warning',
+                'message' => 'Social discovery is enabled but Google Programmable Search API key/cx is missing. Set it in Lead Console > Settings.',
+            ]);
+            return 0;
+        }
+
+        $table = $this->db_table('lc_leads');
+        $max = max(1, (int) $run->max_places);
+        $leads = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, business_name, city, category, linkedin_url, facebook_url, instagram_url, x_url, youtube_url
+                 FROM {$table}
+                 WHERE city = %s
+                 ORDER BY id DESC
+                 LIMIT %d",
+                $run->city,
+                $max
+            )
+        );
+
+        $updated = 0;
+        foreach ($leads as $lead) {
+            $social = $this->discover_social_profiles_for_lead($lead, $cse_key, $cse_cx);
+            if (empty($social['data'])) {
+                continue;
+            }
+
+            $update_data = $social['data'];
+            $update_data['social_confidence'] = $social['confidence'];
+            $update_data['social_source'] = 'google_cse';
+
+            $did_update = $wpdb->update($table, $update_data, ['id' => (int) $lead->id]);
+            if ($did_update !== false) {
+                $updated++;
+            }
+        }
+
+        $wpdb->insert($logs_table, [
+            'run_id' => $run->id,
+            'level' => 'info',
+            'message' => sprintf('Social URL discovery completed. Leads updated: %d.', $updated),
+        ]);
+
+        return $updated;
+    }
+
+    private function discover_social_profiles_for_lead($lead, $cse_key, $cse_cx)
+    {
+        $business = sanitize_text_field($lead->business_name ?? '');
+        $city = sanitize_text_field($lead->city ?? '');
+        if ($business === '') {
+            return ['data' => [], 'confidence' => 0];
+        }
+
+        $platforms = [
+            'linkedin_url' => ['site' => 'linkedin.com/company', 'domain' => 'linkedin.com'],
+            'facebook_url' => ['site' => 'facebook.com', 'domain' => 'facebook.com'],
+            'instagram_url' => ['site' => 'instagram.com', 'domain' => 'instagram.com'],
+            'x_url' => ['site' => 'x.com', 'domain' => 'x.com'],
+            'youtube_url' => ['site' => 'youtube.com', 'domain' => 'youtube.com'],
+        ];
+
+        $data = [];
+        $confidence_scores = [];
+
+        foreach ($platforms as $field => $platform) {
+            if (!empty($lead->{$field})) {
+                continue;
+            }
+
+            $query = sprintf('site:%s "%s" "%s"', $platform['site'], $business, $city);
+            $result = $this->google_cse_search($query, $cse_key, $cse_cx);
+            if (empty($result['link'])) {
+                continue;
+            }
+
+            $host = strtolower((string) wp_parse_url($result['link'], PHP_URL_HOST));
+            if (strpos($host, $platform['domain']) === false) {
+                continue;
+            }
+
+            $data[$field] = esc_url_raw($result['link']);
+            $confidence_scores[] = $this->score_social_match_confidence($result, $business, $city);
+        }
+
+        if (empty($data)) {
+            return ['data' => [], 'confidence' => 0];
+        }
+
+        $confidence = (int) round(array_sum($confidence_scores) / count($confidence_scores));
+        return ['data' => $data, 'confidence' => max(0, min(100, $confidence))];
+    }
+
+    private function google_cse_search($query, $key, $cx)
+    {
+        $url = add_query_arg([
+            'key' => $key,
+            'cx' => $cx,
+            'q' => $query,
+            'num' => 3,
+        ], 'https://www.googleapis.com/customsearch/v1');
+
+        $response = wp_remote_get($url, ['timeout' => 20]);
+        if (is_wp_error($response)) {
+            return [];
+        }
+
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (empty($payload['items'][0])) {
+            return [];
+        }
+
+        return [
+            'link' => sanitize_text_field($payload['items'][0]['link'] ?? ''),
+            'title' => sanitize_text_field($payload['items'][0]['title'] ?? ''),
+            'snippet' => sanitize_textarea_field($payload['items'][0]['snippet'] ?? ''),
+        ];
+    }
+
+    private function score_social_match_confidence($result, $business, $city)
+    {
+        $score = 50;
+        $title = strtolower((string) ($result['title'] ?? ''));
+        $snippet = strtolower((string) ($result['snippet'] ?? ''));
+        $business_l = strtolower($business);
+        $city_l = strtolower($city);
+
+        if ($business_l && strpos($title, $business_l) !== false) {
+            $score += 25;
+        }
+        if ($city_l && strpos($snippet, $city_l) !== false) {
+            $score += 15;
+        }
+        if ($business_l && strpos($snippet, $business_l) !== false) {
+            $score += 10;
+        }
+
+        return max(0, min(100, $score));
     }
 
     private function find_duplicate_lead_id($phone, $website)
@@ -1050,6 +1269,9 @@ class LC_Plugin
         } else {
             echo '<p><strong>Google Places API key detected.</strong> Run can use Google Places API depending on discovery mode.</p>';
         }
+        if (($settings['social_discovery_mode'] ?? 'off') !== 'off' && (empty($settings['google_cse_api_key']) || empty($settings['google_cse_cx']))) {
+            echo '<p><strong>Note:</strong> Social discovery is enabled but Google Programmable Search API key/cx is missing. Configure both in Settings to enrich LinkedIn/social URLs safely.</p>';
+        }
         echo '<form class="lc-form-grid" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         wp_nonce_field('lc_queue_run');
         echo '<input type="hidden" name="action" value="lc_queue_run" />';
@@ -1265,6 +1487,13 @@ class LC_Plugin
         echo '<textarea id="lc_directory_sources" name="lc_settings[directory_sources]" class="large-text code" rows="8" placeholder="Source Name|https://example.com/search?q={query}&loc={city}|80">' . esc_textarea($settings['directory_sources']) . '</textarea>';
         echo '<p class="description">Optional custom fallback list. One source per line in format: <code>Name|URL-with-{query}-and-{city}|QualityScore</code>.</p>';
         echo '</td></tr>';
+        echo '<tr><th scope="row"><label for="lc_social_mode">Social discovery mode</label></th><td><select id="lc_social_mode" name="lc_settings[social_discovery_mode]">';
+        echo '<option value="off" ' . selected($settings['social_discovery_mode'], 'off', false) . '>Off</option>';
+        echo '<option value="url_discovery_only" ' . selected($settings['social_discovery_mode'], 'url_discovery_only', false) . '>URL discovery only (recommended)</option>';
+        echo '<option value="official_api_enabled" ' . selected($settings['social_discovery_mode'], 'official_api_enabled', false) . '>Official API enabled (requires custom OAuth integration)</option>';
+        echo '</select></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_google_cse_key">Google Programmable Search API key</label></th><td><input id="lc_google_cse_key" type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr($settings['google_cse_api_key']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_google_cse_cx">Google Programmable Search Engine ID (cx)</label></th><td><input id="lc_google_cse_cx" type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr($settings['google_cse_cx']) . '" class="regular-text code" /></td></tr>';
         echo '</tbody></table>';
 
         submit_button('Save Settings');
@@ -1289,6 +1518,19 @@ class LC_Plugin
         echo '<h2>Fallback Directory Scan Guidance</h2>';
         echo '<p>Default fallback sources include Google Maps search URL capture, Yelp, Yellow Pages, BBB, Chamber of Commerce, and Manta. You can override sources in Directory sources field.</p>';
         echo '<p>Recommended practice is to prioritize high-authority directories and review each source quality score before outreach.</p>';
+        echo '</div>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Social Discovery (Low-Risk Setup)</h2>';
+        echo '<ol>';
+        echo '<li>Set <strong>Social discovery mode</strong> to <strong>URL discovery only</strong>.</li>';
+        echo '<li>Create a Google Programmable Search Engine that includes web-wide search.</li>';
+        echo '<li>Generate Google Programmable Search API key.</li>';
+        echo '<li>Paste API key into <strong>Google Programmable Search API key</strong>.</li>';
+        echo '<li>Paste search engine ID into <strong>Google Programmable Search Engine ID (cx)</strong>.</li>';
+        echo '<li>Save settings and queue a run.</li>';
+        echo '</ol>';
+        echo '<p><strong>Compliance:</strong> This mode only stores discovered public profile URLs and confidence scores. It does not scrape LinkedIn or automate social platform actions.</p>';
         echo '</div>';
 
         echo '<p><strong>Ownership:</strong> This software is proprietary and owned by 5N2 Digital.</p>';

@@ -118,3 +118,30 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 
 Use the `Directory sources` setting to override list entries with this format:
 `Source Name|https://source.example/search?query={query}&city={city}|85`
+
+## Social Discovery (Low-Risk / Compliant)
+- The plugin supports social profile URL enrichment without scraping.
+- Recommended mode: `URL discovery only`.
+- Uses Google Programmable Search API to discover likely profile URLs for:
+  - LinkedIn
+  - Facebook
+  - Instagram
+  - X
+  - YouTube
+- Stores URL + confidence + source metadata on each lead.
+
+### Social Setup Steps
+1. Open `Lead Console -> Settings`.
+2. Set `Social discovery mode` to `URL discovery only`.
+3. Create/choose a Google Programmable Search Engine and get `cx`.
+4. Create Google Programmable Search API key.
+5. Enter:
+   - `Google Programmable Search API key`
+   - `Google Programmable Search Engine ID (cx)`
+6. Save settings.
+7. Queue a run from `Lead Console -> Runs`.
+
+### Compliance Guardrails
+- No direct LinkedIn scraping.
+- No automated login/bot actions on social networks.
+- Official API mode is reserved for future provider-approved OAuth integrations.
