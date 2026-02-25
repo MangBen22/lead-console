@@ -14,6 +14,11 @@
   isolation: isolate;
   color: var(--lc-text);
   font-family: "DM Sans", sans-serif;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  min-height: 100vh;
+  box-sizing: border-box;
   padding: 28px 16px;
 }
 
@@ -29,9 +34,22 @@
 }
 
 .lc-fe-shell {
-  max-width: 1140px;
+  max-width: 1280px;
   margin: 0 auto;
+  width: 100%;
   animation: lcRise 500ms ease-out;
+}
+
+.lc-logo {
+  display: block;
+  width: 168px;
+  height: auto;
+  margin-bottom: 12px;
+}
+
+.lc-logo-hero {
+  width: 190px;
+  margin-bottom: 8px;
 }
 
 .lc-fe-card,
@@ -41,6 +59,7 @@
   backdrop-filter: blur(6px);
   border-radius: 16px;
   padding: 18px;
+  overflow-x: auto;
 }
 
 .lc-fe h1,
@@ -87,7 +106,7 @@
 
 .lc-fe-login {
   max-width: 540px;
-  margin: 34px auto;
+  margin: 6vh auto;
 }
 
 .lc-fe-form {
@@ -288,5 +307,23 @@
   .lc-fe-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .lc-logo-hero {
+    width: 150px;
+  }
+}
+
+@media (max-width: 560px) {
+  .lc-fe {
+    padding: 16px 10px;
+  }
+
+  .lc-logo {
+    width: 132px;
+  }
+
+  .lc-fe-metrics strong {
+    font-size: 22px;
   }
 }

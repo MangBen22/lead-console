@@ -102,6 +102,7 @@ class LC_Frontend
     private function render_login_form()
     {
         echo '<div class="lc-fe-card lc-fe-login">';
+        echo '<img class="lc-logo" src="https://5n2digital.com/wp-content/uploads/2024/01/Untitled-1-1.png" alt="5N2 Digital logo" />';
         echo '<p class="lc-badge">5N2 DIGITAL SOFTWARE</p>';
         echo '<h2>Welcome to the 5N2 Lead Console</h2>';
         echo '<p>Secure frontend workspace for lead management and discovery operations.</p>';
@@ -153,6 +154,7 @@ class LC_Frontend
 
         echo '<header class="lc-fe-hero">';
         echo '<div>';
+        echo '<img class="lc-logo lc-logo-hero" src="https://5n2digital.com/wp-content/uploads/2024/01/Untitled-1-1.png" alt="5N2 Digital logo" />';
         echo '<p class="lc-badge">// FRONTEND CONSOLE</p>';
         echo '<h1>Hello, ' . esc_html($user->display_name ?: $user->user_login) . '</h1>';
         echo '<p class="lc-hero-sub">w e  b r i d g e  c r e a t i v i t y  a n d  s t r u c t u r e  i n t o  a c t i o n a b l e  s y s t e m s.</p>';
