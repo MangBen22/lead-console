@@ -318,9 +318,18 @@
 }
 
 .lc-run-advanced-wrap summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 220px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
   cursor: pointer;
   font-weight: 700;
-  color: #dce4fa;
+  color: #ffffff;
   list-style: none;
 }
 
@@ -330,9 +339,8 @@
 
 .lc-run-advanced-wrap summary::after {
   content: "Open";
-  float: right;
   font-size: 12px;
-  color: #c9d3f2;
+  color: #e5ecff;
 }
 
 .lc-run-advanced-wrap[open] summary::after {

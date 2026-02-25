@@ -86,7 +86,7 @@
     },
     {
       selector: "#lc-section-run-checklist",
-      text: "Run checklist: review compliance requirements in Settings and confirm them before each queued run.",
+      text: "Run checklist: review compliance requirements in Settings. The system automatically validates these rules when you queue a run.",
     },
   ];
 

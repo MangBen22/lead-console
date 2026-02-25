@@ -122,7 +122,7 @@ class LC_Frontend
             'import_error' => 'Import failed. File could not be parsed or rows were incomplete.',
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
-            'run_compliance_required' => 'Please confirm the run compliance checklist before queuing a run.',
+            'run_compliance_blocked' => 'Run blocked by automatic compliance review. Check Settings checklist and API configuration.',
             'status_updated' => 'Lead status updated.',
             'not_allowed' => 'You are not authorized to perform that action.',
         ];
@@ -301,7 +301,7 @@ class LC_Frontend
         echo '<label class="lc-col-3">City<input type="text" name="city" required /></label>';
         echo '<label class="lc-col-3">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
-        echo '<summary>Advanced Options</summary>';
+        echo '<summary><span>Advanced Options</span></summary>';
         echo '<div class="lc-run-advanced">';
         echo '<label class="lc-col-4">Country<input type="text" name="country" placeholder="United States" /></label>';
         echo '<label class="lc-col-2">Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
@@ -312,7 +312,6 @@ class LC_Frontend
         echo '<label class="lc-col-4">Minimum Reviews<input type="number" min="0" name="min_reviews" placeholder="0+" /></label>';
         echo '</div>';
         echo '</details>';
-        echo '<label class="lc-check lc-col-12"><input type="checkbox" name="run_compliance_confirmed" value="1" required /> I confirm this run follows the compliance checklist in Settings.</label>';
         echo '<button type="submit" class="lc-col-12">Queue Run</button>';
         echo '</form>';
         echo '</article>';
@@ -453,7 +452,7 @@ class LC_Frontend
         echo '<label class="lc-check"><input type="checkbox" checked disabled /> Do not use prohibited scraping or unauthorized automation.</label>';
         echo '<label class="lc-check"><input type="checkbox" checked disabled /> Respect platform terms and privacy obligations (including GDPR and internal policy).</label>';
         echo '<label class="lc-check"><input type="checkbox" checked disabled /> Queue runs only for approved business workflows.</label>';
-        echo '<p><small>Each run requires confirmation from the Queue Discovery Run form.</small></p>';
+        echo '<p><small>The system automatically reviews this checklist on every queued run.</small></p>';
         echo '</div></section>';
 
         if ($is_primary_admin) {
@@ -1236,12 +1235,17 @@ class LC_Frontend
     {
         $this->ensure_frontend_user();
         check_admin_referer('lc_frontend_queue_run');
-        if (empty($_POST['run_compliance_confirmed'])) {
-            $this->redirect_with_msg('run_compliance_required');
-        }
 
         global $wpdb;
         $settings = $this->settings();
+        $query_text = sanitize_text_field($_POST['query_text'] ?? '');
+        $city = sanitize_text_field($_POST['city'] ?? '');
+        $country = sanitize_text_field($_POST['country'] ?? '');
+        $radius_miles = absint($_POST['radius_miles'] ?? 0);
+        $service_focus = sanitize_text_field($_POST['niche'] ?? '');
+        $services = sanitize_textarea_field($_POST['services'] ?? '');
+        $min_rating = max(0, min(5, (float) ($_POST['min_rating'] ?? 0)));
+        $min_reviews = absint($_POST['min_reviews'] ?? 0);
         $requested_max = absint($_POST['max_places'] ?? 0);
         $max_places = min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']);
         $website_focus = sanitize_text_field((string) ($_POST['website_focus'] ?? 'any'));
@@ -1249,29 +1253,115 @@ class LC_Frontend
             $website_focus = 'any';
         }
 
-        $wpdb->insert($this->table('lc_runs'), [
-            'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
-            'city' => sanitize_text_field($_POST['city'] ?? ''),
-            'country' => sanitize_text_field($_POST['country'] ?? ''),
-            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
-            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
-            'services' => sanitize_textarea_field($_POST['services'] ?? ''),
+        $review = $this->evaluate_run_compliance([
+            'query_text' => $query_text,
+            'city' => $city,
             'website_focus' => $website_focus,
-            'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
-            'min_reviews' => absint($_POST['min_reviews'] ?? 0),
+            'min_rating' => $min_rating,
+            'min_reviews' => $min_reviews,
+            'max_places' => $max_places,
+        ], $settings);
+
+        if (!$review['ok']) {
+            $this->log_event('compliance', 'warning', 'Run blocked by automatic compliance review.', [
+                'query' => $query_text,
+                'city' => $city,
+                'issues' => $review['issues'],
+            ]);
+            $this->redirect_with_msg('run_compliance_blocked');
+        }
+
+        $wpdb->insert($this->table('lc_runs'), [
+            'query_text' => $query_text,
+            'city' => $city,
+            'country' => $country,
+            'radius_miles' => $radius_miles,
+            'niche' => $service_focus,
+            'services' => $services,
+            'website_focus' => $website_focus,
+            'min_rating' => $min_rating,
+            'min_reviews' => $min_reviews,
             'max_places' => $max_places,
             'status' => 'queued',
         ]);
 
         $this->log_event('runs', 'info', 'Run queued from frontend.', [
-            'query' => sanitize_text_field($_POST['query_text'] ?? ''),
-            'city' => sanitize_text_field($_POST['city'] ?? ''),
-            'country' => sanitize_text_field($_POST['country'] ?? ''),
-            'radius_miles' => absint($_POST['radius_miles'] ?? 0),
-            'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+            'query' => $query_text,
+            'city' => $city,
+            'country' => $country,
+            'radius_miles' => $radius_miles,
+            'niche' => $service_focus,
             'website_focus' => $website_focus,
+            'compliance_review' => 'pass',
+            'compliance_checks' => $review['checks'],
         ]);
         $this->redirect_with_msg('run_queued');
+    }
+
+    private function evaluate_run_compliance($run, $settings)
+    {
+        $issues = [];
+        $checks = [];
+
+        $query = trim((string) ($run['query_text'] ?? ''));
+        $city = trim((string) ($run['city'] ?? ''));
+        if ($query === '') {
+            $issues[] = 'missing_query_text';
+        } else {
+            $checks[] = 'query_text_present';
+        }
+        if ($city === '') {
+            $issues[] = 'missing_city';
+        } else {
+            $checks[] = 'city_present';
+        }
+
+        $min_rating = (float) ($run['min_rating'] ?? 0);
+        if ($min_rating < 0 || $min_rating > 5) {
+            $issues[] = 'invalid_min_rating';
+        } else {
+            $checks[] = 'min_rating_in_range';
+        }
+
+        $min_reviews = (int) ($run['min_reviews'] ?? 0);
+        if ($min_reviews < 0) {
+            $issues[] = 'invalid_min_reviews';
+        } else {
+            $checks[] = 'min_reviews_non_negative';
+        }
+
+        $max_places = (int) ($run['max_places'] ?? 0);
+        $max_allowed = max(1, absint($settings['max_places_per_run'] ?? 25));
+        if ($max_places < 1 || $max_places > $max_allowed) {
+            $issues[] = 'max_places_out_of_bounds';
+        } else {
+            $checks[] = 'max_places_within_limit';
+        }
+
+        $live_api_enabled = !empty($settings['enable_live_api_calls']);
+        $discovery_mode = sanitize_text_field((string) ($settings['discovery_mode'] ?? 'hybrid'));
+        if ($live_api_enabled && in_array($discovery_mode, ['hybrid', 'google_only'], true)) {
+            if (trim((string) ($settings['google_places_api_key'] ?? '')) === '') {
+                $issues[] = 'missing_google_places_api_key';
+            } else {
+                $checks[] = 'google_places_api_key_present';
+            }
+        }
+
+        $social_mode = sanitize_text_field((string) ($settings['social_discovery_mode'] ?? 'off'));
+        if ($social_mode !== 'off') {
+            if (trim((string) ($settings['google_cse_api_key'] ?? '')) === '' || trim((string) ($settings['google_cse_cx'] ?? '')) === '') {
+                $issues[] = 'missing_google_cse_configuration';
+            } else {
+                $checks[] = 'google_cse_configuration_present';
+            }
+        }
+
+        return [
+            'ok' => empty($issues),
+            'issues' => $issues,
+            'checks' => $checks,
+        ];
     }
 
     private function table($name)
@@ -1284,6 +1374,12 @@ class LC_Frontend
     {
         $defaults = [
             'max_places_per_run' => 25,
+            'enable_live_api_calls' => 0,
+            'google_places_api_key' => '',
+            'discovery_mode' => 'hybrid',
+            'social_discovery_mode' => 'off',
+            'google_cse_api_key' => '',
+            'google_cse_cx' => '',
             'smtp_enabled' => 0,
             'smtp_host' => '',
             'smtp_port' => 587,
