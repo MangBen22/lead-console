@@ -42,6 +42,10 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 - Safe default mode keeps live APIs off until explicitly enabled.
 - Max places/run enforced from settings.
 - Google Places API key field included for controlled connector expansion.
+- Discovery modes:
+  - `Hybrid` (Google Places API first, then directory fallback)
+  - `Google Places API only`
+  - `Directory fallback only`
 
 ### Dedupe + suppression
 - Duplicate checks by phone/domain during CSV import.
@@ -83,3 +87,34 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 - A cron hook (`lc_process_run`) is scheduled hourly.
 - On deactivation, cron processing is unscheduled.
 - On uninstall, plugin tables and settings are removed.
+
+## Google Places API Capture (Step by Step)
+1. Open Google Cloud Console.
+2. Create/select your project.
+3. Enable `Places API`.
+4. Go to `APIs & Services -> Credentials`.
+5. Create API key.
+6. Restrict API key to:
+   - Your website/domain
+   - Places API only
+7. In WordPress open `Lead Console -> Settings`.
+8. Paste key into `Google Places API key`.
+9. Turn on `Enable live API calls`.
+10. Set `Discovery mode` to `Hybrid` or `Google Places API only`.
+11. Save settings and queue a run from `Lead Console -> Runs`.
+
+## If Google Places API Is Not Ready
+- If API key is empty, plugin logs this in run logs and uses fallback when mode allows.
+- Fallback scans configured web directory sources (default list included).
+- Default fallback sources are preloaded with quality scores and can be customized in Settings.
+
+## Fallback Directory Sources (Default)
+- Google Maps search URL capture
+- Yelp
+- Yellow Pages
+- Better Business Bureau (BBB)
+- Chamber of Commerce
+- Manta
+
+Use the `Directory sources` setting to override list entries with this format:
+`Source Name|https://source.example/search?query={query}&city={city}|85`

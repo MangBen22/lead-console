@@ -112,6 +112,8 @@ class LC_Plugin
             'max_places_per_run' => 25,
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
+            'discovery_mode' => 'hybrid',
+            'directory_sources' => '',
         ]);
     }
 
@@ -165,11 +167,18 @@ class LC_Plugin
 
     public function sanitize_settings($settings)
     {
+        $mode = sanitize_text_field($settings['discovery_mode'] ?? 'hybrid');
+        if (!in_array($mode, ['hybrid', 'google_only', 'directory_only'], true)) {
+            $mode = 'hybrid';
+        }
+
         return [
             'domain_fragment' => sanitize_text_field($settings['domain_fragment'] ?? ''),
             'max_places_per_run' => max(1, absint($settings['max_places_per_run'] ?? 25)),
             'enable_live_api_calls' => !empty($settings['enable_live_api_calls']) ? 1 : 0,
             'google_places_api_key' => sanitize_text_field($settings['google_places_api_key'] ?? ''),
+            'discovery_mode' => $mode,
+            'directory_sources' => sanitize_textarea_field($settings['directory_sources'] ?? ''),
         ];
     }
 
@@ -193,6 +202,8 @@ class LC_Plugin
             'max_places_per_run' => 25,
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
+            'discovery_mode' => 'hybrid',
+            'directory_sources' => '',
         ];
 
         return wp_parse_args(get_option('lc_settings', []), $defaults);
@@ -436,16 +447,284 @@ class LC_Plugin
             'message' => 'Run started in ' . $mode . ' mode. Query: ' . $run->query_text,
         ]);
 
+        $created = 0;
+        $used_api = false;
+        $can_use_api = !empty($settings['enable_live_api_calls']) && !empty($settings['google_places_api_key']);
+        $mode_setting = $settings['discovery_mode'] ?? 'hybrid';
+
+        if ($can_use_api && $mode_setting !== 'directory_only') {
+            $used_api = true;
+            $created += $this->discover_with_google_places_api($run, $settings, $logs_table);
+        } elseif (empty($settings['google_places_api_key'])) {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'warning',
+                'message' => 'Google Places API key is empty. Capture it in Lead Console > Settings > Google Places API key.',
+            ]);
+        }
+
+        if (($mode_setting === 'directory_only') || ($mode_setting === 'hybrid' && (!$can_use_api || $created === 0))) {
+            $created += $this->discover_with_directory_fallback($run, $settings, $logs_table);
+        }
+
+        $summary = $used_api ? 'Google API + fallback processing complete.' : 'Fallback directory processing complete.';
         $wpdb->insert($logs_table, [
             'run_id' => $run->id,
             'level' => 'info',
-            'message' => 'Run completed. Connector integrations are ready for expansion.',
+            'message' => sprintf('%s Leads created: %d.', $summary, $created),
         ]);
 
         $wpdb->update($runs_table, [
             'status' => 'completed',
             'finished_at' => current_time('mysql'),
         ], ['id' => $run->id]);
+    }
+
+    private function discover_with_google_places_api($run, $settings, $logs_table)
+    {
+        global $wpdb;
+
+        $api_key = $settings['google_places_api_key'] ?? '';
+        $max_places = max(1, (int) $run->max_places);
+        $query = trim($run->query_text . ' ' . $run->city);
+
+        $url = add_query_arg([
+            'query' => $query,
+            'key' => $api_key,
+        ], 'https://maps.googleapis.com/maps/api/place/textsearch/json');
+
+        $response = wp_remote_get($url, ['timeout' => 20]);
+        if (is_wp_error($response)) {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'error',
+                'message' => 'Google Places API request failed: ' . $response->get_error_message(),
+            ]);
+            return 0;
+        }
+
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (empty($payload['results']) || !is_array($payload['results'])) {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'warning',
+                'message' => 'Google Places API returned no results.',
+            ]);
+            return 0;
+        }
+
+        $added = 0;
+        foreach ($payload['results'] as $item) {
+            if ($added >= $max_places) {
+                break;
+            }
+
+            $website = '';
+            $phone = '';
+            $email = '';
+            $name = sanitize_text_field($item['name'] ?? '');
+            $address = sanitize_text_field($item['formatted_address'] ?? '');
+            $rating = (float) ($item['rating'] ?? 0);
+            $review_count = absint($item['user_ratings_total'] ?? 0);
+
+            if (!$name) {
+                continue;
+            }
+
+            $inserted = $this->insert_discovered_lead([
+                'business_name' => $name,
+                'city' => sanitize_text_field($run->city),
+                'category' => sanitize_text_field($run->query_text),
+                'address' => $address,
+                'website' => $website,
+                'phone' => $phone,
+                'email' => $email,
+                'review_count' => $review_count,
+                'rating' => $rating,
+                'source_url' => 'https://maps.google.com/?q=' . rawurlencode($name . ' ' . $run->city),
+                'notes' => 'Imported from Google Places API',
+            ]);
+
+            if ($inserted) {
+                $added++;
+            }
+        }
+
+        $wpdb->insert($logs_table, [
+            'run_id' => $run->id,
+            'level' => 'info',
+            'message' => sprintf('Google Places API discovery added %d leads.', $added),
+        ]);
+
+        return $added;
+    }
+
+    private function discover_with_directory_fallback($run, $settings, $logs_table)
+    {
+        global $wpdb;
+
+        $sources = $this->get_directory_sources($settings);
+        $max_places = max(1, (int) $run->max_places);
+        $added = 0;
+
+        foreach ($sources as $source) {
+            if ($added >= $max_places) {
+                break;
+            }
+
+            $search_url = str_replace(
+                ['{query}', '{city}'],
+                [rawurlencode($run->query_text), rawurlencode($run->city)],
+                $source['search_url']
+            );
+
+            $response = wp_remote_get($search_url, ['timeout' => 15, 'user-agent' => 'LeadConsoleBot/0.1']);
+            if (is_wp_error($response)) {
+                $wpdb->insert($logs_table, [
+                    'run_id' => $run->id,
+                    'level' => 'warning',
+                    'message' => 'Directory request failed for ' . $source['name'] . ': ' . $response->get_error_message(),
+                ]);
+                continue;
+            }
+
+            $html = (string) wp_remote_retrieve_body($response);
+            if (!$html) {
+                continue;
+            }
+
+            preg_match_all('/<a[^>]*>([^<]{3,120})<\/a>/i', $html, $matches);
+            if (empty($matches[1])) {
+                continue;
+            }
+
+            $added_from_source = 0;
+            foreach ($matches[1] as $candidate) {
+                if ($added >= $max_places || $added_from_source >= 3) {
+                    break;
+                }
+
+                $name = trim(wp_strip_all_tags($candidate));
+                if (strlen($name) < 4 || stripos($name, 'cookie') !== false) {
+                    continue;
+                }
+
+                $inserted = $this->insert_discovered_lead([
+                    'business_name' => $name,
+                    'city' => sanitize_text_field($run->city),
+                    'category' => sanitize_text_field($run->query_text),
+                    'address' => '',
+                    'website' => '',
+                    'phone' => '',
+                    'email' => '',
+                    'review_count' => 0,
+                    'rating' => 0,
+                    'source_url' => esc_url_raw($search_url),
+                    'notes' => sprintf('Imported via directory fallback: %s (quality:%d)', $source['name'], (int) $source['quality_score']),
+                ]);
+
+                if ($inserted) {
+                    $added++;
+                    $added_from_source++;
+                }
+            }
+
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'info',
+                'message' => sprintf('Directory fallback source %s added %d leads.', $source['name'], $added_from_source),
+            ]);
+        }
+
+        if ($added === 0) {
+            $wpdb->insert($logs_table, [
+                'run_id' => $run->id,
+                'level' => 'warning',
+                'message' => 'Directory fallback added 0 leads. Consider setting Google Places API key in Settings.',
+            ]);
+        }
+
+        return $added;
+    }
+
+    private function insert_discovered_lead($data)
+    {
+        global $wpdb;
+
+        $website = esc_url_raw($data['website'] ?? '');
+        $phone = sanitize_text_field($data['phone'] ?? '');
+        $email = sanitize_email($data['email'] ?? '');
+        $name = sanitize_text_field($data['business_name'] ?? '');
+
+        if (!$name) {
+            return false;
+        }
+
+        if ($this->is_suppressed($email, $phone, $website, $name)) {
+            return false;
+        }
+
+        if ($this->find_duplicate_lead_id($phone, $website)) {
+            return false;
+        }
+
+        $score = $this->compute_score($website, $phone, $email, (int) ($data['review_count'] ?? 0), (float) ($data['rating'] ?? 0));
+        $lead_type = $this->compute_lead_type($website, $score);
+
+        $inserted = $wpdb->insert($this->db_table('lc_leads'), [
+            'business_name' => $name,
+            'city' => sanitize_text_field($data['city'] ?? ''),
+            'category' => sanitize_text_field($data['category'] ?? ''),
+            'address' => sanitize_text_field($data['address'] ?? ''),
+            'website' => $website,
+            'phone' => $phone,
+            'email' => $email,
+            'email_confidence' => '',
+            'review_count' => absint($data['review_count'] ?? 0),
+            'rating' => (float) ($data['rating'] ?? 0),
+            'status' => 'New',
+            'score' => $score,
+            'lead_type' => $lead_type,
+            'source_url' => esc_url_raw($data['source_url'] ?? ''),
+            'notes' => sanitize_textarea_field($data['notes'] ?? ''),
+        ]);
+
+        return !empty($inserted);
+    }
+
+    private function get_directory_sources($settings)
+    {
+        $custom = trim((string) ($settings['directory_sources'] ?? ''));
+        $sources = [];
+
+        if ($custom !== '') {
+            $lines = preg_split('/\r\n|\r|\n/', $custom);
+            foreach ($lines as $line) {
+                $parts = array_map('trim', explode('|', $line));
+                if (count($parts) < 3) {
+                    continue;
+                }
+
+                $sources[] = [
+                    'name' => sanitize_text_field($parts[0]),
+                    'search_url' => esc_url_raw($parts[1]),
+                    'quality_score' => absint($parts[2]),
+                ];
+            }
+        }
+
+        if (!empty($sources)) {
+            return $sources;
+        }
+
+        return [
+            ['name' => 'Google Maps', 'search_url' => 'https://www.google.com/maps/search/{query}+{city}', 'quality_score' => 95],
+            ['name' => 'Yelp', 'search_url' => 'https://www.yelp.com/search?find_desc={query}&find_loc={city}', 'quality_score' => 90],
+            ['name' => 'Yellow Pages', 'search_url' => 'https://www.yellowpages.com/search?search_terms={query}&geo_location_terms={city}', 'quality_score' => 84],
+            ['name' => 'Better Business Bureau', 'search_url' => 'https://www.bbb.org/search?find_text={query}&find_loc={city}', 'quality_score' => 86],
+            ['name' => 'Chamber of Commerce', 'search_url' => 'https://www.chamberofcommerce.com/search?what={query}&where={city}', 'quality_score' => 79],
+            ['name' => 'Manta', 'search_url' => 'https://www.manta.com/search?search={query}+{city}', 'quality_score' => 72],
+        ];
     }
 
     private function find_duplicate_lead_id($phone, $website)
@@ -766,6 +1045,11 @@ class LC_Plugin
 
         echo '<div class="lc-card">';
         echo '<h2>Queue Discovery Run</h2>';
+        if (empty($settings['google_places_api_key'])) {
+            echo '<p><strong>Note:</strong> Google Places API key is not configured. Run will use directory fallback mode based on Settings.</p>';
+        } else {
+            echo '<p><strong>Google Places API key detected.</strong> Run can use Google Places API depending on discovery mode.</p>';
+        }
         echo '<form class="lc-form-grid" method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         wp_nonce_field('lc_queue_run');
         echo '<input type="hidden" name="action" value="lc_queue_run" />';
@@ -972,10 +1256,40 @@ class LC_Plugin
         echo '<tr><th scope="row"><label for="lc_max_places">Max places per run</label></th><td><input id="lc_max_places" type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) $settings['max_places_per_run']) . '" /></td></tr>';
         echo '<tr><th scope="row"><label for="lc_live_api">Enable live API calls</label></th><td><label><input id="lc_live_api" type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enabled</label></td></tr>';
         echo '<tr><th scope="row"><label for="lc_google_key">Google Places API key</label></th><td><input id="lc_google_key" type="text" name="lc_settings[google_places_api_key]" value="' . esc_attr($settings['google_places_api_key']) . '" class="regular-text" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_discovery_mode">Discovery mode</label></th><td><select id="lc_discovery_mode" name="lc_settings[discovery_mode]">';
+        echo '<option value="hybrid" ' . selected($settings['discovery_mode'], 'hybrid', false) . '>Hybrid (API first, fallback directories)</option>';
+        echo '<option value="google_only" ' . selected($settings['discovery_mode'], 'google_only', false) . '>Google Places API only</option>';
+        echo '<option value="directory_only" ' . selected($settings['discovery_mode'], 'directory_only', false) . '>Directory fallback only</option>';
+        echo '</select></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_directory_sources">Directory sources</label></th><td>';
+        echo '<textarea id="lc_directory_sources" name="lc_settings[directory_sources]" class="large-text code" rows="8" placeholder="Source Name|https://example.com/search?q={query}&loc={city}|80">' . esc_textarea($settings['directory_sources']) . '</textarea>';
+        echo '<p class="description">Optional custom fallback list. One source per line in format: <code>Name|URL-with-{query}-and-{city}|QualityScore</code>.</p>';
+        echo '</td></tr>';
         echo '</tbody></table>';
 
         submit_button('Save Settings');
         echo '</form>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Google Places API Setup (Step by Step)</h2>';
+        echo '<ol>';
+        echo '<li>Go to Google Cloud Console and select/create a project.</li>';
+        echo '<li>Enable <strong>Places API</strong>.</li>';
+        echo '<li>Create an API key under <strong>APIs & Services -> Credentials</strong>.</li>';
+        echo '<li>Restrict key usage to your WordPress domain and Places API.</li>';
+        echo '<li>Paste key into <strong>Lead Console -> Settings -> Google Places API key</strong>.</li>';
+        echo '<li>Enable <strong>Live API calls</strong>.</li>';
+        echo '<li>Set Discovery mode to <strong>Hybrid</strong> or <strong>Google Places API only</strong>.</li>';
+        echo '<li>Save Settings, then queue a run in <strong>Lead Console -> Runs</strong>.</li>';
+        echo '</ol>';
+        echo '<p><strong>If key is missing:</strong> plugin automatically logs and uses directory fallback when mode allows it.</p>';
+        echo '</div>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Fallback Directory Scan Guidance</h2>';
+        echo '<p>Default fallback sources include Google Maps search URL capture, Yelp, Yellow Pages, BBB, Chamber of Commerce, and Manta. You can override sources in Directory sources field.</p>';
+        echo '<p>Recommended practice is to prioritize high-authority directories and review each source quality score before outreach.</p>';
+        echo '</div>';
 
         echo '<p><strong>Ownership:</strong> This software is proprietary and owned by 5N2 Digital.</p>';
 
