@@ -53,11 +53,27 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 1. Copy this folder to `wp-content/plugins/lead-console`.
 2. Ensure the main plugin file is `lead-console.php` in that folder root.
 3. Activate **5N2 Lead Console** in WP Admin -> Plugins.
-4. Open **Lead Console -> Settings**.
-5. Confirm domain fragment and free-tier limits.
-6. Keep **Enable live API calls** OFF initially.
-7. Add sample leads manually or import CSV.
-8. Queue a run in **Lead Console -> Runs**.
+4. Create or edit a front-end page and add shortcode: `[lc_frontend_console]`.
+5. Open **Lead Console -> Settings**.
+6. Confirm domain fragment and free-tier limits.
+7. Keep **Enable live API calls** OFF initially.
+8. Add sample leads manually or import CSV.
+9. Queue a run in **Lead Console -> Runs**.
+
+## Front-End Portal Flow
+- Login form with username/password.
+- Required GDPR acceptance at sign-in.
+- Welcome message for logged-in user.
+- Onboarding tutorial popup with Next/Back flow.
+- Checklist step confirmation required before advancing tutorial steps.
+- Front-end lead and run actions:
+  - Add lead
+  - Update lead status
+  - Queue run
+  - View recent leads and runs
+
+## Design Direction
+- Front-end portal styling follows the 5N2 Digital visual direction (dark UI with red/orange/blue brand accent system).
 
 ## CSV Headers (Required)
 `business_name, city, category, address, website, phone, email, email_confidence, review_count, rating, status, notes, source_url`

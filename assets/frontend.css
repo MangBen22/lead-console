@@ -1,0 +1,253 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Sora:wght@500;600;700&display=swap");
+
+.lc-fe {
+  --lc-bg: #070a10;
+  --lc-panel: #121827;
+  --lc-panel-2: #1a2235;
+  --lc-text: #f5f7ff;
+  --lc-muted: #a8b1c7;
+  --lc-red: #f0423c;
+  --lc-orange: #ff8a00;
+  --lc-blue: #2b6dff;
+  --lc-line: rgba(255, 255, 255, 0.12);
+  position: relative;
+  isolation: isolate;
+  color: var(--lc-text);
+  font-family: "DM Sans", sans-serif;
+  padding: 28px 16px;
+}
+
+.lc-fe-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background:
+    radial-gradient(1000px 500px at 5% 0%, rgba(240, 66, 60, 0.2), transparent 55%),
+    radial-gradient(900px 500px at 95% 0%, rgba(43, 109, 255, 0.2), transparent 55%),
+    linear-gradient(145deg, #05070c, #0b1020 55%, #141325);
+  z-index: -1;
+}
+
+.lc-fe-shell {
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.lc-fe-card,
+.lc-fe-metrics article {
+  border: 1px solid var(--lc-line);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.lc-fe h1,
+.lc-fe h2,
+.lc-fe h3 {
+  margin: 0 0 10px;
+  font-family: "Sora", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.lc-fe p {
+  margin: 0;
+  color: var(--lc-muted);
+}
+
+.lc-badge {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: #ffd8ac;
+}
+
+.lc-fe-alert {
+  margin-bottom: 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(255, 138, 0, 0.18);
+  border: 1px solid rgba(255, 138, 0, 0.34);
+}
+
+.lc-fe-login {
+  max-width: 540px;
+  margin: 34px auto;
+}
+
+.lc-fe-form {
+  margin-top: 15px;
+  display: grid;
+  gap: 11px;
+}
+
+.lc-fe-form label {
+  display: grid;
+  gap: 6px;
+  color: #dce4fa;
+  font-size: 14px;
+}
+
+.lc-fe-form input,
+.lc-fe-form select {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 11px 12px;
+  color: var(--lc-text);
+  background: rgba(5, 10, 24, 0.55);
+}
+
+.lc-fe button,
+.lc-fe a.lc-btn {
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--lc-red), var(--lc-orange) 52%, var(--lc-blue));
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lc-check {
+  display: flex !important;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.lc-check input {
+  margin-top: 4px;
+}
+
+.lc-fe-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.lc-fe-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.lc-fe-actions a {
+  color: #c7d4ff;
+  text-decoration: none;
+}
+
+.lc-fe-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.lc-fe-metrics p {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.lc-fe-metrics strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 28px;
+  font-family: "Sora", sans-serif;
+}
+
+.lc-fe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.lc-fe table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.lc-fe th,
+.lc-fe td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+  font-size: 14px;
+}
+
+.lc-inline-form {
+  display: flex;
+  gap: 6px;
+}
+
+.lc-inline-form select {
+  min-width: 130px;
+}
+
+.lc-tutorial {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.lc-tutorial[hidden] {
+  display: none;
+}
+
+.lc-tutorial-panel {
+  width: min(92vw, 560px);
+  background: linear-gradient(170deg, var(--lc-panel), var(--lc-panel-2));
+  border: 1px solid var(--lc-line);
+  border-radius: 14px;
+  padding: 20px;
+  position: relative;
+}
+
+.lc-tutorial-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.lc-step-copy {
+  margin: 10px 0 12px !important;
+}
+
+.lc-tutorial-progress {
+  margin: 12px 0;
+  color: #d6dcf8;
+  font-size: 13px;
+}
+
+.lc-tutorial-nav {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 900px) {
+  .lc-fe-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lc-fe-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lc-fe-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

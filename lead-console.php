@@ -19,8 +19,10 @@ define('LC_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('LC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once LC_PLUGIN_PATH . 'includes/class-lc-plugin.php';
+require_once LC_PLUGIN_PATH . 'includes/class-lc-frontend.php';
 
 register_activation_hook(LC_PLUGIN_FILE, ['LC_Plugin', 'activate']);
 register_deactivation_hook(LC_PLUGIN_FILE, ['LC_Plugin', 'deactivate']);
 
 LC_Plugin::instance();
+LC_Frontend::instance();
