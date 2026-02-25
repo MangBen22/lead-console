@@ -43,6 +43,17 @@
     });
   });
 
+  root.querySelectorAll(".lc-open-run-advanced").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const form = btn.closest("form");
+      const panel = form?.querySelector(".lc-run-advanced");
+      if (!panel) return;
+      const open = panel.hidden;
+      panel.hidden = !open;
+      btn.textContent = open ? "Hide Advanced Options" : "Advanced Options";
+    });
+  });
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 
