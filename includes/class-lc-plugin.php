@@ -212,6 +212,8 @@ class LC_Plugin
         add_action('admin_post_lc_admin_unlock_user', [$this, 'handle_admin_unlock_user']);
         add_action('admin_post_lc_admin_approve_user', [$this, 'handle_admin_approve_user']);
         add_action('admin_post_lc_admin_reject_user', [$this, 'handle_admin_reject_user']);
+        add_action('admin_post_lc_admin_update_user_profile', [$this, 'handle_admin_update_user_profile']);
+        add_action('admin_post_lc_admin_create_user', [$this, 'handle_admin_create_user']);
         add_action('admin_post_lc_frontend_save_settings', [$this, 'handle_frontend_save_settings']);
         add_action('phpmailer_init', [$this, 'configure_smtp_mailer']);
         add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
@@ -1485,6 +1487,13 @@ class LC_Plugin
         return in_array($status, $this->statuses, true) ? $status : 'New';
     }
 
+    private function normalize_access_level($access)
+    {
+        $access = sanitize_text_field((string) $access);
+        $allowed = ['standard', 'manager', 'readonly'];
+        return in_array($access, $allowed, true) ? $access : 'standard';
+    }
+
     private function message_notice()
     {
         if (empty($_GET['message'])) {
@@ -1504,6 +1513,8 @@ class LC_Plugin
             'user_reset_done' => 'User password reset completed.',
             'user_lock_done' => 'User locked successfully.',
             'user_unlock_done' => 'User unlocked successfully.',
+            'user_profile_saved' => 'User profile updated successfully.',
+            'user_created' => 'User created successfully.',
             'user_action_error' => 'User action failed.',
             'invalid_headers' => 'CSV headers do not match expected format.',
             'missing_file' => 'Please select a CSV file to import.',
@@ -2068,6 +2079,105 @@ class LC_Plugin
         $this->redirect_after_action('user_lock_done', 'lc_users');
     }
 
+    public function handle_admin_update_user_profile()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_update_user_profile');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            $this->redirect_after_action('user_action_error', 'lc_users');
+        }
+
+        $first_name = sanitize_text_field($_POST['first_name'] ?? '');
+        $last_name = sanitize_text_field($_POST['last_name'] ?? '');
+        $display_name = sanitize_text_field($_POST['display_name'] ?? trim($first_name . ' ' . $last_name));
+        $phone = sanitize_text_field($_POST['phone'] ?? '');
+        $company = sanitize_text_field($_POST['company'] ?? '');
+        $access_level = $this->normalize_access_level($_POST['access_level'] ?? 'standard');
+
+        wp_update_user([
+            'ID' => $user_id,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'display_name' => $display_name !== '' ? $display_name : $user->user_login,
+        ]);
+
+        update_user_meta($user_id, 'lc_phone', $phone);
+        update_user_meta($user_id, 'lc_company', $company);
+        update_user_meta($user_id, 'lc_access_level', $access_level);
+
+        $this->log_system_event('users', 'info', 'User profile updated by super admin.', ['user_id' => $user_id, 'access_level' => $access_level]);
+        $this->redirect_after_action('user_profile_saved', 'lc_users');
+    }
+
+    public function handle_admin_create_user()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_create_user');
+
+        $email = sanitize_email($_POST['email'] ?? '');
+        if ($email === '' || email_exists($email)) {
+            $this->redirect_after_action('user_action_error', 'lc_users');
+        }
+
+        $first_name = sanitize_text_field($_POST['first_name'] ?? '');
+        $last_name = sanitize_text_field($_POST['last_name'] ?? '');
+        $phone = sanitize_text_field($_POST['phone'] ?? '');
+        $company = sanitize_text_field($_POST['company'] ?? '');
+        $password = (string) ($_POST['password'] ?? '');
+        if ($password === '') {
+            $password = wp_generate_password(14, true, true);
+        }
+        $access_level = $this->normalize_access_level($_POST['access_level'] ?? 'standard');
+
+        $base_login = sanitize_user(strstr($email, '@', true) ?: 'user', true);
+        $login = $base_login ?: 'user';
+        $suffix = 1;
+        while (username_exists($login)) {
+            $login = $base_login . $suffix;
+            $suffix++;
+        }
+
+        $user_id = wp_create_user($login, $password, $email);
+        if (is_wp_error($user_id) || !$user_id) {
+            $this->redirect_after_action('user_action_error', 'lc_users');
+        }
+
+        wp_update_user([
+            'ID' => (int) $user_id,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'display_name' => trim($first_name . ' ' . $last_name) ?: $login,
+            'role' => 'subscriber',
+        ]);
+
+        update_user_meta((int) $user_id, 'lc_phone', $phone);
+        update_user_meta((int) $user_id, 'lc_company', $company);
+        update_user_meta((int) $user_id, 'lc_access_level', $access_level);
+        update_user_meta((int) $user_id, 'lc_pending_approval', 0);
+        update_user_meta((int) $user_id, 'lc_registration_status', 'approved');
+        update_user_meta((int) $user_id, 'lc_locked', 0);
+
+        $this->send_templated_email(
+            $email,
+            'registration_approved',
+            [
+                'first_name' => $first_name,
+                'full_name' => trim($first_name . ' ' . $last_name),
+                'user_email' => $email,
+                'username' => $login,
+                'new_password' => $password,
+            ],
+            'Your account has been created',
+            "Hello {first_name},\n\nYour account has been created by the super admin.\nUsername: {username}\nPassword: {new_password}\n\nPlease log in and update your password."
+        );
+
+        $this->log_system_event('users', 'info', 'User created by super admin.', ['user_id' => (int) $user_id, 'access_level' => $access_level]);
+        $this->redirect_after_action('user_created', 'lc_users');
+    }
+
     public function handle_frontend_save_settings()
     {
         $this->ensure_permissions();
@@ -2110,25 +2220,45 @@ class LC_Plugin
 
         echo '<div class="lc-card" style="margin-bottom:16px;">';
         echo '<h2>User Administration</h2>';
-        echo '<p>Manual password reset and account lock/unlock are available only to primary admin (' . esc_html($this->get_primary_admin_email()) . ').</p>';
+        echo '<p>Only super admin can create users, update important profile information, and set access level. Email remains fixed and cannot be changed.</p>';
+        echo '</div>';
+
+        echo '<div class="lc-card" style="margin-bottom:16px;">';
+        echo '<h2>Create User</h2>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-form-grid">';
+        wp_nonce_field('lc_admin_create_user');
+        echo '<input type="hidden" name="action" value="lc_admin_create_user" />';
+        echo '<input type="text" name="first_name" placeholder="First name" required />';
+        echo '<input type="text" name="last_name" placeholder="Last name" required />';
+        echo '<input type="email" name="email" placeholder="Email (immutable)" required />';
+        echo '<input type="text" name="phone" placeholder="Phone" />';
+        echo '<input type="text" name="company" placeholder="Company" />';
+        echo '<input type="text" name="password" placeholder="Optional password (auto-generate if empty)" />';
+        echo '<select name="access_level"><option value="standard">Standard Access</option><option value="manager">Manager Access</option><option value="readonly">Read-Only Access</option></select>';
+        submit_button('Create User', 'primary', 'submit', false);
+        echo '</form>';
         echo '</div>';
 
         echo '<table class="widefat striped">';
-        echo '<thead><tr><th>Photo</th><th>User</th><th>Role</th><th>Status</th><th>Approval</th><th>Manual Password Reset</th><th>Lock Controls</th></tr></thead><tbody>';
+        echo '<thead><tr><th>Photo</th><th>User</th><th>Access</th><th>Status</th><th>Approval</th><th>Update Info</th><th>Manual Password Reset</th><th>Lock Controls</th></tr></thead><tbody>';
 
         foreach ($users as $user) {
-            $roles = implode(', ', array_map('sanitize_text_field', $user->roles));
             $locked = !empty(get_user_meta($user->ID, 'lc_locked', true));
             $is_primary = strtolower((string) $user->user_email) === $this->get_primary_admin_email();
             $is_pending = !empty(get_user_meta($user->ID, 'lc_pending_approval', true));
             $reg_status = (string) get_user_meta($user->ID, 'lc_registration_status', true);
+            $access_level = $this->normalize_access_level(get_user_meta($user->ID, 'lc_access_level', true));
+            $phone = (string) get_user_meta($user->ID, 'lc_phone', true);
+            $company = (string) get_user_meta($user->ID, 'lc_company', true);
+            $first_name = (string) get_user_meta($user->ID, 'first_name', true);
+            $last_name = (string) get_user_meta($user->ID, 'last_name', true);
 
             echo '<tr>';
             echo '<td>' . get_avatar($user->ID, 48) . '</td>';
             echo '<td><strong>' . esc_html($user->display_name ?: $user->user_login) . '</strong><br/>';
             echo '<small>Username: ' . esc_html($user->user_login) . '</small><br/>';
             echo '<small>Email: ' . esc_html($user->user_email) . '</small></td>';
-            echo '<td>' . esc_html($roles ?: 'subscriber') . '</td>';
+            echo '<td>' . esc_html(ucfirst($access_level)) . '</td>';
             echo '<td>' . ($locked ? '<span style="color:#b10000;font-weight:600;">Locked</span>' : '<span style="color:#0a7a0a;font-weight:600;">Active</span>') . ($is_primary ? '<br/><small>Primary Admin</small>' : '') . '</td>';
 
             echo '<td>';
@@ -2149,6 +2279,30 @@ class LC_Plugin
                 echo '</form>';
             } else {
                 echo '<em>' . esc_html($reg_status !== '' ? ucfirst($reg_status) : 'Approved') . '</em>';
+            }
+            echo '</td>';
+
+            echo '<td>';
+            if ($is_primary) {
+                echo '<em>Protected</em>';
+            } else {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-form-grid">';
+                wp_nonce_field('lc_admin_update_user_profile');
+                echo '<input type="hidden" name="action" value="lc_admin_update_user_profile" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+                echo '<input type="text" name="first_name" value="' . esc_attr($first_name) . '" placeholder="First name" />';
+                echo '<input type="text" name="last_name" value="' . esc_attr($last_name) . '" placeholder="Last name" />';
+                echo '<input type="text" name="display_name" value="' . esc_attr((string) $user->display_name) . '" placeholder="Display name" />';
+                echo '<input type="text" value="' . esc_attr($user->user_email) . '" disabled />';
+                echo '<input type="text" name="phone" value="' . esc_attr($phone) . '" placeholder="Phone" />';
+                echo '<input type="text" name="company" value="' . esc_attr($company) . '" placeholder="Company" />';
+                echo '<select name="access_level">';
+                echo '<option value="standard" ' . selected($access_level, 'standard', false) . '>Standard Access</option>';
+                echo '<option value="manager" ' . selected($access_level, 'manager', false) . '>Manager Access</option>';
+                echo '<option value="readonly" ' . selected($access_level, 'readonly', false) . '>Read-Only Access</option>';
+                echo '</select>';
+                submit_button('Save Info', 'small', 'submit', false);
+                echo '</form>';
             }
             echo '</td>';
 
@@ -2188,7 +2342,7 @@ class LC_Plugin
         }
 
         if (empty($users)) {
-            echo '<tr><td colspan="7">No users found.</td></tr>';
+            echo '<tr><td colspan="8">No users found.</td></tr>';
         }
 
         echo '</tbody></table>';

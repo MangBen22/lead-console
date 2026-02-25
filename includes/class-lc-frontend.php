@@ -100,6 +100,8 @@ class LC_Frontend
             'user_reset_done' => 'User password reset completed.',
             'user_lock_done' => 'User locked successfully.',
             'user_unlock_done' => 'User unlocked successfully.',
+            'user_profile_saved' => 'User profile updated successfully.',
+            'user_created' => 'User created successfully.',
             'user_action_error' => 'User action failed.',
             'reset_email_not_found' => 'Email not found in user database.',
             'reset_sent' => 'Password reset email sent. The link is valid for 5 minutes.',
@@ -457,15 +459,39 @@ class LC_Frontend
         echo '<section class="lc-tab-panel" data-tab="users"><div class="lc-fe-card" id="lc-section-users">';
         echo '<p class="lc-card-kicker">// USERS</p>';
         echo '<h3>User Management</h3>';
-        echo '<table><thead><tr><th>Photo</th><th>User</th><th>Status</th><th>Approval</th><th>Reset</th><th>Lock</th></tr></thead><tbody>';
+        echo '<p>Only super admin can update important user information and access level. Email is immutable.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form" style="margin-bottom:10px;">';
+        wp_nonce_field('lc_admin_create_user');
+        echo '<input type="hidden" name="action" value="lc_admin_create_user" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<label>First Name<input type="text" name="first_name" required /></label>';
+        echo '<label>Last Name<input type="text" name="last_name" required /></label>';
+        echo '<label>Email (immutable)<input type="email" name="email" required /></label>';
+        echo '<label>Phone<input type="text" name="phone" /></label>';
+        echo '<label>Company<input type="text" name="company" /></label>';
+        echo '<label>Password (optional)<input type="text" name="password" placeholder="Auto-generate if empty" /></label>';
+        echo '<label>Access Level<select name="access_level"><option value="standard">Standard Access</option><option value="manager">Manager Access</option><option value="readonly">Read-Only Access</option></select></label>';
+        echo '<button type="submit">Create User</button>';
+        echo '</form>';
+
+        echo '<table><thead><tr><th>Photo</th><th>User</th><th>Access</th><th>Status</th><th>Approval</th><th>Update Info</th><th>Reset</th><th>Lock</th></tr></thead><tbody>';
         foreach ($users as $u) {
             $locked = !empty(get_user_meta((int) $u->ID, 'lc_locked', true));
             $is_primary = $this->is_primary_admin($u);
             $is_pending = !empty(get_user_meta((int) $u->ID, 'lc_pending_approval', true));
             $reg_status = (string) get_user_meta((int) $u->ID, 'lc_registration_status', true);
+            $access_level = sanitize_text_field((string) get_user_meta((int) $u->ID, 'lc_access_level', true));
+            if (!in_array($access_level, ['standard', 'manager', 'readonly'], true)) {
+                $access_level = 'standard';
+            }
+            $phone = (string) get_user_meta((int) $u->ID, 'lc_phone', true);
+            $company = (string) get_user_meta((int) $u->ID, 'lc_company', true);
+            $first_name = (string) get_user_meta((int) $u->ID, 'first_name', true);
+            $last_name = (string) get_user_meta((int) $u->ID, 'last_name', true);
             echo '<tr>';
             echo '<td>' . get_avatar($u->ID, 34) . '</td>';
             echo '<td><strong>' . esc_html($u->display_name ?: $u->user_login) . '</strong><br/><small>' . esc_html($u->user_email) . '</small></td>';
+            echo '<td>' . esc_html(ucfirst($access_level)) . '</td>';
             echo '<td>' . ($locked ? 'Locked' : 'Active') . ($is_primary ? ' (Primary Admin)' : '') . '</td>';
             echo '<td>';
             if ($is_primary) {
@@ -487,6 +513,30 @@ class LC_Frontend
                 echo '</form>';
             } else {
                 echo esc_html($reg_status !== '' ? ucfirst($reg_status) : 'Approved');
+            }
+            echo '</td>';
+            echo '<td>';
+            if ($is_primary) {
+                echo 'Protected';
+            } else {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+                wp_nonce_field('lc_admin_update_user_profile');
+                echo '<input type="hidden" name="action" value="lc_admin_update_user_profile" />';
+                echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $u->ID) . '" />';
+                echo '<input type="text" name="first_name" value="' . esc_attr($first_name) . '" placeholder="First name" />';
+                echo '<input type="text" name="last_name" value="' . esc_attr($last_name) . '" placeholder="Last name" />';
+                echo '<input type="text" name="display_name" value="' . esc_attr((string) $u->display_name) . '" placeholder="Display name" />';
+                echo '<input type="text" value="' . esc_attr((string) $u->user_email) . '" disabled />';
+                echo '<input type="text" name="phone" value="' . esc_attr($phone) . '" placeholder="Phone" />';
+                echo '<input type="text" name="company" value="' . esc_attr($company) . '" placeholder="Company" />';
+                echo '<select name="access_level">';
+                echo '<option value="standard" ' . selected($access_level, 'standard', false) . '>Standard</option>';
+                echo '<option value="manager" ' . selected($access_level, 'manager', false) . '>Manager</option>';
+                echo '<option value="readonly" ' . selected($access_level, 'readonly', false) . '>Read-Only</option>';
+                echo '</select>';
+                echo '<button type="submit">Save</button>';
+                echo '</form>';
             }
             echo '</td>';
             echo '<td><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
@@ -521,7 +571,7 @@ class LC_Frontend
             echo '</tr>';
         }
         if (empty($users)) {
-            echo '<tr><td colspan="6">No users found.</td></tr>';
+            echo '<tr><td colspan="8">No users found.</td></tr>';
         }
         echo '</tbody></table>';
         echo '</div></section>';
@@ -758,6 +808,7 @@ class LC_Frontend
         ]);
         update_user_meta((int) $user_id, 'lc_phone', $phone);
         update_user_meta((int) $user_id, 'lc_company', $company);
+        update_user_meta((int) $user_id, 'lc_access_level', 'standard');
         update_user_meta((int) $user_id, 'lc_pending_approval', 1);
         update_user_meta((int) $user_id, 'lc_registration_status', 'pending');
         update_user_meta((int) $user_id, 'lc_locked', 1);
