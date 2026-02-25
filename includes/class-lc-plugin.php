@@ -705,8 +705,11 @@ class LC_Plugin
             'reason' => sanitize_text_field($_POST['reason'] ?? ''),
         ]);
 
-        wp_safe_redirect(admin_url('admin.php?page=lc_suppression&message=added'));
-        exit;
+        $this->log_system_event('suppression', 'info', 'Suppression entry added.', [
+            'type' => sanitize_text_field($_POST['type'] ?? ''),
+            'value' => sanitize_text_field($_POST['value'] ?? ''),
+        ]);
+        $this->redirect_after_action('added', 'lc_suppression');
     }
 
     public function handle_export_ready()
@@ -1712,8 +1715,7 @@ class LC_Plugin
             $this->enrich_single_lead_profile($lead_id);
         }
 
-        wp_safe_redirect(admin_url('admin.php?page=lc_intelligence&message=enriched'));
-        exit;
+        $this->redirect_after_action('enriched', 'lc_intelligence');
     }
 
     public function handle_enrich_recent()
@@ -1727,8 +1729,7 @@ class LC_Plugin
             $this->enrich_single_lead_profile((int) $lead_id);
         }
 
-        wp_safe_redirect(admin_url('admin.php?page=lc_intelligence&message=enriched_recent'));
-        exit;
+        $this->redirect_after_action('enriched_recent', 'lc_intelligence');
     }
 
     public function render_intelligence()

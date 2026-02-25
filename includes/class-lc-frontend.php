@@ -229,6 +229,10 @@ class LC_Frontend
             echo '<a href="#lc-section-settings">Settings</a>';
             echo '<a href="#lc-section-logs">Logs</a>';
             echo '<a href="#lc-section-users">Users</a>';
+            echo '<a href="#lc-section-suppression">Suppression</a>';
+            echo '<a href="#lc-section-intelligence">Intelligence</a>';
+            echo '<a href="#lc-section-reports">Reports</a>';
+            echo '<a href="#lc-section-exports">Exports</a>';
         }
         echo '</nav>';
 
@@ -332,6 +336,16 @@ class LC_Frontend
 
         $logs = $wpdb->get_results("SELECT id, level, category, message, created_at FROM {$this->table('lc_system_logs')} ORDER BY id DESC LIMIT 50");
         $users = get_users(['orderby' => 'registered', 'order' => 'DESC', 'number' => 100]);
+        $suppression = $wpdb->get_results("SELECT * FROM {$this->table('lc_suppression')} ORDER BY id DESC LIMIT 50");
+        $profiles = $wpdb->get_results("
+            SELECT l.id, l.business_name, l.city, p.primary_email, p.completeness_score, p.confidence_score
+            FROM {$this->table('lc_leads')} l
+            LEFT JOIN {$this->table('lc_lead_profiles')} p ON p.lead_id = l.id
+            ORDER BY l.id DESC
+            LIMIT 50
+        ");
+        $status_rows = $wpdb->get_results("SELECT status, COUNT(*) AS total FROM {$this->table('lc_leads')} GROUP BY status ORDER BY total DESC");
+        $run_rows = $wpdb->get_results("SELECT status, COUNT(*) AS total FROM {$this->table('lc_runs')} GROUP BY status ORDER BY total DESC");
 
         echo '<div class="lc-fe-card" id="lc-section-settings">';
         echo '<p class="lc-card-kicker">// SETTINGS</p>';
@@ -425,6 +439,94 @@ class LC_Frontend
             echo '<tr><td colspan="5">No users found.</td></tr>';
         }
         echo '</tbody></table>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-suppression">';
+        echo '<p class="lc-card-kicker">// SUPPRESSION</p>';
+        echo '<h3>Suppression Management</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        wp_nonce_field('lc_add_suppression');
+        echo '<input type="hidden" name="action" value="lc_add_suppression" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<label>Type<select name="type"><option value="email">Email</option><option value="phone">Phone</option><option value="domain">Domain</option><option value="name">Name</option></select></label>';
+        echo '<label>Value<input type="text" name="value" required /></label>';
+        echo '<label>Reason<input type="text" name="reason" /></label>';
+        echo '<button type="submit">Add Suppression</button>';
+        echo '</form>';
+        echo '<table><thead><tr><th>ID</th><th>Type</th><th>Value</th><th>Reason</th></tr></thead><tbody>';
+        foreach ($suppression as $s) {
+            echo '<tr><td>' . esc_html((string) $s->id) . '</td><td>' . esc_html($s->type) . '</td><td>' . esc_html($s->value) . '</td><td>' . esc_html($s->reason) . '</td></tr>';
+        }
+        if (empty($suppression)) {
+            echo '<tr><td colspan="4">No suppression entries yet.</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-intelligence">';
+        echo '<p class="lc-card-kicker">// INTELLIGENCE</p>';
+        echo '<h3>Lead Intelligence</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form" style="margin-bottom:10px;">';
+        wp_nonce_field('lc_enrich_recent');
+        echo '<input type="hidden" name="action" value="lc_enrich_recent" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<button type="submit">Enrich 25 Recent Leads</button>';
+        echo '</form>';
+        echo '<table><thead><tr><th>ID</th><th>Lead</th><th>Primary Email</th><th>Completeness</th><th>Confidence</th><th>Action</th></tr></thead><tbody>';
+        foreach ($profiles as $p) {
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $p->id) . '</td>';
+            echo '<td><strong>' . esc_html($p->business_name) . '</strong><br/><small>' . esc_html($p->city) . '</small></td>';
+            echo '<td>' . esc_html((string) ($p->primary_email ?? '')) . '</td>';
+            echo '<td>' . esc_html((string) ($p->completeness_score ?? 0)) . '%</td>';
+            echo '<td>' . esc_html((string) ($p->confidence_score ?? 0)) . '%</td>';
+            echo '<td><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+            wp_nonce_field('lc_enrich_lead');
+            echo '<input type="hidden" name="action" value="lc_enrich_lead" />';
+            echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+            echo '<input type="hidden" name="lead_id" value="' . esc_attr((string) $p->id) . '" />';
+            echo '<button type="submit">Enrich</button>';
+            echo '</form></td>';
+            echo '</tr>';
+        }
+        if (empty($profiles)) {
+            echo '<tr><td colspan="6">No leads available.</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-reports">';
+        echo '<p class="lc-card-kicker">// REPORTS</p>';
+        echo '<h3>Funnel and Run Reports</h3>';
+        echo '<div class="lc-fe-grid">';
+        echo '<article class="lc-fe-card"><h4>Lead Funnel</h4><table><thead><tr><th>Status</th><th>Total</th></tr></thead><tbody>';
+        foreach ($status_rows as $r) {
+            echo '<tr><td>' . esc_html($r->status) . '</td><td>' . esc_html((string) $r->total) . '</td></tr>';
+        }
+        if (empty($status_rows)) {
+            echo '<tr><td colspan="2">No lead data.</td></tr>';
+        }
+        echo '</tbody></table></article>';
+        echo '<article class="lc-fe-card"><h4>Run Health</h4><table><thead><tr><th>Status</th><th>Total</th></tr></thead><tbody>';
+        foreach ($run_rows as $r) {
+            echo '<tr><td>' . esc_html($r->status) . '</td><td>' . esc_html((string) $r->total) . '</td></tr>';
+        }
+        if (empty($run_rows)) {
+            echo '<tr><td colspan="2">No run data.</td></tr>';
+        }
+        echo '</tbody></table></article>';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-exports">';
+        echo '<p class="lc-card-kicker">// EXPORTS</p>';
+        echo '<h3>Exports</h3>';
+        echo '<p>Download outreach CSV for Ready/Verified leads.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+        wp_nonce_field('lc_export_ready');
+        echo '<input type="hidden" name="action" value="lc_export_ready" />';
+        echo '<button type="submit">Download CSV</button>';
+        echo '</form>';
         echo '</div>';
     }
 
