@@ -66,7 +66,7 @@ class LC_Frontend
         if (!is_user_logged_in()) {
             $this->render_login_form();
         } elseif (!$this->is_allowed_user_email()) {
-            echo '<div class="lc-fe-card"><h2>Access Restricted</h2><p>This console is restricted to ' . esc_html($this->allowed_email()) . '.</p></div>';
+            echo '<div class="lc-fe-card"><h2>Access Restricted</h2><p>This console is restricted to authorized accounts.</p></div>';
         } elseif (!$gdpr_accepted) {
             $this->render_gdpr_gate();
         } else {
@@ -106,7 +106,6 @@ class LC_Frontend
         echo '<p class="lc-badge">5N2 DIGITAL SOFTWARE</p>';
         echo '<h2>Welcome to the 5N2 Lead Console</h2>';
         echo '<p>Secure frontend workspace for lead management and discovery operations.</p>';
-        echo '<p><strong>Authorized email required:</strong> ' . esc_html($this->allowed_email()) . '</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
         wp_nonce_field('lc_frontend_login');
         echo '<input type="hidden" name="action" value="lc_frontend_login" />';
