@@ -325,12 +325,13 @@
   min-width: 220px;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  background: #f59d1f;
   cursor: pointer;
   font-weight: 700;
   color: #ffffff;
   list-style: none;
+  transition: transform 160ms ease, filter 160ms ease;
 }
 
 .lc-run-advanced-wrap summary::-webkit-details-marker {
@@ -340,7 +341,7 @@
 .lc-run-advanced-wrap summary::after {
   content: "Open";
   font-size: 12px;
-  color: #e5ecff;
+  color: #ffffff;
 }
 
 .lc-run-advanced-wrap[open] summary::after {
@@ -349,6 +350,11 @@
 
 .lc-run-advanced-wrap .lc-run-advanced {
   margin-top: 10px;
+}
+
+.lc-run-advanced-wrap summary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
 }
 
 .lc-app-layout {
