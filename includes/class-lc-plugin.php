@@ -79,6 +79,7 @@ class LC_Plugin
             radius_miles INT DEFAULT 0,
             niche VARCHAR(190) DEFAULT '',
             services TEXT NULL,
+            website_focus VARCHAR(20) DEFAULT 'any',
             min_rating DECIMAL(3,1) DEFAULT 0,
             min_reviews INT DEFAULT 0,
             max_places INT DEFAULT 25,
@@ -187,7 +188,7 @@ class LC_Plugin
             'email_template_registration_rejected_subject' => 'Registration declined',
             'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ]);
-        update_option('lc_schema_version', '5');
+        update_option('lc_schema_version', '6');
     }
 
     public static function deactivate()
@@ -486,7 +487,7 @@ class LC_Plugin
     public function maybe_upgrade_schema()
     {
         $version = get_option('lc_schema_version', '1');
-        if ($version === '5') {
+        if ($version === '6') {
             return;
         }
 
@@ -558,6 +559,7 @@ class LC_Plugin
                 'radius_miles' => "ALTER TABLE {$runs_table} ADD COLUMN radius_miles INT DEFAULT 0",
                 'niche' => "ALTER TABLE {$runs_table} ADD COLUMN niche VARCHAR(190) DEFAULT ''",
                 'services' => "ALTER TABLE {$runs_table} ADD COLUMN services TEXT NULL",
+                'website_focus' => "ALTER TABLE {$runs_table} ADD COLUMN website_focus VARCHAR(20) DEFAULT 'any'",
                 'min_rating' => "ALTER TABLE {$runs_table} ADD COLUMN min_rating DECIMAL(3,1) DEFAULT 0",
                 'min_reviews' => "ALTER TABLE {$runs_table} ADD COLUMN min_reviews INT DEFAULT 0",
             ];
@@ -568,7 +570,7 @@ class LC_Plugin
             }
         }
 
-        update_option('lc_schema_version', '5');
+        update_option('lc_schema_version', '6');
     }
 
     private function get_settings()
@@ -859,6 +861,7 @@ class LC_Plugin
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
             'services' => sanitize_textarea_field($_POST['services'] ?? ''),
+            'website_focus' => $this->normalize_website_focus($_POST['website_focus'] ?? 'any'),
             'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
             'min_reviews' => absint($_POST['min_reviews'] ?? 0),
             'max_places' => min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']),
@@ -871,6 +874,7 @@ class LC_Plugin
             'country' => sanitize_text_field($_POST['country'] ?? ''),
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+            'website_focus' => $this->normalize_website_focus($_POST['website_focus'] ?? 'any'),
         ]);
 
         wp_safe_redirect(admin_url('admin.php?page=lc_runs&message=queued'));
@@ -1004,6 +1008,7 @@ class LC_Plugin
         $query = trim($this->run_search_text($run) . ' ' . $this->run_location_text($run));
         $min_rating = max(0, min(5, (float) ($run->min_rating ?? 0)));
         $min_reviews = max(0, (int) ($run->min_reviews ?? 0));
+        $website_focus = $this->normalize_website_focus($run->website_focus ?? 'any');
 
         $url = add_query_arg([
             'query' => $query,
@@ -1051,6 +1056,19 @@ class LC_Plugin
                 continue;
             }
 
+            if (!empty($item['place_id'])) {
+                $details = $this->fetch_google_place_details((string) $item['place_id'], $api_key);
+                $website = $details['website'];
+                $phone = $details['phone'];
+            }
+
+            if ($website_focus === 'no_website' && $website !== '') {
+                continue;
+            }
+            if ($website_focus === 'has_website' && $website === '') {
+                continue;
+            }
+
             $inserted = $this->insert_discovered_lead([
                 'business_name' => $name,
                 'city' => sanitize_text_field($run->city),
@@ -1063,6 +1081,7 @@ class LC_Plugin
                 'rating' => $rating,
                 'source_url' => 'https://maps.google.com/?q=' . rawurlencode($name . ' ' . $this->run_location_text($run)),
                 'notes' => 'Imported from Google Places API',
+                'run_focus' => $website_focus,
             ]);
 
             if ($inserted) {
@@ -1089,6 +1108,7 @@ class LC_Plugin
         $location = $this->run_location_text($run);
         $min_rating = max(0, min(5, (float) ($run->min_rating ?? 0)));
         $min_reviews = max(0, (int) ($run->min_reviews ?? 0));
+        $website_focus = $this->normalize_website_focus($run->website_focus ?? 'any');
 
         foreach ($sources as $source) {
             if ($added >= $max_places) {
@@ -1144,6 +1164,7 @@ class LC_Plugin
                     'rating' => 0,
                     'source_url' => esc_url_raw($search_url),
                     'notes' => sprintf('Imported via directory fallback: %s (quality:%d, requested filters rating>=%.1f, reviews>=%d)', $source['name'], (int) $source['quality_score'], $min_rating, $min_reviews),
+                    'run_focus' => $website_focus,
                 ]);
 
                 if ($inserted) {
@@ -1193,11 +1214,17 @@ class LC_Plugin
 
         $score = $this->compute_score($website, $phone, $email, (int) ($data['review_count'] ?? 0), (float) ($data['rating'] ?? 0));
         $lead_type = $this->compute_lead_type($website, $score);
+        $category = sanitize_text_field($data['category'] ?? '');
+        $qualification = $this->analyze_website_presence($website);
+        $seo_audit = $website !== '' ? $this->audit_website_basic_seo($website) : ['checked' => false, 'issues' => []];
+        $opportunity_notes = $this->build_service_opportunity_notes($category, $qualification, $seo_audit);
+        $base_notes = sanitize_textarea_field($data['notes'] ?? '');
+        $notes = trim($base_notes . "\n" . $opportunity_notes);
 
         $inserted = $wpdb->insert($this->db_table('lc_leads'), [
             'business_name' => $name,
             'city' => sanitize_text_field($data['city'] ?? ''),
-            'category' => sanitize_text_field($data['category'] ?? ''),
+            'category' => $category,
             'address' => sanitize_text_field($data['address'] ?? ''),
             'website' => $website,
             'phone' => $phone,
@@ -1209,7 +1236,7 @@ class LC_Plugin
             'score' => $score,
             'lead_type' => $lead_type,
             'source_url' => esc_url_raw($data['source_url'] ?? ''),
-            'notes' => sanitize_textarea_field($data['notes'] ?? ''),
+            'notes' => $notes,
         ]);
 
         return !empty($inserted);
@@ -1282,7 +1309,7 @@ class LC_Plugin
         $max = max(1, (int) $run->max_places);
         $leads = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT id, business_name, city, category, linkedin_url, facebook_url, instagram_url, x_url, youtube_url
+                "SELECT id, business_name, city, category, website, notes, linkedin_url, facebook_url, instagram_url, x_url, youtube_url
                  FROM {$table}
                  WHERE city = %s
                  ORDER BY id DESC
@@ -1295,17 +1322,39 @@ class LC_Plugin
         $updated = 0;
         foreach ($leads as $lead) {
             $social = $this->discover_social_profiles_for_lead($lead, $cse_key, $cse_cx);
-            if (empty($social['data'])) {
-                continue;
+            $update_data = [];
+            if (!empty($social['data'])) {
+                $update_data = $social['data'];
+                $update_data['social_confidence'] = $social['confidence'];
+                $update_data['social_source'] = 'google_cse';
             }
 
-            $update_data = $social['data'];
-            $update_data['social_confidence'] = $social['confidence'];
-            $update_data['social_source'] = 'google_cse';
+            $website = trim((string) ($lead->website ?? ''));
+            if ($website === '') {
+                $website_candidate = $this->find_candidate_website_for_lead($lead, $cse_key, $cse_cx);
+                if ($website_candidate !== '') {
+                    $update_data['website'] = esc_url_raw($website_candidate);
+                    $website_info = $this->analyze_website_presence($website_candidate);
+                    $seo = $this->audit_website_basic_seo($website_candidate);
+                    $extra_note = "Cross-match: Candidate website found: {$website_candidate}\n";
+                    $extra_note .= $this->build_service_opportunity_notes((string) ($lead->category ?? ''), $website_info, $seo);
+                    $update_data['notes'] = $this->append_note((string) ($lead->notes ?? ''), $extra_note);
+                } else {
+                    $extra_note = 'Cross-match: No official website found across search/social signals. Treat as no-website lead.';
+                    $update_data['notes'] = $this->append_note((string) ($lead->notes ?? ''), $extra_note);
+                }
+            } elseif (!empty($update_data)) {
+                $website_info = $this->analyze_website_presence($website);
+                $seo = $this->audit_website_basic_seo($website);
+                $extra_note = $this->build_service_opportunity_notes((string) ($lead->category ?? ''), $website_info, $seo);
+                $update_data['notes'] = $this->append_note((string) ($lead->notes ?? ''), $extra_note);
+            }
 
-            $did_update = $wpdb->update($table, $update_data, ['id' => (int) $lead->id]);
-            if ($did_update !== false) {
-                $updated++;
+            if (!empty($update_data)) {
+                $did_update = $wpdb->update($table, $update_data, ['id' => (int) $lead->id]);
+                if ($did_update !== false) {
+                    $updated++;
+                }
             }
         }
 
@@ -1393,6 +1442,91 @@ class LC_Plugin
             'title' => sanitize_text_field($payload['items'][0]['title'] ?? ''),
             'snippet' => sanitize_textarea_field($payload['items'][0]['snippet'] ?? ''),
         ];
+    }
+
+    private function find_candidate_website_for_lead($lead, $key, $cx)
+    {
+        $business = sanitize_text_field((string) ($lead->business_name ?? ''));
+        $city = sanitize_text_field((string) ($lead->city ?? ''));
+        if ($business === '') {
+            return '';
+        }
+
+        $query = sprintf('"%s" "%s" official website', $business, $city);
+        $url = add_query_arg([
+            'key' => $key,
+            'cx' => $cx,
+            'q' => $query,
+            'num' => 5,
+        ], 'https://www.googleapis.com/customsearch/v1');
+
+        $response = wp_remote_get($url, ['timeout' => 20]);
+        if (is_wp_error($response)) {
+            return '';
+        }
+
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        if (empty($payload['items']) || !is_array($payload['items'])) {
+            return '';
+        }
+
+        $blocked_hosts = [
+            'linkedin.com',
+            'facebook.com',
+            'instagram.com',
+            'x.com',
+            'twitter.com',
+            'youtube.com',
+            'yelp.com',
+            'yellowpages.com',
+            'bbb.org',
+            'chamberofcommerce.com',
+            'manta.com',
+            'maps.google.com',
+            'google.com',
+        ];
+
+        foreach ($payload['items'] as $item) {
+            $link = esc_url_raw((string) ($item['link'] ?? ''));
+            if ($link === '') {
+                continue;
+            }
+            $host = strtolower((string) wp_parse_url($link, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+
+            $blocked = false;
+            foreach ($blocked_hosts as $blocked_host) {
+                if ($host === $blocked_host || substr($host, -strlen('.' . $blocked_host)) === '.' . $blocked_host) {
+                    $blocked = true;
+                    break;
+                }
+            }
+            if ($blocked) {
+                continue;
+            }
+
+            return $link;
+        }
+
+        return '';
+    }
+
+    private function append_note($existing, $addition)
+    {
+        $existing = trim((string) $existing);
+        $addition = trim((string) $addition);
+        if ($addition === '') {
+            return $existing;
+        }
+        if ($existing === '') {
+            return sanitize_textarea_field($addition);
+        }
+        if (strpos($existing, $addition) !== false) {
+            return sanitize_textarea_field($existing);
+        }
+        return sanitize_textarea_field($existing . "\n\n" . $addition);
     }
 
     private function score_social_match_confidence($result, $business, $city)
@@ -1572,6 +1706,161 @@ class LC_Plugin
         });
 
         return implode(' ', $parts);
+    }
+
+    private function normalize_website_focus($focus)
+    {
+        $focus = sanitize_text_field((string) $focus);
+        $allowed = ['any', 'no_website', 'has_website'];
+        return in_array($focus, $allowed, true) ? $focus : 'any';
+    }
+
+    private function fetch_google_place_details($place_id, $api_key)
+    {
+        $result = ['website' => '', 'phone' => '', 'maps_url' => ''];
+        $place_id = trim((string) $place_id);
+        $api_key = trim((string) $api_key);
+        if ($place_id === '' || $api_key === '') {
+            return $result;
+        }
+
+        $url = add_query_arg([
+            'place_id' => $place_id,
+            'fields' => 'website,formatted_phone_number,url',
+            'key' => $api_key,
+        ], 'https://maps.googleapis.com/maps/api/place/details/json');
+
+        $response = wp_remote_get($url, ['timeout' => 20]);
+        if (is_wp_error($response)) {
+            return $result;
+        }
+
+        $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+        $details = $payload['result'] ?? [];
+        $result['website'] = esc_url_raw((string) ($details['website'] ?? ''));
+        $result['phone'] = sanitize_text_field((string) ($details['formatted_phone_number'] ?? ''));
+        $result['maps_url'] = esc_url_raw((string) ($details['url'] ?? ''));
+        return $result;
+    }
+
+    private function analyze_website_presence($website)
+    {
+        $website = esc_url_raw((string) $website);
+        if ($website === '') {
+            return [
+                'has_website' => false,
+                'is_subdomain_service' => false,
+                'host' => '',
+                'classification' => 'no_website_listed',
+            ];
+        }
+
+        $host = strtolower((string) wp_parse_url($website, PHP_URL_HOST));
+        $service_domains = [
+            'sites.google.com',
+            'wixsite.com',
+            'wordpress.com',
+            'weebly.com',
+            'squarespace.com',
+            'webnode.com',
+            'myshopify.com',
+            'godaddysites.com',
+            'yolasite.com',
+            'strikingly.com',
+            'jimdosite.com',
+        ];
+        $is_subdomain_service = false;
+        foreach ($service_domains as $domain) {
+            if ($host === $domain || substr($host, -strlen('.' . $domain)) === '.' . $domain) {
+                $is_subdomain_service = true;
+                break;
+            }
+        }
+
+        return [
+            'has_website' => true,
+            'is_subdomain_service' => $is_subdomain_service,
+            'host' => $host,
+            'classification' => $is_subdomain_service ? 'service_subdomain' : 'custom_domain',
+        ];
+    }
+
+    private function audit_website_basic_seo($website)
+    {
+        $result = [
+            'checked' => false,
+            'issues' => [],
+            'title' => '',
+            'meta_description' => '',
+        ];
+
+        $response = wp_remote_get($website, ['timeout' => 15, 'redirection' => 4]);
+        if (is_wp_error($response)) {
+            $result['issues'][] = 'Website is unreachable during SEO check.';
+            return $result;
+        }
+
+        $html = (string) wp_remote_retrieve_body($response);
+        if ($html === '') {
+            $result['issues'][] = 'Website returned empty HTML.';
+            return $result;
+        }
+
+        $result['checked'] = true;
+        if (preg_match('/<title>(.*?)<\/title>/is', $html, $m)) {
+            $result['title'] = trim(wp_strip_all_tags((string) $m[1]));
+        } else {
+            $result['issues'][] = 'Missing meta title.';
+        }
+
+        if (preg_match('/<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']*)["\']/i', $html, $m)) {
+            $result['meta_description'] = trim((string) $m[1]);
+            if ($result['meta_description'] === '') {
+                $result['issues'][] = 'Empty meta description.';
+            }
+        } else {
+            $result['issues'][] = 'Missing meta description.';
+        }
+
+        if (!preg_match('/<h1[\s>]/i', $html)) {
+            $result['issues'][] = 'Missing H1 tag.';
+        }
+        if (preg_match('/<meta[^>]+name=["\']robots["\'][^>]+content=["\'][^"\']*noindex/i', $html)) {
+            $result['issues'][] = 'Page appears noindex.';
+        }
+
+        return $result;
+    }
+
+    private function build_service_opportunity_notes($category, $website_info, $seo_audit)
+    {
+        $notes = [];
+        $category_l = strtolower((string) $category);
+
+        if (empty($website_info['has_website'])) {
+            $notes[] = 'Qualification: No website listed. Possible social-only or directory-only business.';
+            $notes[] = 'Opportunity: Website design/development, branding system, local SEO setup, digital marketing foundation.';
+        } elseif (!empty($website_info['is_subdomain_service'])) {
+            $notes[] = 'Qualification: Website appears hosted on service subdomain (' . (string) ($website_info['host'] ?? '') . ').';
+            $notes[] = 'Opportunity: Migrate to branded custom domain with stronger SEO architecture.';
+        } else {
+            $notes[] = 'Qualification: Custom domain website detected (' . (string) ($website_info['host'] ?? '') . ').';
+        }
+
+        if (!empty($seo_audit['issues'])) {
+            $notes[] = 'SEO Findings: ' . implode(' ', array_map('sanitize_text_field', $seo_audit['issues']));
+            $notes[] = 'Opportunity: Technical SEO cleanup, on-page optimization, metadata improvement.';
+        } elseif (!empty($website_info['has_website'])) {
+            $notes[] = 'SEO Findings: Basic metadata signals look present. Deeper SEO audit recommended.';
+        }
+
+        if ($category_l !== '' && (strpos($category_l, 'marketing') !== false || strpos($category_l, 'agency') !== false || strpos($category_l, 'design') !== false)) {
+            $notes[] = 'Service Angle: Position conversion-focused UX, branding consistency, and performance/SEO reporting.';
+        } else {
+            $notes[] = 'Service Angle: Offer branding, graphics, social media management, and full-funnel digital marketing.';
+        }
+
+        return implode("\n", $notes);
     }
 
     private function user_avatar_html($user_id, $size, $label)
@@ -1820,6 +2109,7 @@ class LC_Plugin
         echo '<input type="number" min="0" name="radius_miles" placeholder="Radius miles (0 = city only)" />';
         echo '<input type="text" name="niche" placeholder="Niche (e.g. Cosmetic Dentistry)" />';
         echo '<textarea name="services" rows="2" placeholder="Services (comma separated: implants, whitening, emergency)"></textarea>';
+        echo '<select name="website_focus"><option value="any">Website Focus: Any</option><option value="no_website">Website Focus: No Website Listed</option><option value="has_website">Website Focus: Has Website</option></select>';
         echo '<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="Min rating (0-5)" />';
         echo '<input type="number" min="0" name="min_reviews" placeholder="Min reviews" />';
         echo '<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" placeholder="Max places" />';
@@ -1835,7 +2125,7 @@ class LC_Plugin
             echo '<td>' . esc_html($row->query_text) . '</td>';
             echo '<td>' . esc_html($this->run_location_text($row)) . '</td>';
             echo '<td>' . esc_html((string) ($row->niche ?: '-')) . '<br/><small>' . esc_html((string) ($row->services ?: '-')) . '</small></td>';
-            echo '<td>Rating >= ' . esc_html(number_format((float) ($row->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($row->min_reviews ?? 0)) . '</small></td>';
+            echo '<td>Rating >= ' . esc_html(number_format((float) ($row->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($row->min_reviews ?? 0)) . '</small><br/><small>Website: ' . esc_html(ucwords(str_replace('_', ' ', (string) ($row->website_focus ?? 'any')))) . '</small></td>';
             echo '<td>' . esc_html((string) $row->max_places) . '</td>';
             echo '<td>' . esc_html($row->status) . '</td>';
             echo '<td>' . esc_html($row->created_at) . '</td>';

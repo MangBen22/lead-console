@@ -246,8 +246,8 @@ class LC_Frontend
         $won_leads = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$leads_table} WHERE status='Won'");
         $queued_runs = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$runs_table} WHERE status='queued'");
 
-        $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status FROM {$leads_table} ORDER BY id DESC LIMIT 20");
-        $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
+        $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT 20");
+        $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
 
         $settings = $this->settings();
         $user = wp_get_current_user();
@@ -317,6 +317,7 @@ class LC_Frontend
         echo '<label>Radius (miles)<input type="number" min="0" name="radius_miles" placeholder="0 = city only" /></label>';
         echo '<label>Niche<input type="text" name="niche" placeholder="Cosmetic Dentistry" /></label>';
         echo '<label>Services<textarea name="services" rows="2" placeholder="implants, whitening, emergency"></textarea></label>';
+        echo '<label>Website Focus<select name="website_focus"><option value="any">Any</option><option value="no_website">No Website Listed</option><option value="has_website">Has Website</option></select></label>';
         echo '<label>Minimum Rating<input type="number" min="0" max="5" step="0.1" name="min_rating" placeholder="0 to 5" /></label>';
         echo '<label>Minimum Reviews<input type="number" min="0" name="min_reviews" placeholder="0+" /></label>';
         echo '<label>Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
@@ -346,7 +347,7 @@ class LC_Frontend
             if ($location === '') {
                 $location = 'Unspecified';
             }
-            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
+            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small><br/><small>Website: ' . esc_html(ucwords(str_replace('_', ' ', (string) ($run->website_focus ?: 'any')))) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
         }
         if (empty($run_rows)) {
             echo '<tr><td colspan="7">No runs queued yet.</td></tr>';
@@ -371,12 +372,17 @@ class LC_Frontend
         echo '</div>';
         echo '<div class="lc-fe-card">';
         echo '<h3>Recent Leads</h3>';
-        echo '<table><thead><tr><th>Business</th><th>Contact</th><th>Score</th><th>Status</th><th>Update</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>Business</th><th>Contact</th><th>Score</th><th>Notes</th><th>Status</th><th>Update</th></tr></thead><tbody>';
         foreach ($lead_rows as $row) {
+            $note_text = '';
+            if (isset($row->notes)) {
+                $note_text = (string) $row->notes;
+            }
             echo '<tr>';
             echo '<td><strong>' . esc_html($row->business_name) . '</strong><br/><small>' . esc_html($row->city) . ' | ' . esc_html($row->category) . '</small></td>';
             echo '<td>' . esc_html($row->phone ?: '-') . '<br/>' . esc_html($row->email ?: '-') . '</td>';
             echo '<td>' . esc_html((string) $row->score) . ' / ' . esc_html($row->lead_type) . '</td>';
+            echo '<td><small>' . esc_html($note_text !== '' ? substr($note_text, 0, 220) : '-') . '</small></td>';
             echo '<td>' . esc_html($row->status) . '</td>';
             echo '<td><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
             wp_nonce_field('lc_frontend_update_status');
@@ -391,7 +397,7 @@ class LC_Frontend
             echo '</tr>';
         }
         if (empty($lead_rows)) {
-            echo '<tr><td colspan="5">No leads available yet.</td></tr>';
+            echo '<tr><td colspan="6">No leads available yet.</td></tr>';
         }
         echo '</tbody></table>';
         echo '</div>';
@@ -1202,6 +1208,10 @@ class LC_Frontend
         $settings = $this->settings();
         $requested_max = absint($_POST['max_places'] ?? 0);
         $max_places = min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']);
+        $website_focus = sanitize_text_field((string) ($_POST['website_focus'] ?? 'any'));
+        if (!in_array($website_focus, ['any', 'no_website', 'has_website'], true)) {
+            $website_focus = 'any';
+        }
 
         $wpdb->insert($this->table('lc_runs'), [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
@@ -1210,6 +1220,7 @@ class LC_Frontend
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
             'services' => sanitize_textarea_field($_POST['services'] ?? ''),
+            'website_focus' => $website_focus,
             'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
             'min_reviews' => absint($_POST['min_reviews'] ?? 0),
             'max_places' => $max_places,
@@ -1222,6 +1233,7 @@ class LC_Frontend
             'country' => sanitize_text_field($_POST['country'] ?? ''),
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
+            'website_focus' => $website_focus,
         ]);
         $this->redirect_with_msg('run_queued');
     }
