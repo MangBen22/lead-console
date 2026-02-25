@@ -298,8 +298,21 @@ class LC_Frontend
             $this->redirect_with_msg('gdpr_required');
         }
 
+        $identifier = sanitize_text_field($_POST['log'] ?? '');
+        if ($identifier === '') {
+            $this->redirect_with_msg('login_failed');
+        }
+
+        // Resolve email -> username for consistent authentication behavior.
+        if (strpos($identifier, '@') !== false) {
+            $email_user = get_user_by('email', $identifier);
+            if ($email_user) {
+                $identifier = (string) $email_user->user_login;
+            }
+        }
+
         $creds = [
-            'user_login' => sanitize_text_field($_POST['log'] ?? ''),
+            'user_login' => $identifier,
             'user_password' => (string) ($_POST['pwd'] ?? ''),
             'remember' => true,
         ];
