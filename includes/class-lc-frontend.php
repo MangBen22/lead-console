@@ -150,8 +150,9 @@ class LC_Frontend
 
         echo '<header class="lc-fe-hero">';
         echo '<div>';
-        echo '<p class="lc-badge">5N2 DIGITAL</p>';
+        echo '<p class="lc-badge">// FRONTEND CONSOLE</p>';
         echo '<h1>Hello, ' . esc_html($user->display_name ?: $user->user_login) . '</h1>';
+        echo '<p class="lc-hero-sub">w e  b r i d g e  c r e a t i v i t y  a n d  s t r u c t u r e  i n t o  a c t i o n a b l e  s y s t e m s.</p>';
         echo '<p>Welcome to your frontend lead operations console.</p>';
         echo '</div>';
         echo '<div class="lc-fe-actions">';
@@ -169,6 +170,7 @@ class LC_Frontend
 
         echo '<div class="lc-fe-grid">';
         echo '<article class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// LEADS</p>';
         echo '<h3>Add Lead</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
         wp_nonce_field('lc_frontend_add_lead');
@@ -185,6 +187,7 @@ class LC_Frontend
         echo '</article>';
 
         echo '<article class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// RUNS</p>';
         echo '<h3>Queue Discovery Run</h3>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
         wp_nonce_field('lc_frontend_queue_run');
@@ -199,6 +202,7 @@ class LC_Frontend
         echo '</div>';
 
         echo '<div class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// PIPELINE</p>';
         echo '<h3>Recent Leads</h3>';
         echo '<table><thead><tr><th>Business</th><th>Contact</th><th>Score</th><th>Status</th><th>Update</th></tr></thead><tbody>';
         foreach ($lead_rows as $row) {
@@ -226,6 +230,7 @@ class LC_Frontend
         echo '</div>';
 
         echo '<div class="lc-fe-card">';
+        echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
         echo '<h3>Recent Runs</h3>';
         echo '<table><thead><tr><th>ID</th><th>Query</th><th>City</th><th>Status</th><th>Created</th></tr></thead><tbody>';
         foreach ($run_rows as $run) {

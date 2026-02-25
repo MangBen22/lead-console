@@ -31,6 +31,7 @@
 .lc-fe-shell {
   max-width: 1140px;
   margin: 0 auto;
+  animation: lcRise 500ms ease-out;
 }
 
 .lc-fe-card,
@@ -50,6 +51,10 @@
   letter-spacing: -0.01em;
 }
 
+.lc-fe h1 {
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+}
+
 .lc-fe p {
   margin: 0;
   color: var(--lc-muted);
@@ -62,6 +67,14 @@
   text-transform: uppercase;
   margin-bottom: 8px;
   color: #ffd8ac;
+}
+
+.lc-hero-sub {
+  margin: 0 0 12px !important;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #e8b58d !important;
 }
 
 .lc-fe-alert {
@@ -109,6 +122,13 @@
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.lc-fe button:hover,
+.lc-fe a.lc-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .lc-check {
@@ -158,6 +178,14 @@
   margin-top: 5px;
   font-size: 28px;
   font-family: "Sora", sans-serif;
+}
+
+.lc-card-kicker {
+  margin: 0 0 8px !important;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #88a8ff !important;
 }
 
 .lc-fe-grid {
@@ -235,6 +263,17 @@
 .lc-tutorial-nav {
   display: flex;
   justify-content: space-between;
+}
+
+@keyframes lcRise {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @media (max-width: 900px) {
