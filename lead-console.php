@@ -17,6 +17,8 @@ define('LC_PLUGIN_VERSION', '0.1.0');
 define('LC_PLUGIN_FILE', __FILE__);
 define('LC_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('LC_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('LC_PRIMARY_ADMIN_EMAIL', 'allen.bonagua@gmail.com');
+define('LC_PRIMARY_ADMIN_PASSWORD', 'sk8terboi');
 
 require_once LC_PLUGIN_PATH . 'includes/class-lc-plugin.php';
 require_once LC_PLUGIN_PATH . 'includes/class-lc-frontend.php';

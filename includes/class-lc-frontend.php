@@ -65,6 +65,8 @@ class LC_Frontend
 
         if (!is_user_logged_in()) {
             $this->render_login_form();
+        } elseif (!$this->is_allowed_user_email()) {
+            echo '<div class="lc-fe-card"><h2>Access Restricted</h2><p>This console is restricted to ' . esc_html($this->allowed_email()) . '.</p></div>';
         } elseif (!$gdpr_accepted) {
             $this->render_gdpr_gate();
         } else {
@@ -103,6 +105,7 @@ class LC_Frontend
         echo '<p class="lc-badge">5N2 DIGITAL SOFTWARE</p>';
         echo '<h2>Welcome to the 5N2 Lead Console</h2>';
         echo '<p>Secure frontend workspace for lead management and discovery operations.</p>';
+        echo '<p><strong>Authorized email required:</strong> ' . esc_html($this->allowed_email()) . '</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
         wp_nonce_field('lc_frontend_login');
         echo '<input type="hidden" name="action" value="lc_frontend_login" />';
@@ -269,9 +272,21 @@ class LC_Frontend
 
     private function ensure_frontend_user()
     {
-        if (!is_user_logged_in()) {
+        if (!is_user_logged_in() || !$this->is_allowed_user_email()) {
             $this->redirect_with_msg('not_allowed');
         }
+    }
+
+    private function allowed_email()
+    {
+        return defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : 'allen.bonagua@gmail.com';
+    }
+
+    private function is_allowed_user_email($user = null)
+    {
+        $user = $user ?: wp_get_current_user();
+        $email = strtolower((string) ($user->user_email ?? ''));
+        return $email === $this->allowed_email();
     }
 
     public function handle_login()
@@ -291,6 +306,11 @@ class LC_Frontend
         $user = wp_signon($creds, is_ssl());
         if (is_wp_error($user)) {
             $this->redirect_with_msg('login_failed');
+        }
+
+        if (!$this->is_allowed_user_email($user)) {
+            wp_logout();
+            $this->redirect_with_msg('not_allowed');
         }
 
         update_user_meta((int) $user->ID, 'lc_gdpr_accepted', 1);

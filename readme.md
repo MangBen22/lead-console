@@ -11,6 +11,20 @@ This plugin is created by the **5N2 Digital Software Development Team**.
 - Unauthorized copying, redistribution, resale, sublicensing, or public marketplace distribution is prohibited.
 - Use is limited to 5N2 Digital-approved environments and clients.
 
+## Access Control (Implemented)
+- Primary admin email is locked to: `allen.bonagua@gmail.com`
+- On plugin load, account is auto-provisioned if missing (administrator role).
+- In multisite, this account is promoted to super admin.
+- Only this email can:
+  - Access Lead Console admin pages
+  - Access frontend console
+  - Create users in WordPress admin
+- Other WordPress users are blocked from Lead Console and user-creation capability.
+
+## Credentials Note
+- Requested credentials were configured for bootstrap.
+- For production safety, rotate the password immediately after first login in WordPress (`Users -> Profile`).
+
 ## Internal Scope
 - Intended for install on a 5N2-controlled WordPress environment.
 - Not for WordPress marketplace/public distribution.

