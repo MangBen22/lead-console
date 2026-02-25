@@ -45,6 +45,7 @@ class LC_Frontend
         add_action('admin_post_nopriv_lc_frontend_revoke_password_change', [$this, 'handle_revoke_password_change']);
         add_action('admin_post_lc_frontend_revoke_password_change', [$this, 'handle_revoke_password_change']);
         add_action('admin_post_lc_frontend_accept_gdpr', [$this, 'handle_accept_gdpr']);
+        add_action('admin_post_lc_frontend_update_profile_photo', [$this, 'handle_update_profile_photo']);
         add_action('admin_post_lc_frontend_add_lead', [$this, 'handle_add_lead']);
         add_action('admin_post_lc_frontend_update_status', [$this, 'handle_update_status']);
         add_action('admin_post_lc_frontend_queue_run', [$this, 'handle_queue_run']);
@@ -113,6 +114,8 @@ class LC_Frontend
             'register_request_sent' => 'Registration request submitted. Please wait for admin approval.',
             'approval_pending' => 'Your account is pending admin approval.',
             'approval_rejected' => 'Your registration has been declined. Please contact admin.',
+            'photo_updated' => 'Profile photo updated successfully.',
+            'photo_invalid' => 'Please upload a valid image file for your profile photo.',
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
             'status_updated' => 'Lead status updated.',
@@ -237,6 +240,7 @@ class LC_Frontend
         $settings = $this->settings();
         $user = wp_get_current_user();
         $first_name = $this->first_name($user);
+        $full_name = $this->full_name($user);
         $is_primary_admin = $this->is_primary_admin($user);
 
         echo '<header class="lc-fe-hero">';
@@ -247,6 +251,17 @@ class LC_Frontend
         echo '<p>Welcome to 5N2 Digital Lead Console.</p>';
         echo '</div>';
         echo '<div class="lc-fe-actions">';
+        echo '<div class="lc-account-chip">';
+        echo $this->avatar_html((int) $user->ID, 42, $full_name);
+        echo '<div class="lc-account-meta"><strong>' . esc_html($full_name) . '</strong></div>';
+        echo '</div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" enctype="multipart/form-data" class="lc-photo-form">';
+        wp_nonce_field('lc_frontend_update_profile_photo');
+        echo '<input type="hidden" name="action" value="lc_frontend_update_profile_photo" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<input type="file" name="profile_photo" accept="image/*" required />';
+        echo '<button type="submit">Update Photo</button>';
+        echo '</form>';
         echo '<button type="button" class="lc-open-tutorial lc-btn-tutorial">Start Tutorial</button>';
         echo '<a href="' . esc_url(wp_logout_url($this->current_url())) . '">Log Out</a>';
         echo '</div>';
@@ -489,7 +504,7 @@ class LC_Frontend
             $first_name = (string) get_user_meta((int) $u->ID, 'first_name', true);
             $last_name = (string) get_user_meta((int) $u->ID, 'last_name', true);
             echo '<tr>';
-            echo '<td>' . get_avatar($u->ID, 34) . '</td>';
+            echo '<td>' . $this->avatar_html((int) $u->ID, 34, (string) ($u->display_name ?: $u->user_login)) . '</td>';
             echo '<td><strong>' . esc_html($u->display_name ?: $u->user_login) . '</strong><br/><small>' . esc_html($u->user_email) . '</small></td>';
             echo '<td>' . esc_html(ucfirst($access_level)) . '</td>';
             echo '<td>' . ($locked ? 'Locked' : 'Active') . ($is_primary ? ' (Primary Admin)' : '') . '</td>';
@@ -992,6 +1007,40 @@ class LC_Frontend
         exit;
     }
 
+    public function handle_update_profile_photo()
+    {
+        $this->ensure_frontend_user();
+        check_admin_referer('lc_frontend_update_profile_photo');
+
+        if (empty($_FILES['profile_photo']) || !is_array($_FILES['profile_photo'])) {
+            $this->redirect_with_msg('photo_invalid');
+        }
+
+        $file = $_FILES['profile_photo'];
+        if (!empty($file['error'])) {
+            $this->redirect_with_msg('photo_invalid');
+        }
+
+        $ext = strtolower((string) pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            $this->redirect_with_msg('photo_invalid');
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $attachment_id = media_handle_upload('profile_photo', 0);
+        if (is_wp_error($attachment_id) || !$attachment_id) {
+            $this->log_event('users', 'warning', 'Profile photo upload failed.', ['error' => is_wp_error($attachment_id) ? $attachment_id->get_error_message() : 'unknown']);
+            $this->redirect_with_msg('photo_invalid');
+        }
+
+        update_user_meta(get_current_user_id(), 'lc_profile_photo_id', (int) $attachment_id);
+        $this->log_event('users', 'info', 'Profile photo updated.', ['user_id' => get_current_user_id(), 'attachment_id' => (int) $attachment_id]);
+        $this->redirect_with_msg('photo_updated');
+    }
+
     public function handle_add_lead()
     {
         $this->ensure_frontend_user();
@@ -1280,6 +1329,42 @@ class LC_Frontend
 
         $login = (string) ($user->user_login ?? 'User');
         return explode('@', $login)[0];
+    }
+
+    private function full_name($user)
+    {
+        $first = trim((string) get_user_meta((int) $user->ID, 'first_name', true));
+        $last = trim((string) get_user_meta((int) $user->ID, 'last_name', true));
+        $full = trim($first . ' ' . $last);
+        if ($full !== '') {
+            return $full;
+        }
+
+        $display = trim((string) ($user->display_name ?? ''));
+        if ($display !== '') {
+            return $display;
+        }
+
+        return $this->first_name($user);
+    }
+
+    private function avatar_html($user_id, $size, $label)
+    {
+        $size = max(24, absint($size));
+        $photo_id = absint(get_user_meta((int) $user_id, 'lc_profile_photo_id', true));
+        if ($photo_id > 0) {
+            $url = wp_get_attachment_image_url($photo_id, 'thumbnail');
+            if ($url) {
+                return '<img class="lc-user-avatar" src="' . esc_url($url) . '" alt="' . esc_attr($label) . '" width="' . esc_attr((string) $size) . '" height="' . esc_attr((string) $size) . '" />';
+            }
+        }
+
+        $initial = strtoupper(substr(trim((string) $label), 0, 1));
+        if ($initial === '') {
+            $initial = 'U';
+        }
+
+        return '<span class="lc-user-avatar lc-user-avatar-fallback" role="img" aria-label="' . esc_attr($label) . '" style="width:' . esc_attr((string) $size) . 'px;height:' . esc_attr((string) $size) . 'px;">' . esc_html($initial) . '</span>';
     }
 
     private function log_event($category, $level, $message, $context = [])

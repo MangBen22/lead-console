@@ -214,11 +214,57 @@
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .lc-fe-actions a {
   color: #c7d4ff;
   text-decoration: none;
+}
+
+.lc-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lc-account-meta strong {
+  color: #f2f5ff;
+  font-size: 14px;
+}
+
+.lc-user-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.lc-user-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #32415f;
+  color: #fff;
+  font-weight: 700;
+}
+
+.lc-photo-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lc-photo-form input[type="file"] {
+  max-width: 180px;
 }
 
 .lc-app-layout {
@@ -432,6 +478,14 @@
   .lc-fe-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .lc-fe-actions {
+    justify-content: flex-start;
+  }
+
+  .lc-account-meta strong {
+    font-size: 13px;
   }
 
   .lc-app-layout {

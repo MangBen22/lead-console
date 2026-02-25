@@ -1494,6 +1494,24 @@ class LC_Plugin
         return in_array($access, $allowed, true) ? $access : 'standard';
     }
 
+    private function user_avatar_html($user_id, $size, $label)
+    {
+        $size = max(24, absint($size));
+        $photo_id = absint(get_user_meta((int) $user_id, 'lc_profile_photo_id', true));
+        if ($photo_id > 0) {
+            $url = wp_get_attachment_image_url($photo_id, 'thumbnail');
+            if ($url) {
+                return '<img src="' . esc_url($url) . '" alt="' . esc_attr($label) . '" width="' . esc_attr((string) $size) . '" height="' . esc_attr((string) $size) . '" style="border-radius:999px;object-fit:cover;" />';
+            }
+        }
+
+        $initial = strtoupper(substr(trim((string) $label), 0, 1));
+        if ($initial === '') {
+            $initial = 'U';
+        }
+        return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' . esc_attr((string) $size) . 'px;height:' . esc_attr((string) $size) . 'px;border-radius:999px;background:#32415f;color:#fff;font-weight:700;">' . esc_html($initial) . '</span>';
+    }
+
     private function message_notice()
     {
         if (empty($_GET['message'])) {
@@ -2254,7 +2272,7 @@ class LC_Plugin
             $last_name = (string) get_user_meta($user->ID, 'last_name', true);
 
             echo '<tr>';
-            echo '<td>' . get_avatar($user->ID, 48) . '</td>';
+            echo '<td>' . $this->user_avatar_html((int) $user->ID, 48, (string) ($user->display_name ?: $user->user_login)) . '</td>';
             echo '<td><strong>' . esc_html($user->display_name ?: $user->user_login) . '</strong><br/>';
             echo '<small>Username: ' . esc_html($user->user_login) . '</small><br/>';
             echo '<small>Email: ' . esc_html($user->user_email) . '</small></td>';
