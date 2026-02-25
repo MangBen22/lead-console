@@ -459,13 +459,28 @@
   display: none;
 }
 
-.lc-tab-panel.lc-settings-panel.is-settings-active {
+.lc-tab-panel.lc-settings-panel.is-active.is-settings-active {
   display: block;
 }
 
 .lc-settings-form {
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 10px;
+}
+
+.lc-run-inline-note {
+  grid-column: span 12;
+  font-size: 12px;
+  color: #cdd7f4;
+  margin-top: 2px;
+}
+
+.lc-run-city-country-note {
+  color: #f8c16a;
+}
+
+.lc-run-country-scope-note {
+  color: #9dc0ff;
 }
 
 .lc-settings-form label {

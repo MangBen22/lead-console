@@ -249,6 +249,21 @@ class LC_Frontend
 
         $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT 20");
         $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
+        $run_locations = $wpdb->get_results("SELECT DISTINCT country, city FROM {$runs_table} WHERE city <> '' ORDER BY country ASC, city ASC LIMIT 800");
+        $run_city_map = [];
+        foreach ($run_locations as $location_row) {
+            $country_key = trim((string) ($location_row->country ?? ''));
+            $city_name = trim((string) ($location_row->city ?? ''));
+            if ($city_name === '') {
+                continue;
+            }
+            if (!isset($run_city_map[$country_key])) {
+                $run_city_map[$country_key] = [];
+            }
+            if (!in_array($city_name, $run_city_map[$country_key], true)) {
+                $run_city_map[$country_key][] = $city_name;
+            }
+        }
 
         $settings = $this->settings();
         $user = wp_get_current_user();
@@ -298,8 +313,8 @@ class LC_Frontend
         echo '<input type="hidden" name="action" value="lc_frontend_queue_run" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label class="lc-col-4">Search Query<input type="text" name="query_text" required /></label>';
-        echo '<label class="lc-col-3">City<input type="text" name="city" required /></label>';
-        echo '<label class="lc-col-3">Country<input type="text" name="country" placeholder="United States" /></label>';
+        echo '<label class="lc-col-3">City<select name="city"><option value="">Select city (optional)</option></select></label>';
+        echo '<label class="lc-col-3">Country<select name="country"><option value="">Select country (optional)</option></select></label>';
         echo '<label class="lc-col-2">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
         echo '<summary><span>Advanced Options</span></summary>';
@@ -313,6 +328,9 @@ class LC_Frontend
         echo '</div>';
         echo '</details>';
         echo '<button type="submit" class="lc-col-12">Queue Run</button>';
+        echo '<div class="lc-run-inline-note lc-run-city-country-note" hidden>Selecting a country with the city improves targeting and search quality.</div>';
+        echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage.</div>';
+        echo '<script type="application/json" class="lc-run-city-map-data">' . wp_json_encode($run_city_map) . '</script>';
         echo '</form>';
         echo '</article>';
         echo '</div>';
@@ -1248,6 +1266,10 @@ class LC_Frontend
         $min_reviews = absint($_POST['min_reviews'] ?? 0);
         $requested_max = absint($_POST['max_places'] ?? 0);
         $max_places = min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']);
+        $country_scope = ($country !== '' && $city === '');
+        if ($country_scope) {
+            $max_places = max(1, (int) $settings['max_places_per_run']);
+        }
         $website_focus = sanitize_text_field((string) ($_POST['website_focus'] ?? 'any'));
         if (!in_array($website_focus, ['any', 'no_website', 'has_website'], true)) {
             $website_focus = 'any';
@@ -1256,6 +1278,7 @@ class LC_Frontend
         $review = $this->evaluate_run_compliance([
             'query_text' => $query_text,
             'city' => $city,
+            'country' => $country,
             'website_focus' => $website_focus,
             'min_rating' => $min_rating,
             'min_reviews' => $min_reviews,
@@ -1292,8 +1315,10 @@ class LC_Frontend
             'radius_miles' => $radius_miles,
             'niche' => $service_focus,
             'website_focus' => $website_focus,
+            'scope' => $country_scope ? 'country_wide' : 'city_targeted',
             'compliance_review' => 'pass',
             'compliance_checks' => $review['checks'],
+            'compliance_warnings' => $review['warnings'],
         ]);
         $this->redirect_with_msg('run_queued');
     }
@@ -1302,18 +1327,26 @@ class LC_Frontend
     {
         $issues = [];
         $checks = [];
+        $warnings = [];
 
         $query = trim((string) ($run['query_text'] ?? ''));
         $city = trim((string) ($run['city'] ?? ''));
+        $country = trim((string) ($run['country'] ?? ''));
         if ($query === '') {
             $issues[] = 'missing_query_text';
         } else {
             $checks[] = 'query_text_present';
         }
-        if ($city === '') {
-            $issues[] = 'missing_city';
+        if ($city === '' && $country === '') {
+            $issues[] = 'missing_location';
         } else {
-            $checks[] = 'city_present';
+            $checks[] = 'location_present';
+        }
+        if ($city !== '' && $country === '') {
+            $warnings[] = 'city_without_country';
+        }
+        if ($country !== '' && $city === '') {
+            $checks[] = 'country_wide_scope_enabled';
         }
 
         $min_rating = (float) ($run['min_rating'] ?? 0);
@@ -1361,6 +1394,7 @@ class LC_Frontend
             'ok' => empty($issues),
             'issues' => $issues,
             'checks' => $checks,
+            'warnings' => $warnings,
         ];
     }
 

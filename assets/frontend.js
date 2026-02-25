@@ -66,6 +66,117 @@
     activateSettingsPanel(initialSettings.dataset.settingsTarget || "");
   }
 
+  const runForm = root.querySelector(".lc-run-form");
+  if (runForm) {
+    const countrySelect = runForm.querySelector("select[name='country']");
+    const citySelect = runForm.querySelector("select[name='city']");
+    const cityCountryNote = runForm.querySelector(".lc-run-city-country-note");
+    const countryScopeNote = runForm.querySelector(".lc-run-country-scope-note");
+    const cityMapNode = runForm.querySelector(".lc-run-city-map-data");
+    let runCityMap = {};
+    try {
+      runCityMap = JSON.parse(cityMapNode?.textContent || "{}");
+    } catch (_err) {
+      runCityMap = {};
+    }
+
+    const fallbackCityMap = {
+      "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Dallas", "Miami"],
+      Canada: ["Toronto", "Vancouver", "Montreal", "Calgary"],
+      Australia: ["Sydney", "Melbourne", "Brisbane", "Perth"],
+      "United Kingdom": ["London", "Manchester", "Birmingham", "Liverpool"],
+      Philippines: ["Manila", "Cebu City", "Davao City", "Quezon City"],
+    };
+
+    const toTitleCase = (value) =>
+      value
+        .toLowerCase()
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+        .trim();
+
+    const allCountryNames = () => {
+      const set = new Set(["United States", ...Object.keys(runCityMap), ...Object.keys(fallbackCityMap)]);
+      if (typeof Intl !== "undefined" && typeof Intl.DisplayNames !== "undefined" && typeof Intl.supportedValuesOf === "function") {
+        const display = new Intl.DisplayNames(["en"], { type: "region" });
+        Intl.supportedValuesOf("region").forEach((code) => {
+          const name = display.of(code);
+          if (name) set.add(name);
+        });
+      }
+      return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
+    };
+
+    const cityOptions = (country) => {
+      const cities = new Set();
+      const append = (items) => {
+        (items || []).forEach((city) => {
+          const clean = toTitleCase(String(city || ""));
+          if (clean) cities.add(clean);
+        });
+      };
+      if (country) {
+        append(runCityMap[country]);
+        append(fallbackCityMap[country]);
+      } else {
+        Object.keys(runCityMap).forEach((key) => append(runCityMap[key]));
+        Object.keys(fallbackCityMap).forEach((key) => append(fallbackCityMap[key]));
+      }
+      return [...cities].sort((a, b) => a.localeCompare(b));
+    };
+
+    const renderCountryOptions = () => {
+      if (!countrySelect) return;
+      const selected = countrySelect.value || "";
+      countrySelect.innerHTML = "";
+      const base = document.createElement("option");
+      base.value = "";
+      base.textContent = "Select country (optional)";
+      countrySelect.appendChild(base);
+      allCountryNames().forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country;
+        option.textContent = country;
+        countrySelect.appendChild(option);
+      });
+      countrySelect.value = selected;
+    };
+
+    const renderCityOptions = () => {
+      if (!citySelect) return;
+      const country = (countrySelect?.value || "").trim();
+      const selected = citySelect.value || "";
+      citySelect.innerHTML = "";
+      const base = document.createElement("option");
+      base.value = "";
+      base.textContent = country ? "All cities in selected country" : "Select city (optional)";
+      citySelect.appendChild(base);
+      cityOptions(country).forEach((city) => {
+        const option = document.createElement("option");
+        option.value = city;
+        option.textContent = city;
+        citySelect.appendChild(option);
+      });
+      citySelect.value = selected && [...citySelect.options].some((opt) => opt.value === selected) ? selected : "";
+    };
+
+    const updateRunNotes = () => {
+      const city = (citySelect?.value || "").trim();
+      const country = (countrySelect?.value || "").trim();
+      if (cityCountryNote) cityCountryNote.hidden = !(city && !country);
+      if (countryScopeNote) countryScopeNote.hidden = !(country && !city);
+    };
+
+    renderCountryOptions();
+    renderCityOptions();
+    updateRunNotes();
+
+    countrySelect?.addEventListener("change", () => {
+      renderCityOptions();
+      updateRunNotes();
+    });
+    citySelect?.addEventListener("change", updateRunNotes);
+  }
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 
