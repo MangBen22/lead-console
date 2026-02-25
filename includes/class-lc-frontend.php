@@ -46,6 +46,7 @@ class LC_Frontend
         add_action('admin_post_lc_frontend_revoke_password_change', [$this, 'handle_revoke_password_change']);
         add_action('admin_post_lc_frontend_accept_gdpr', [$this, 'handle_accept_gdpr']);
         add_action('admin_post_lc_frontend_update_profile_photo', [$this, 'handle_update_profile_photo']);
+        add_action('admin_post_lc_frontend_import_leads', [$this, 'handle_import_leads']);
         add_action('admin_post_lc_frontend_add_lead', [$this, 'handle_add_lead']);
         add_action('admin_post_lc_frontend_update_status', [$this, 'handle_update_status']);
         add_action('admin_post_lc_frontend_queue_run', [$this, 'handle_queue_run']);
@@ -116,6 +117,9 @@ class LC_Frontend
             'approval_rejected' => 'Your registration has been declined. Please contact admin.',
             'photo_updated' => 'Profile photo updated successfully.',
             'photo_invalid' => 'Please upload a valid image file for your profile photo.',
+            'import_success' => 'Leads imported successfully.',
+            'import_partial' => 'Import completed with some skipped rows.',
+            'import_error' => 'Import failed. File could not be parsed or rows were incomplete.',
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
             'status_updated' => 'Lead status updated.',
@@ -123,7 +127,15 @@ class LC_Frontend
         ];
 
         if (isset($messages[$code])) {
-            echo '<div class="lc-fe-alert">' . esc_html($messages[$code]) . '</div>';
+            $detail = '';
+            if (in_array($code, ['import_success', 'import_partial', 'import_error'], true)) {
+                $imported = absint($_GET['lc_imported'] ?? 0);
+                $failed = absint($_GET['lc_failed'] ?? 0);
+                if ($imported > 0 || $failed > 0) {
+                    $detail = ' Imported: ' . $imported . '. Skipped: ' . $failed . '.';
+                }
+            }
+            echo '<div class="lc-fe-alert">' . esc_html($messages[$code] . $detail) . '</div>';
         }
     }
 
@@ -270,6 +282,7 @@ class LC_Frontend
         echo '<div class="lc-app-layout">';
         echo '<aside class="lc-side-tabs" aria-label="Console tabs">';
         echo '<button type="button" class="lc-tab-btn is-active" data-tab="dashboard">Dashboard</button>';
+        echo '<button type="button" class="lc-tab-btn" data-tab="leads">Leads</button>';
         if ($is_primary_admin) {
             echo '<button type="button" class="lc-tab-btn" data-tab="settings">Settings</button>';
             echo '<button type="button" class="lc-tab-btn" data-tab="logs">Logs</button>';
@@ -291,23 +304,6 @@ class LC_Frontend
         echo '</div>';
 
         echo '<div class="lc-fe-grid">';
-        echo '<article class="lc-fe-card" id="lc-section-leads">';
-        echo '<p class="lc-card-kicker">// LEADS</p>';
-        echo '<h3>Add Lead</h3>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
-        wp_nonce_field('lc_frontend_add_lead');
-        echo '<input type="hidden" name="action" value="lc_frontend_add_lead" />';
-        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
-        echo '<label>Business Name<input type="text" name="business_name" required /></label>';
-        echo '<label>City<input type="text" name="city" /></label>';
-        echo '<label>Category<input type="text" name="category" /></label>';
-        echo '<label>Website<input type="url" name="website" /></label>';
-        echo '<label>Phone<input type="text" name="phone" /></label>';
-        echo '<label>Email<input type="email" name="email" /></label>';
-        echo '<button type="submit">Save Lead</button>';
-        echo '</form>';
-        echo '</article>';
-
         echo '<article class="lc-fe-card" id="lc-section-runs">';
         echo '<p class="lc-card-kicker">// RUNS</p>';
         echo '<h3>Queue Discovery Run</h3>';
@@ -336,7 +332,44 @@ class LC_Frontend
         echo '</div>';
 
         echo '<div class="lc-fe-card">';
-        echo '<p class="lc-card-kicker">// PIPELINE</p>';
+        echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
+        echo '<h3>Recent Runs</h3>';
+        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Niche/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+        foreach ($run_rows as $run) {
+            $location = trim((string) $run->city);
+            if (!empty($run->country)) {
+                $location = trim($location . ', ' . (string) $run->country, ', ');
+            }
+            if ((int) ($run->radius_miles ?? 0) > 0) {
+                $location .= ' within ' . (int) $run->radius_miles . ' miles';
+            }
+            if ($location === '') {
+                $location = 'Unspecified';
+            }
+            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
+        }
+        if (empty($run_rows)) {
+            echo '<tr><td colspan="7">No runs queued yet.</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
+
+        echo '</section>';
+        echo '<section class="lc-tab-panel" data-tab="leads">';
+        echo '<div class="lc-fe-card" id="lc-section-leads">';
+        echo '<p class="lc-card-kicker">// LEADS</p>';
+        echo '<h3>Lead Import</h3>';
+        echo '<p>Import leads using CSV, TSV, TXT, JSON, or XLSX. The system maps fields automatically when possible and skips unreadable rows.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form" enctype="multipart/form-data">';
+        wp_nonce_field('lc_frontend_import_leads');
+        echo '<input type="hidden" name="action" value="lc_frontend_import_leads" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<label>Import File<input type="file" name="import_file" accept=".csv,.tsv,.txt,.json,.xlsx" required /></label>';
+        echo '<button type="submit">Import Leads</button>';
+        echo '</form>';
+        echo '<p><small>Supported fields: business_name, city, category, address, website, phone, email, rating, review_count, status, notes, source_url.</small></p>';
+        echo '</div>';
+        echo '<div class="lc-fe-card">';
         echo '<h3>Recent Leads</h3>';
         echo '<table><thead><tr><th>Business</th><th>Contact</th><th>Score</th><th>Status</th><th>Update</th></tr></thead><tbody>';
         foreach ($lead_rows as $row) {
@@ -362,30 +395,6 @@ class LC_Frontend
         }
         echo '</tbody></table>';
         echo '</div>';
-
-        echo '<div class="lc-fe-card">';
-        echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
-        echo '<h3>Recent Runs</h3>';
-        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Niche/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
-        foreach ($run_rows as $run) {
-            $location = trim((string) $run->city);
-            if (!empty($run->country)) {
-                $location = trim($location . ', ' . (string) $run->country, ', ');
-            }
-            if ((int) ($run->radius_miles ?? 0) > 0) {
-                $location .= ' within ' . (int) $run->radius_miles . ' miles';
-            }
-            if ($location === '') {
-                $location = 'Unspecified';
-            }
-            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
-        }
-        if (empty($run_rows)) {
-            echo '<tr><td colspan="7">No runs queued yet.</td></tr>';
-        }
-        echo '</tbody></table>';
-        echo '</div>';
-
         echo '</section>';
         if ($is_primary_admin) {
             $this->render_admin_console_sections($settings);
@@ -1057,6 +1066,84 @@ class LC_Frontend
         $this->redirect_with_msg('photo_updated');
     }
 
+    public function handle_import_leads()
+    {
+        $this->ensure_frontend_user();
+        check_admin_referer('lc_frontend_import_leads');
+
+        if (empty($_FILES['import_file']) || !is_array($_FILES['import_file'])) {
+            $this->redirect_with_import_result('import_error', 0, 0);
+        }
+
+        $file = $_FILES['import_file'];
+        if (!empty($file['error']) || empty($file['tmp_name'])) {
+            $this->redirect_with_import_result('import_error', 0, 0);
+        }
+
+        $ext = strtolower((string) pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'tsv', 'txt', 'json', 'xlsx'], true)) {
+            $this->log_event('leads', 'warning', 'Import rejected due to unsupported extension.', ['extension' => $ext]);
+            $this->redirect_with_import_result('import_error', 0, 0);
+        }
+
+        $rows = $this->parse_import_rows((string) $file['tmp_name'], $ext);
+        if (empty($rows)) {
+            $this->log_event('leads', 'warning', 'Import parsed zero rows.', ['extension' => $ext]);
+            $this->redirect_with_import_result('import_error', 0, 0);
+        }
+
+        global $wpdb;
+        $imported = 0;
+        $failed = 0;
+
+        foreach ($rows as $row) {
+            $mapped = $this->map_import_row($row);
+            if (!$mapped) {
+                $failed++;
+                continue;
+            }
+
+            if ($this->is_suppressed($mapped['email'], $mapped['phone'], $mapped['website'], $mapped['business_name'])) {
+                $failed++;
+                continue;
+            }
+
+            $score = $this->compute_score($mapped['website'], $mapped['phone'], $mapped['email'], $mapped['review_count'], $mapped['rating']);
+            $result = $wpdb->insert($this->table('lc_leads'), [
+                'business_name' => $mapped['business_name'],
+                'city' => $mapped['city'],
+                'category' => $mapped['category'],
+                'address' => $mapped['address'],
+                'website' => $mapped['website'],
+                'phone' => $mapped['phone'],
+                'email' => $mapped['email'],
+                'status' => $this->normalize_status($mapped['status']),
+                'score' => $score,
+                'lead_type' => $this->compute_lead_type($mapped['website'], $score),
+                'review_count' => absint($mapped['review_count']),
+                'rating' => (float) $mapped['rating'],
+                'source_url' => $mapped['source_url'],
+                'notes' => $mapped['notes'],
+            ]);
+
+            if ($result) {
+                $imported++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $message = 'import_error';
+        if ($imported > 0 && $failed === 0) {
+            $message = 'import_success';
+        } elseif ($imported > 0 && $failed > 0) {
+            $message = 'import_partial';
+        }
+
+        $this->log_event('leads', 'info', 'Lead import processed.', ['imported' => $imported, 'failed' => $failed, 'extension' => $ext]);
+        $this->redirect_with_import_result($message, $imported, $failed);
+    }
+
     public function handle_add_lead()
     {
         $this->ensure_frontend_user();
@@ -1255,10 +1342,308 @@ class LC_Frontend
         return preg_replace('/^www\./', '', strtolower($host));
     }
 
+    private function parse_import_rows($path, $ext)
+    {
+        if ($ext === 'json') {
+            $json = file_get_contents($path);
+            if ($json === false) {
+                return [];
+            }
+            $decoded = json_decode($json, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        if ($ext === 'xlsx') {
+            return $this->parse_xlsx_rows($path);
+        }
+
+        $delimiter = ',';
+        if ($ext === 'tsv') {
+            $delimiter = "\t";
+        }
+
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return [];
+        }
+
+        $rows = [];
+        $first = true;
+        $header = [];
+        $has_header = false;
+        while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
+            if ($ext === 'txt' && $first) {
+                $joined = implode(',', $data);
+                if (substr_count($joined, "\t") > substr_count($joined, ',')) {
+                    fclose($handle);
+                    return $this->parse_import_rows_with_delimiter($path, "\t");
+                }
+            }
+
+            if ($first) {
+                $header = array_map([$this, 'normalize_import_header'], $data);
+                $has_header = $this->looks_like_header($header);
+                $first = false;
+                if (!$has_header) {
+                    $rows[] = $this->row_from_indexed($data);
+                }
+                continue;
+            }
+
+            if ($has_header) {
+                $assoc = [];
+                foreach ($data as $i => $value) {
+                    $key = $header[$i] ?? ('col_' . $i);
+                    $assoc[$key] = (string) $value;
+                }
+                $rows[] = $assoc;
+            } else {
+                $rows[] = $this->row_from_indexed($data);
+            }
+        }
+        fclose($handle);
+
+        return $rows;
+    }
+
+    private function parse_import_rows_with_delimiter($path, $delimiter)
+    {
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return [];
+        }
+        $rows = [];
+        $first = true;
+        $header = [];
+        $has_header = false;
+        while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
+            if ($first) {
+                $header = array_map([$this, 'normalize_import_header'], $data);
+                $has_header = $this->looks_like_header($header);
+                $first = false;
+                if (!$has_header) {
+                    $rows[] = $this->row_from_indexed($data);
+                }
+                continue;
+            }
+            if ($has_header) {
+                $assoc = [];
+                foreach ($data as $i => $value) {
+                    $assoc[$header[$i] ?? ('col_' . $i)] = (string) $value;
+                }
+                $rows[] = $assoc;
+            } else {
+                $rows[] = $this->row_from_indexed($data);
+            }
+        }
+        fclose($handle);
+        return $rows;
+    }
+
+    private function parse_xlsx_rows($path)
+    {
+        if (!class_exists('ZipArchive')) {
+            return [];
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            return [];
+        }
+
+        $sheet_xml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if ($sheet_xml === false) {
+            $zip->close();
+            return [];
+        }
+
+        $shared = [];
+        $shared_xml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($shared_xml !== false) {
+            $sx = @simplexml_load_string($shared_xml);
+            if ($sx) {
+                $si_nodes = $sx->xpath('//*[local-name()="si"]');
+                if (is_array($si_nodes)) {
+                    foreach ($si_nodes as $si) {
+                        $text_nodes = $si->xpath('.//*[local-name()="t"]');
+                        $text = '';
+                        if (is_array($text_nodes)) {
+                            foreach ($text_nodes as $t_node) {
+                                $text .= (string) $t_node;
+                            }
+                        }
+                        $shared[] = $text;
+                    }
+                }
+            }
+        }
+
+        $rows = [];
+        $sx_sheet = @simplexml_load_string($sheet_xml);
+        if (!$sx_sheet) {
+            $zip->close();
+            return [];
+        }
+
+        $row_nodes = $sx_sheet->xpath('//*[local-name()="sheetData"]/*[local-name()="row"]');
+        if (!is_array($row_nodes)) {
+            $zip->close();
+            return [];
+        }
+
+        foreach ($row_nodes as $row) {
+            $vals = [];
+            $cell_nodes = $row->xpath('./*[local-name()="c"]');
+            foreach ((array) $cell_nodes as $c) {
+                $type = (string) ($c['t'] ?? '');
+                $v_nodes = $c->xpath('./*[local-name()="v"]');
+                $val = is_array($v_nodes) && isset($v_nodes[0]) ? (string) $v_nodes[0] : '';
+                if ($type === 's') {
+                    $idx = absint($val);
+                    $val = $shared[$idx] ?? '';
+                }
+                $vals[] = $val;
+            }
+            if (!empty($vals)) {
+                $rows[] = $vals;
+            }
+        }
+
+        $zip->close();
+        if (empty($rows)) {
+            return [];
+        }
+
+        $header = array_map([$this, 'normalize_import_header'], $rows[0]);
+        $has_header = $this->looks_like_header($header);
+        $mapped = [];
+        foreach ($rows as $idx => $vals) {
+            if ($idx === 0 && $has_header) {
+                continue;
+            }
+            if ($has_header) {
+                $assoc = [];
+                foreach ($vals as $i => $val) {
+                    $assoc[$header[$i] ?? ('col_' . $i)] = (string) $val;
+                }
+                $mapped[] = $assoc;
+            } else {
+                $mapped[] = $this->row_from_indexed($vals);
+            }
+        }
+
+        return $mapped;
+    }
+
+    private function normalize_import_header($header)
+    {
+        $header = strtolower(trim((string) $header));
+        $header = str_replace(['-', ' ', '.'], '_', $header);
+        $map = [
+            'name' => 'business_name',
+            'company' => 'business_name',
+            'company_name' => 'business_name',
+            'business' => 'business_name',
+            'businessname' => 'business_name',
+            'e_mail' => 'email',
+            'mail' => 'email',
+            'telephone' => 'phone',
+            'mobile' => 'phone',
+            'site' => 'website',
+            'url' => 'website',
+            'services_offered' => 'services',
+            'service' => 'services',
+            'reviews' => 'review_count',
+            'user_ratings_total' => 'review_count',
+            'stars' => 'rating',
+            'lead_status' => 'status',
+            'source' => 'source_url',
+        ];
+        return $map[$header] ?? $header;
+    }
+
+    private function looks_like_header($headers)
+    {
+        $known = ['business_name', 'city', 'category', 'address', 'website', 'phone', 'email', 'review_count', 'rating', 'status', 'notes', 'source_url'];
+        foreach ($headers as $h) {
+            if (in_array((string) $h, $known, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function row_from_indexed($data)
+    {
+        return [
+            'business_name' => (string) ($data[0] ?? ''),
+            'city' => (string) ($data[1] ?? ''),
+            'category' => (string) ($data[2] ?? ''),
+            'address' => (string) ($data[3] ?? ''),
+            'website' => (string) ($data[4] ?? ''),
+            'phone' => (string) ($data[5] ?? ''),
+            'email' => (string) ($data[6] ?? ''),
+            'review_count' => (string) ($data[7] ?? '0'),
+            'rating' => (string) ($data[8] ?? '0'),
+            'status' => (string) ($data[9] ?? 'New'),
+            'notes' => (string) ($data[10] ?? ''),
+            'source_url' => (string) ($data[11] ?? ''),
+        ];
+    }
+
+    private function map_import_row($row)
+    {
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $business_name = sanitize_text_field((string) ($row['business_name'] ?? $row['name'] ?? ''));
+        $city = sanitize_text_field((string) ($row['city'] ?? ''));
+        $website = esc_url_raw((string) ($row['website'] ?? ''));
+        $phone = sanitize_text_field((string) ($row['phone'] ?? ''));
+        $email = sanitize_email((string) ($row['email'] ?? ''));
+
+        // Require business name plus at least two key fields to consider row complete.
+        $completeness = 0;
+        foreach ([$city, $website, $phone, $email] as $value) {
+            if ($value !== '') {
+                $completeness++;
+            }
+        }
+        if ($business_name === '' || $completeness < 2) {
+            return null;
+        }
+
+        return [
+            'business_name' => $business_name,
+            'city' => $city,
+            'category' => sanitize_text_field((string) ($row['category'] ?? $row['niche'] ?? $row['services'] ?? '')),
+            'address' => sanitize_text_field((string) ($row['address'] ?? '')),
+            'website' => $website,
+            'phone' => $phone,
+            'email' => $email,
+            'review_count' => absint($row['review_count'] ?? 0),
+            'rating' => max(0, min(5, (float) ($row['rating'] ?? 0))),
+            'status' => sanitize_text_field((string) ($row['status'] ?? 'New')),
+            'notes' => sanitize_textarea_field((string) ($row['notes'] ?? '')),
+            'source_url' => esc_url_raw((string) ($row['source_url'] ?? '')),
+        ];
+    }
+
     private function redirect_with_msg($msg)
     {
         $target = $this->redirect_target();
         $target = add_query_arg('lc_msg', $msg, $target);
+        wp_safe_redirect($target);
+        exit;
+    }
+
+    private function redirect_with_import_result($msg, $imported, $failed)
+    {
+        $target = $this->redirect_target();
+        $target = add_query_arg('lc_msg', $msg, $target);
+        $target = add_query_arg('lc_imported', absint($imported), $target);
+        $target = add_query_arg('lc_failed', absint($failed), $target);
         wp_safe_redirect($target);
         exit;
     }
@@ -1387,12 +1772,7 @@ class LC_Frontend
             }
         }
 
-        $initial = strtoupper(substr(trim((string) $label), 0, 1));
-        if ($initial === '') {
-            $initial = 'U';
-        }
-
-        return '<span class="lc-user-avatar lc-user-avatar-fallback" role="img" aria-label="' . esc_attr($label) . '" style="width:' . esc_attr((string) $size) . 'px;height:' . esc_attr((string) $size) . 'px;">' . esc_html($initial) . '</span>';
+        return '<span class="lc-user-avatar lc-user-avatar-fallback" role="img" aria-label="' . esc_attr($label) . '" style="width:' . esc_attr((string) $size) . 'px;height:' . esc_attr((string) $size) . 'px;"><img class="lc-user-avatar-brand" src="https://5n2digital.com/wp-content/uploads/2024/01/Untitled-1-1.png" alt="5N2 emblem" /></span>';
     }
 
     private function log_event($category, $level, $message, $context = [])

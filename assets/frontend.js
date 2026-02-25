@@ -66,7 +66,7 @@
     },
     {
       selector: "#lc-section-leads",
-      text: "Leads section: add a business name, city, category, website, phone, and email. Example query later: 'Dentist' in 'Austin'.",
+      text: "Leads section: import CSV, TSV, TXT, JSON, or XLSX files. The system maps fields automatically and reports skipped rows if data is incomplete.",
     },
     {
       selector: "#lc-section-runs",
