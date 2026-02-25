@@ -2,6 +2,18 @@
   const root = document.querySelector(".lc-fe");
   if (!root) return;
 
+  root.querySelectorAll(".lc-toggle-password").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".lc-password-row");
+      const input = row?.querySelector(".lc-password-input");
+      if (!input) return;
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      btn.textContent = showing ? "Show" : "Hide";
+      btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
+  });
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 

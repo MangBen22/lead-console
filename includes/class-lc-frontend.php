@@ -36,6 +36,12 @@ class LC_Frontend
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
         add_action('admin_post_nopriv_lc_frontend_login', [$this, 'handle_login']);
         add_action('admin_post_lc_frontend_login', [$this, 'handle_login']);
+        add_action('admin_post_nopriv_lc_frontend_forgot_password', [$this, 'handle_forgot_password']);
+        add_action('admin_post_lc_frontend_forgot_password', [$this, 'handle_forgot_password']);
+        add_action('admin_post_nopriv_lc_frontend_reset_password', [$this, 'handle_reset_password']);
+        add_action('admin_post_lc_frontend_reset_password', [$this, 'handle_reset_password']);
+        add_action('admin_post_nopriv_lc_frontend_revoke_password_change', [$this, 'handle_revoke_password_change']);
+        add_action('admin_post_lc_frontend_revoke_password_change', [$this, 'handle_revoke_password_change']);
         add_action('admin_post_lc_frontend_accept_gdpr', [$this, 'handle_accept_gdpr']);
         add_action('admin_post_lc_frontend_add_lead', [$this, 'handle_add_lead']);
         add_action('admin_post_lc_frontend_update_status', [$this, 'handle_update_status']);
@@ -63,10 +69,10 @@ class LC_Frontend
 
         $this->render_message();
 
-        if (!is_user_logged_in()) {
+        if ($this->has_reset_query()) {
+            $this->render_reset_password_form();
+        } elseif (!is_user_logged_in()) {
             $this->render_login_form();
-        } elseif (!$this->is_allowed_user_email()) {
-            echo '<div class="lc-fe-card"><h2>Access Restricted</h2><p>This console is restricted to authorized accounts.</p></div>';
         } elseif (!$gdpr_accepted) {
             $this->render_gdpr_gate();
         } else {
@@ -86,8 +92,14 @@ class LC_Frontend
 
         $messages = [
             'login_failed' => 'Login failed. Please check your username and password.',
+            'user_locked' => 'This user is temporarily locked. Please contact the super admin.',
             'gdpr_required' => 'Please accept the GDPR notice to continue.',
             'gdpr_saved' => 'GDPR consent recorded.',
+            'reset_email_not_found' => 'Email not found in user database.',
+            'reset_sent' => 'Password reset email sent. The link is valid for 5 minutes.',
+            'reset_link_invalid' => 'Reset link is invalid or expired.',
+            'reset_success' => 'Password updated successfully. Please log in with your new password.',
+            'reset_revoke_success' => 'Password change revoked. Account is now locked pending super admin reset.',
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
             'status_updated' => 'Lead status updated.',
@@ -111,9 +123,48 @@ class LC_Frontend
         echo '<input type="hidden" name="action" value="lc_frontend_login" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label>Username<input type="text" name="log" required /></label>';
-        echo '<label>Password<input type="password" name="pwd" required /></label>';
+        echo '<label>Password<div class="lc-password-row"><input class="lc-password-input" type="password" name="pwd" required /><button type="button" class="lc-toggle-password" aria-label="Show password">Show</button></div></label>';
         echo '<label class="lc-check"><input type="checkbox" name="accept_gdpr" value="1" required /> I agree to GDPR-compliant processing for authorized business operations.</label>';
         echo '<button type="submit">Sign In</button>';
+        echo '</form>';
+        echo '<hr class="lc-divider" />';
+        echo '<h3>Forgot Password</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        wp_nonce_field('lc_frontend_forgot_password');
+        echo '<input type="hidden" name="action" value="lc_frontend_forgot_password" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<label>Email<input type="email" name="email" required /></label>';
+        echo '<button type="submit">Send Reset Link</button>';
+        echo '</form>';
+        echo '</div>';
+    }
+
+    private function render_reset_password_form()
+    {
+        $selector = sanitize_text_field($_GET['selector'] ?? '');
+        $token = sanitize_text_field($_GET['token'] ?? '');
+
+        if (!$this->is_valid_timed_token('lc_reset_token_', $selector, $token)) {
+            echo '<div class="lc-fe-card lc-fe-login">';
+            echo '<h2>Reset Link Expired</h2>';
+            echo '<p>This reset link is invalid or older than 5 minutes. Please request a new one.</p>';
+            echo '</div>';
+            return;
+        }
+
+        echo '<div class="lc-fe-card lc-fe-login">';
+        echo '<img class="lc-logo" src="https://5n2digital.com/wp-content/uploads/2024/01/Untitled-1-1.png" alt="5N2 Digital logo" />';
+        echo '<p class="lc-badge">5N2 DIGITAL SOFTWARE</p>';
+        echo '<h2>Reset Password</h2>';
+        echo '<p>This reset link is valid for 5 minutes.</p>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        wp_nonce_field('lc_frontend_reset_password');
+        echo '<input type="hidden" name="action" value="lc_frontend_reset_password" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url(remove_query_arg(['lc_reset', 'selector', 'token'], $this->current_url())) . '" />';
+        echo '<input type="hidden" name="selector" value="' . esc_attr($selector) . '" />';
+        echo '<input type="hidden" name="token" value="' . esc_attr($token) . '" />';
+        echo '<label>New Password<div class="lc-password-row"><input class="lc-password-input" type="password" name="new_password" minlength="8" required /><button type="button" class="lc-toggle-password" aria-label="Show password">Show</button></div></label>';
+        echo '<button type="submit">Update Password</button>';
         echo '</form>';
         echo '</div>';
     }
@@ -273,21 +324,14 @@ class LC_Frontend
 
     private function ensure_frontend_user()
     {
-        if (!is_user_logged_in() || !$this->is_allowed_user_email()) {
+        if (!is_user_logged_in()) {
             $this->redirect_with_msg('not_allowed');
         }
-    }
 
-    private function allowed_email()
-    {
-        return defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : 'allen.bonagua@gmail.com';
-    }
-
-    private function is_allowed_user_email($user = null)
-    {
-        $user = $user ?: wp_get_current_user();
-        $email = strtolower((string) ($user->user_email ?? ''));
-        return $email === $this->allowed_email();
+        if ($this->is_locked_user(get_current_user_id())) {
+            wp_logout();
+            $this->redirect_with_msg('user_locked');
+        }
     }
 
     public function handle_login()
@@ -322,15 +366,124 @@ class LC_Frontend
             $this->redirect_with_msg('login_failed');
         }
 
-        if (!$this->is_allowed_user_email($user)) {
+        if ($this->is_locked_user((int) $user->ID)) {
             wp_logout();
-            $this->redirect_with_msg('not_allowed');
+            $this->redirect_with_msg('user_locked');
         }
 
         update_user_meta((int) $user->ID, 'lc_gdpr_accepted', 1);
         update_user_meta((int) $user->ID, 'lc_gdpr_accepted_at', current_time('mysql'));
 
         $this->redirect_with_msg('gdpr_saved');
+    }
+
+    public function handle_forgot_password()
+    {
+        check_admin_referer('lc_frontend_forgot_password');
+
+        $email = sanitize_email($_POST['email'] ?? '');
+        if (!$email) {
+            $this->redirect_with_msg('reset_email_not_found');
+        }
+
+        $user = get_user_by('email', $email);
+        if (!$user) {
+            $this->redirect_with_msg('reset_email_not_found');
+        }
+
+        $token_data = $this->create_timed_token('lc_reset_token_', (int) $user->ID, 300, []);
+        $reset_link = add_query_arg([
+            'lc_reset' => '1',
+            'selector' => $token_data['selector'],
+            'token' => $token_data['token'],
+        ], remove_query_arg(['lc_msg', 'lc_reset', 'selector', 'token'], $this->redirect_target()));
+
+        $subject = '5N2 Lead Console Password Reset';
+        $message = "A password reset was requested for your account.\n\n";
+        $message .= "Reset link (valid for 5 minutes):\n" . esc_url_raw($reset_link) . "\n\n";
+        $message .= "If you did not request this, ignore this email.";
+        wp_mail($user->user_email, $subject, $message);
+
+        $this->redirect_with_msg('reset_sent');
+    }
+
+    public function handle_reset_password()
+    {
+        check_admin_referer('lc_frontend_reset_password');
+
+        $selector = sanitize_text_field($_POST['selector'] ?? '');
+        $token = sanitize_text_field($_POST['token'] ?? '');
+        $new_password = (string) ($_POST['new_password'] ?? '');
+
+        if (strlen($new_password) < 8) {
+            $this->redirect_with_msg('reset_link_invalid');
+        }
+
+        $record = $this->consume_timed_token('lc_reset_token_', $selector, $token);
+        if (!$record) {
+            $this->redirect_with_msg('reset_link_invalid');
+        }
+
+        $user_id = (int) ($record['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            $this->redirect_with_msg('reset_link_invalid');
+        }
+
+        wp_set_password($new_password, $user_id);
+        update_user_meta($user_id, 'lc_locked', 0);
+
+        $revoke = $this->create_timed_token('lc_revoke_token_', $user_id, 300, []);
+        $revoke_link = add_query_arg([
+            'action' => 'lc_frontend_revoke_password_change',
+            'selector' => $revoke['selector'],
+            'token' => $revoke['token'],
+        ], admin_url('admin-post.php'));
+
+        $subject_user = '5N2 Lead Console Password Changed';
+        $message_user = "Your password was changed.\n\n";
+        $message_user .= "If this was NOT you, click this revoke link within 5 minutes:\n" . esc_url_raw($revoke_link) . "\n\n";
+        $message_user .= "After 5 minutes, the revoke link expires.";
+        wp_mail($user->user_email, $subject_user, $message_user);
+
+        $admin_email = defined('LC_PRIMARY_ADMIN_EMAIL') ? LC_PRIMARY_ADMIN_EMAIL : get_option('admin_email');
+        $subject_admin = 'Lead Console Alert: Password changed';
+        $message_admin = "User password changed:\nEmail: {$user->user_email}\nTime: " . current_time('mysql') . "\n";
+        $message_admin .= "Revoke window: 5 minutes.";
+        wp_mail($admin_email, $subject_admin, $message_admin);
+
+        $this->redirect_with_msg('reset_success');
+    }
+
+    public function handle_revoke_password_change()
+    {
+        $selector = sanitize_text_field($_GET['selector'] ?? '');
+        $token = sanitize_text_field($_GET['token'] ?? '');
+
+        $record = $this->consume_timed_token('lc_revoke_token_', $selector, $token);
+        if (!$record) {
+            $target = add_query_arg('lc_msg', 'reset_link_invalid', home_url('/'));
+            wp_safe_redirect($target);
+            exit;
+        }
+
+        $user_id = (int) ($record['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if ($user) {
+            update_user_meta($user_id, 'lc_locked', 1);
+            wp_set_password(wp_generate_password(24, true, true), $user_id);
+
+            $admin_email = defined('LC_PRIMARY_ADMIN_EMAIL') ? LC_PRIMARY_ADMIN_EMAIL : get_option('admin_email');
+            $subject = 'Lead Console Alert: Password change revoked';
+            $message = "A password change was revoked by user confirmation.\n";
+            $message .= "User: {$user->user_email}\n";
+            $message .= "Account locked. Super admin manual reset is required.";
+            wp_mail($admin_email, $subject, $message);
+        }
+
+        $target = add_query_arg('lc_msg', 'reset_revoke_success', home_url('/'));
+        wp_safe_redirect($target);
+        exit;
     }
 
     public function handle_accept_gdpr()
@@ -522,6 +675,69 @@ class LC_Frontend
             return $raw;
         }
         return $this->current_url();
+    }
+
+    private function has_reset_query()
+    {
+        return !empty($_GET['lc_reset']) && !empty($_GET['selector']) && !empty($_GET['token']);
+    }
+
+    private function create_timed_token($prefix, $user_id, $ttl_seconds, $extra)
+    {
+        $selector = wp_generate_password(20, false, false);
+        $token = wp_generate_password(48, false, false);
+        $record = array_merge($extra, [
+            'user_id' => (int) $user_id,
+            'token_hash' => hash('sha256', $token),
+            'created_at' => time(),
+        ]);
+        set_transient($prefix . $selector, $record, $ttl_seconds);
+        return [
+            'selector' => $selector,
+            'token' => $token,
+        ];
+    }
+
+    private function consume_timed_token($prefix, $selector, $token)
+    {
+        if ($selector === '' || $token === '') {
+            return null;
+        }
+
+        $record = get_transient($prefix . $selector);
+        if (!$record || !is_array($record)) {
+            return null;
+        }
+
+        $expected = (string) ($record['token_hash'] ?? '');
+        $actual = hash('sha256', $token);
+        if (!hash_equals($expected, $actual)) {
+            return null;
+        }
+
+        delete_transient($prefix . $selector);
+        return $record;
+    }
+
+    private function is_valid_timed_token($prefix, $selector, $token)
+    {
+        if ($selector === '' || $token === '') {
+            return false;
+        }
+
+        $record = get_transient($prefix . $selector);
+        if (!$record || !is_array($record)) {
+            return false;
+        }
+
+        $expected = (string) ($record['token_hash'] ?? '');
+        $actual = hash('sha256', $token);
+        return hash_equals($expected, $actual);
+    }
+
+    private function is_locked_user($user_id)
+    {
+        return !empty(get_user_meta((int) $user_id, 'lc_locked', true));
     }
 
     private function current_url()

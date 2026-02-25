@@ -167,6 +167,9 @@ class LC_Plugin
         add_action('admin_post_lc_export_ready', [$this, 'handle_export_ready']);
         add_action('admin_post_lc_enrich_lead', [$this, 'handle_enrich_lead']);
         add_action('admin_post_lc_enrich_recent', [$this, 'handle_enrich_recent']);
+        add_action('admin_post_lc_admin_reset_user_password', [$this, 'handle_admin_reset_user_password']);
+        add_action('admin_post_lc_admin_lock_user', [$this, 'handle_admin_lock_user']);
+        add_action('admin_post_lc_admin_unlock_user', [$this, 'handle_admin_unlock_user']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
     }
 
@@ -186,6 +189,7 @@ class LC_Plugin
         add_submenu_page('lc_dashboard', 'Exports', 'Exports', $capability, 'lc_exports', [$this, 'render_exports']);
         add_submenu_page('lc_dashboard', 'Suppression', 'Suppression', $capability, 'lc_suppression', [$this, 'render_suppression']);
         add_submenu_page('lc_dashboard', 'Intelligence', 'Intelligence', $capability, 'lc_intelligence', [$this, 'render_intelligence']);
+        add_submenu_page('lc_dashboard', 'Users', 'Users', $capability, 'lc_users', [$this, 'render_users']);
         add_submenu_page('lc_dashboard', 'Reports', 'Reports', $capability, 'lc_reports', [$this, 'render_reports']);
         add_submenu_page('lc_dashboard', 'Settings', 'Settings', $capability, 'lc_settings', [$this, 'render_settings']);
     }
@@ -1213,6 +1217,10 @@ class LC_Plugin
             'added' => 'Suppression entry added.',
             'enriched' => 'Lead intelligence profile updated.',
             'enriched_recent' => 'Recent leads enriched successfully.',
+            'user_reset_done' => 'User password reset completed.',
+            'user_lock_done' => 'User locked successfully.',
+            'user_unlock_done' => 'User unlocked successfully.',
+            'user_action_error' => 'User action failed.',
             'invalid_headers' => 'CSV headers do not match expected format.',
             'missing_file' => 'Please select a CSV file to import.',
             'import_error' => 'CSV import failed.',
@@ -1641,6 +1649,155 @@ class LC_Plugin
 
         if (empty($rows)) {
             echo '<tr><td colspan="7">No leads available.</td></tr>';
+        }
+
+        echo '</tbody></table>';
+        $this->render_wrap_end();
+    }
+
+    public function handle_admin_reset_user_password()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_reset_user_password');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
+            exit;
+        }
+
+        $new_password = (string) ($_POST['new_password'] ?? '');
+        if ($new_password === '') {
+            $new_password = wp_generate_password(14, true, true);
+        }
+
+        wp_set_password($new_password, $user_id);
+        update_user_meta($user_id, 'lc_locked', 0);
+
+        $subject = '5N2 Lead Console Password Reset by Admin';
+        $message = "Your password was reset by an administrator.\n\n";
+        $message .= "Username: {$user->user_login}\n";
+        $message .= "Temporary/New Password: {$new_password}\n\n";
+        $message .= "Please log in and change it immediately.";
+        wp_mail($user->user_email, $subject, $message);
+
+        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_reset_done'));
+        exit;
+    }
+
+    public function handle_admin_lock_user()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_lock_user');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
+            exit;
+        }
+
+        if (strtolower((string) $user->user_email) === $this->get_primary_admin_email()) {
+            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
+            exit;
+        }
+
+        update_user_meta($user_id, 'lc_locked', 1);
+        wp_set_password(wp_generate_password(24, true, true), $user_id);
+
+        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_lock_done'));
+        exit;
+    }
+
+    public function handle_admin_unlock_user()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_admin_unlock_user');
+
+        $user_id = absint($_POST['user_id'] ?? 0);
+        $user = get_user_by('id', $user_id);
+        if (!$user) {
+            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
+            exit;
+        }
+
+        update_user_meta($user_id, 'lc_locked', 0);
+        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_unlock_done'));
+        exit;
+    }
+
+    public function render_users()
+    {
+        $this->ensure_permissions();
+
+        $users = get_users([
+            'orderby' => 'registered',
+            'order' => 'DESC',
+            'number' => 200,
+        ]);
+
+        $this->render_wrap_start('Users');
+        $this->message_notice();
+
+        echo '<div class="lc-card" style="margin-bottom:16px;">';
+        echo '<h2>User Administration</h2>';
+        echo '<p>Manual password reset and account lock/unlock are available only to primary admin (' . esc_html($this->get_primary_admin_email()) . ').</p>';
+        echo '</div>';
+
+        echo '<table class="widefat striped">';
+        echo '<thead><tr><th>Photo</th><th>User</th><th>Role</th><th>Status</th><th>Manual Password Reset</th><th>Lock Controls</th></tr></thead><tbody>';
+
+        foreach ($users as $user) {
+            $roles = implode(', ', array_map('sanitize_text_field', $user->roles));
+            $locked = !empty(get_user_meta($user->ID, 'lc_locked', true));
+            $is_primary = strtolower((string) $user->user_email) === $this->get_primary_admin_email();
+
+            echo '<tr>';
+            echo '<td>' . get_avatar($user->ID, 48) . '</td>';
+            echo '<td><strong>' . esc_html($user->display_name ?: $user->user_login) . '</strong><br/>';
+            echo '<small>Username: ' . esc_html($user->user_login) . '</small><br/>';
+            echo '<small>Email: ' . esc_html($user->user_email) . '</small></td>';
+            echo '<td>' . esc_html($roles ?: 'subscriber') . '</td>';
+            echo '<td>' . ($locked ? '<span style="color:#b10000;font-weight:600;">Locked</span>' : '<span style="color:#0a7a0a;font-weight:600;">Active</span>') . ($is_primary ? '<br/><small>Primary Admin</small>' : '') . '</td>';
+
+            echo '<td>';
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-form-grid">';
+            wp_nonce_field('lc_admin_reset_user_password');
+            echo '<input type="hidden" name="action" value="lc_admin_reset_user_password" />';
+            echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+            echo '<input type="text" name="new_password" placeholder="Optional custom password" />';
+            submit_button('Reset Password', 'secondary', 'submit', false);
+            echo '</form>';
+            echo '</td>';
+
+            echo '<td>';
+            if (!$is_primary) {
+                if ($locked) {
+                    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                    wp_nonce_field('lc_admin_unlock_user');
+                    echo '<input type="hidden" name="action" value="lc_admin_unlock_user" />';
+                    echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+                    submit_button('Unlock', 'small', 'submit', false);
+                    echo '</form>';
+                } else {
+                    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                    wp_nonce_field('lc_admin_lock_user');
+                    echo '<input type="hidden" name="action" value="lc_admin_lock_user" />';
+                    echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $user->ID) . '" />';
+                    submit_button('Lock', 'small', 'submit', false);
+                    echo '</form>';
+                }
+            } else {
+                echo '<em>Protected</em>';
+            }
+            echo '</td>';
+
+            echo '</tr>';
+        }
+
+        if (empty($users)) {
+            echo '<tr><td colspan="6">No users found.</td></tr>';
         }
 
         echo '</tbody></table>';

@@ -131,6 +131,28 @@
   background: rgba(5, 10, 24, 0.55);
 }
 
+.lc-password-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.lc-password-row .lc-password-input {
+  min-width: 0;
+}
+
+.lc-password-row .lc-toggle-password {
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.lc-divider {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  margin: 14px 0;
+}
+
 .lc-fe button,
 .lc-fe a.lc-btn {
   border: 0;
