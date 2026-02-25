@@ -170,7 +170,9 @@ class LC_Plugin
     {
         add_action('init', [$this, 'maybe_upgrade_schema']);
         add_action('init', [$this, 'bootstrap_primary_admin_user']);
+        add_action('init', [$this, 'disable_admin_bar_for_logged_in_users']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
+        add_action('admin_init', [$this, 'enforce_frontend_only_mode']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
         add_filter('map_meta_cap', [$this, 'restrict_user_creation_capability'], 10, 4);
@@ -185,6 +187,7 @@ class LC_Plugin
         add_action('admin_post_lc_admin_reset_user_password', [$this, 'handle_admin_reset_user_password']);
         add_action('admin_post_lc_admin_lock_user', [$this, 'handle_admin_lock_user']);
         add_action('admin_post_lc_admin_unlock_user', [$this, 'handle_admin_unlock_user']);
+        add_action('admin_post_lc_frontend_save_settings', [$this, 'handle_frontend_save_settings']);
         add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
         add_action('shutdown', [$this, 'capture_shutdown_errors']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
@@ -254,6 +257,34 @@ class LC_Plugin
     {
         if (!current_user_can('manage_options') || !$this->is_allowed_admin_user()) {
             wp_die('Insufficient permissions.');
+        }
+    }
+
+    public function disable_admin_bar_for_logged_in_users()
+    {
+        if (is_user_logged_in()) {
+            show_admin_bar(false);
+        }
+    }
+
+    public function enforce_frontend_only_mode()
+    {
+        if (!is_user_logged_in()) {
+            return;
+        }
+
+        if ((defined('DOING_AJAX') && DOING_AJAX) || (defined('WP_CLI') && WP_CLI)) {
+            return;
+        }
+
+        $script = basename((string) ($_SERVER['PHP_SELF'] ?? ''));
+        if (in_array($script, ['admin-post.php', 'async-upload.php'], true)) {
+            return;
+        }
+
+        if (is_admin()) {
+            wp_safe_redirect(home_url('/'));
+            exit;
         }
     }
 
@@ -1764,8 +1795,7 @@ class LC_Plugin
         $user_id = absint($_POST['user_id'] ?? 0);
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
-            exit;
+            $this->redirect_after_action('user_action_error', 'lc_users');
         }
 
         $new_password = (string) ($_POST['new_password'] ?? '');
@@ -1783,8 +1813,7 @@ class LC_Plugin
         $message .= "Please log in and change it immediately.";
         wp_mail($user->user_email, $subject, $message);
 
-        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_reset_done'));
-        exit;
+        $this->redirect_after_action('user_reset_done', 'lc_users');
     }
 
     public function handle_admin_lock_user()
@@ -1795,20 +1824,17 @@ class LC_Plugin
         $user_id = absint($_POST['user_id'] ?? 0);
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
-            exit;
+            $this->redirect_after_action('user_action_error', 'lc_users');
         }
 
         if (strtolower((string) $user->user_email) === $this->get_primary_admin_email()) {
-            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
-            exit;
+            $this->redirect_after_action('user_action_error', 'lc_users');
         }
 
         update_user_meta($user_id, 'lc_locked', 1);
         wp_set_password(wp_generate_password(24, true, true), $user_id);
 
-        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_lock_done'));
-        exit;
+        $this->redirect_after_action('user_lock_done', 'lc_users');
     }
 
     public function handle_admin_unlock_user()
@@ -1819,12 +1845,37 @@ class LC_Plugin
         $user_id = absint($_POST['user_id'] ?? 0);
         $user = get_user_by('id', $user_id);
         if (!$user) {
-            wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_action_error'));
-            exit;
+            $this->redirect_after_action('user_action_error', 'lc_users');
         }
 
         update_user_meta($user_id, 'lc_locked', 0);
-        wp_safe_redirect(admin_url('admin.php?page=lc_users&message=user_unlock_done'));
+        $this->redirect_after_action('user_unlock_done', 'lc_users');
+    }
+
+    public function handle_frontend_save_settings()
+    {
+        $this->ensure_permissions();
+        check_admin_referer('lc_frontend_save_settings');
+
+        $input = $_POST['lc_settings'] ?? [];
+        if (!is_array($input)) {
+            $input = [];
+        }
+        $sanitized = $this->sanitize_settings($input);
+        update_option('lc_settings', $sanitized);
+        $this->log_system_event('settings', 'info', 'Settings updated from frontend.', []);
+        $this->redirect_after_action('settings_saved', 'lc_settings');
+    }
+
+    private function redirect_after_action($message, $fallback_page)
+    {
+        $target = esc_url_raw($_POST['redirect_to'] ?? '');
+        if (!$target) {
+            $target = admin_url('admin.php?page=' . $fallback_page);
+        }
+        $target = add_query_arg('lc_msg', $message, $target);
+        $target = add_query_arg('message', $message, $target);
+        wp_safe_redirect($target);
         exit;
     }
 

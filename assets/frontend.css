@@ -205,6 +205,23 @@
   text-decoration: none;
 }
 
+.lc-fe-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.lc-fe-nav a {
+  display: inline-block;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: #dce4fa;
+  text-decoration: none;
+  font-size: 13px;
+}
+
 .lc-fe-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -258,10 +275,16 @@
 .lc-inline-form {
   display: flex;
   gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .lc-inline-form select {
   min-width: 130px;
+}
+
+.lc-inline-form input[type="text"] {
+  min-width: 170px;
 }
 
 .lc-tutorial {
@@ -349,6 +372,11 @@
 
   .lc-logo-hero {
     width: 150px;
+  }
+
+  .lc-fe-nav a {
+    padding: 7px 10px;
+    font-size: 12px;
   }
 }
 

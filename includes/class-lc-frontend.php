@@ -94,6 +94,11 @@ class LC_Frontend
             'login_failed' => 'Login failed. Please check your username and password.',
             'user_locked' => 'This user is temporarily locked. Please contact the super admin.',
             'gdpr_required' => 'Please accept the GDPR notice to continue.',
+            'settings_saved' => 'Settings saved successfully.',
+            'user_reset_done' => 'User password reset completed.',
+            'user_lock_done' => 'User locked successfully.',
+            'user_unlock_done' => 'User unlocked successfully.',
+            'user_action_error' => 'User action failed.',
             'reset_email_not_found' => 'Email not found in user database.',
             'reset_sent' => 'Password reset email sent. The link is valid for 5 minutes.',
             'reset_link_invalid' => 'Reset link is invalid or expired.',
@@ -201,6 +206,7 @@ class LC_Frontend
         $settings = $this->settings();
         $user = wp_get_current_user();
         $first_name = $this->first_name($user);
+        $is_primary_admin = $this->is_primary_admin($user);
 
         echo '<header class="lc-fe-hero">';
         echo '<div>';
@@ -214,6 +220,17 @@ class LC_Frontend
         echo '<a href="' . esc_url(wp_logout_url($this->current_url())) . '">Log Out</a>';
         echo '</div>';
         echo '</header>';
+
+        echo '<nav class="lc-fe-nav" aria-label="Console sections">';
+        echo '<a href="#lc-section-leads">Leads</a>';
+        echo '<a href="#lc-section-runs">Runs</a>';
+        echo '<a href="#lc-section-compliance">Compliance</a>';
+        if ($is_primary_admin) {
+            echo '<a href="#lc-section-settings">Settings</a>';
+            echo '<a href="#lc-section-logs">Logs</a>';
+            echo '<a href="#lc-section-users">Users</a>';
+        }
+        echo '</nav>';
 
         echo '<div class="lc-fe-metrics">';
         $this->metric('Total Leads', $total_leads);
@@ -261,6 +278,10 @@ class LC_Frontend
         echo '<p>Use only lawful/public data and provider-approved APIs. Do not use prohibited scraping or unauthorized automation on third-party platforms.</p>';
         echo '</div>';
 
+        if ($is_primary_admin) {
+            $this->render_admin_console_sections($settings);
+        }
+
         echo '<div class="lc-fe-card">';
         echo '<p class="lc-card-kicker">// PIPELINE</p>';
         echo '<h3>Recent Leads</h3>';
@@ -303,6 +324,108 @@ class LC_Frontend
         echo '</div>';
 
         $this->tutorial_markup();
+    }
+
+    private function render_admin_console_sections($settings)
+    {
+        global $wpdb;
+
+        $logs = $wpdb->get_results("SELECT id, level, category, message, created_at FROM {$this->table('lc_system_logs')} ORDER BY id DESC LIMIT 50");
+        $users = get_users(['orderby' => 'registered', 'order' => 'DESC', 'number' => 100]);
+
+        echo '<div class="lc-fe-card" id="lc-section-settings">';
+        echo '<p class="lc-card-kicker">// SETTINGS</p>';
+        echo '<h3>System Settings</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form">';
+        wp_nonce_field('lc_frontend_save_settings');
+        echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<label>Domain fragment<input type="text" name="lc_settings[domain_fragment]" value="' . esc_attr((string) ($settings['domain_fragment'] ?? '')) . '" /></label>';
+        echo '<label>Max places per run<input type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) ($settings['max_places_per_run'] ?? 25)) . '" /></label>';
+        echo '<label class="lc-check"><input type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enable live API calls</label>';
+        echo '<label>Google Places API key<input type="text" name="lc_settings[google_places_api_key]" value="' . esc_attr((string) ($settings['google_places_api_key'] ?? '')) . '" /></label>';
+        echo '<label>Discovery mode<select name="lc_settings[discovery_mode]">';
+        echo '<option value="hybrid" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'hybrid', false) . '>Hybrid</option>';
+        echo '<option value="google_only" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'google_only', false) . '>Google only</option>';
+        echo '<option value="directory_only" ' . selected($settings['discovery_mode'] ?? 'hybrid', 'directory_only', false) . '>Directory only</option>';
+        echo '</select></label>';
+        echo '<label>Social discovery mode<select name="lc_settings[social_discovery_mode]">';
+        echo '<option value="off" ' . selected($settings['social_discovery_mode'] ?? 'off', 'off', false) . '>Off</option>';
+        echo '<option value="url_discovery_only" ' . selected($settings['social_discovery_mode'] ?? 'off', 'url_discovery_only', false) . '>URL discovery only</option>';
+        echo '<option value="official_api_enabled" ' . selected($settings['social_discovery_mode'] ?? 'off', 'official_api_enabled', false) . '>Official API enabled</option>';
+        echo '</select></label>';
+        echo '<label>Google CSE API key<input type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr((string) ($settings['google_cse_api_key'] ?? '')) . '" /></label>';
+        echo '<label>Google CSE cx<input type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr((string) ($settings['google_cse_cx'] ?? '')) . '" /></label>';
+        echo '<label>Directory sources<textarea name="lc_settings[directory_sources]" rows="5">' . esc_textarea((string) ($settings['directory_sources'] ?? '')) . '</textarea></label>';
+        echo '<button type="submit">Save Settings</button>';
+        echo '</form>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-logs">';
+        echo '<p class="lc-card-kicker">// LOGS</p>';
+        echo '<h3>Latest System Logs</h3>';
+        echo '<table><thead><tr><th>Time</th><th>Level</th><th>Category</th><th>Message</th></tr></thead><tbody>';
+        foreach ($logs as $row) {
+            echo '<tr>';
+            echo '<td>' . esc_html($row->created_at) . '</td>';
+            echo '<td>' . esc_html(strtoupper((string) $row->level)) . '</td>';
+            echo '<td>' . esc_html($row->category) . '</td>';
+            echo '<td>' . esc_html($row->message) . '</td>';
+            echo '</tr>';
+        }
+        if (empty($logs)) {
+            echo '<tr><td colspan="4">No logs yet.</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
+
+        echo '<div class="lc-fe-card" id="lc-section-users">';
+        echo '<p class="lc-card-kicker">// USERS</p>';
+        echo '<h3>User Management</h3>';
+        echo '<table><thead><tr><th>Photo</th><th>User</th><th>Status</th><th>Reset</th><th>Lock</th></tr></thead><tbody>';
+        foreach ($users as $u) {
+            $locked = !empty(get_user_meta((int) $u->ID, 'lc_locked', true));
+            $is_primary = $this->is_primary_admin($u);
+            echo '<tr>';
+            echo '<td>' . get_avatar($u->ID, 34) . '</td>';
+            echo '<td><strong>' . esc_html($u->display_name ?: $u->user_login) . '</strong><br/><small>' . esc_html($u->user_email) . '</small></td>';
+            echo '<td>' . ($locked ? 'Locked' : 'Active') . ($is_primary ? ' (Primary Admin)' : '') . '</td>';
+            echo '<td><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+            wp_nonce_field('lc_admin_reset_user_password');
+            echo '<input type="hidden" name="action" value="lc_admin_reset_user_password" />';
+            echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+            echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $u->ID) . '" />';
+            echo '<input type="text" name="new_password" placeholder="Optional password" />';
+            echo '<button type="submit">Reset</button>';
+            echo '</form></td>';
+            echo '<td>';
+            if ($is_primary) {
+                echo 'Protected';
+            } elseif ($locked) {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+                wp_nonce_field('lc_admin_unlock_user');
+                echo '<input type="hidden" name="action" value="lc_admin_unlock_user" />';
+                echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $u->ID) . '" />';
+                echo '<button type="submit">Unlock</button>';
+                echo '</form>';
+            } else {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-inline-form">';
+                wp_nonce_field('lc_admin_lock_user');
+                echo '<input type="hidden" name="action" value="lc_admin_lock_user" />';
+                echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+                echo '<input type="hidden" name="user_id" value="' . esc_attr((string) $u->ID) . '" />';
+                echo '<button type="submit">Lock</button>';
+                echo '</form>';
+            }
+            echo '</td>';
+            echo '</tr>';
+        }
+        if (empty($users)) {
+            echo '<tr><td colspan="5">No users found.</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
     }
 
     private function tutorial_markup()
@@ -765,6 +888,13 @@ class LC_Frontend
     private function is_locked_user($user_id)
     {
         return !empty(get_user_meta((int) $user_id, 'lc_locked', true));
+    }
+
+    private function is_primary_admin($user)
+    {
+        $email = strtolower((string) ($user->user_email ?? ''));
+        $primary = defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : '';
+        return $email !== '' && $email === $primary;
     }
 
     private function first_name($user)
