@@ -196,6 +196,8 @@ class LC_Plugin
             'webops_monitors' => '',
             'seo_extension_enabled' => 0,
             'human_support_email' => '',
+            'bridge_enabled' => 0,
+            'bridge_shared_key' => '',
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
@@ -273,6 +275,7 @@ class LC_Plugin
         add_action('admin_post_lc_frontend_save_settings', [$this, 'handle_frontend_save_settings']);
         add_action('phpmailer_init', [$this, 'configure_smtp_mailer']);
         add_filter('cron_schedules', [$this, 'register_cron_schedules']);
+        add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
         add_action('shutdown', [$this, 'capture_shutdown_errors']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
@@ -487,6 +490,8 @@ class LC_Plugin
             'webops_monitors' => sanitize_textarea_field($settings['webops_monitors'] ?? ''),
             'seo_extension_enabled' => !empty($settings['seo_extension_enabled']) ? 1 : 0,
             'human_support_email' => sanitize_email($settings['human_support_email'] ?? ''),
+            'bridge_enabled' => !empty($settings['bridge_enabled']) ? 1 : 0,
+            'bridge_shared_key' => sanitize_text_field($settings['bridge_shared_key'] ?? ''),
             'enable_live_api_calls' => !empty($settings['enable_live_api_calls']) ? 1 : 0,
             'google_places_api_key' => sanitize_text_field($settings['google_places_api_key'] ?? ''),
             'discovery_mode' => $mode,
@@ -1144,6 +1149,8 @@ class LC_Plugin
             'webops_monitors' => '',
             'seo_extension_enabled' => 0,
             'human_support_email' => '',
+            'bridge_enabled' => 0,
+            'bridge_shared_key' => '',
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
@@ -1184,6 +1191,73 @@ class LC_Plugin
     public function get_settings_snapshot()
     {
         return $this->get_settings();
+    }
+
+    public function register_rest_routes()
+    {
+        register_rest_route('lc/v1', '/bridge/status', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_status'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/push-approved', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_push_approved'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+    }
+
+    public function rest_bridge_permission($request)
+    {
+        $settings = $this->get_settings();
+        if (empty($settings['bridge_enabled'])) {
+            return false;
+        }
+        $expected = trim((string) ($settings['bridge_shared_key'] ?? ''));
+        if ($expected === '') {
+            return false;
+        }
+        $incoming = trim((string) $request->get_header('x-lc-bridge-key'));
+        return hash_equals($expected, $incoming);
+    }
+
+    public function rest_bridge_status($request)
+    {
+        $settings = $this->get_settings();
+        return rest_ensure_response([
+            'ok' => true,
+            'service' => 'lead-console-plugin-bridge',
+            'site_url' => home_url('/'),
+            'plugin_version' => LC_PLUGIN_VERSION,
+            'bridge_enabled' => !empty($settings['bridge_enabled']),
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_push_approved($request)
+    {
+        global $wpdb;
+
+        $leads = $wpdb->get_results(
+            "SELECT id, business_name, city, category, website, phone, email, status, created_at
+             FROM {$this->db_table('lc_leads')}
+             WHERE status IN ('Ready','Verified')
+             ORDER BY id DESC
+             LIMIT 100",
+            ARRAY_A
+        );
+
+        $this->log_system_event('bridge', 'info', 'Bridge approved leads sync requested.', [
+            'count' => count($leads),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'count' => count($leads),
+            'leads' => $leads,
+            'time' => current_time('mysql'),
+        ]);
     }
 
     public function get_smtp_health_status()
@@ -3983,6 +4057,8 @@ class LC_Plugin
         echo '<tr><th scope="row"><label for="lc_notifications_email">Email notifications</label></th><td><label><input id="lc_notifications_email" type="checkbox" name="lc_settings[notifications_email]" value="1" ' . checked(!empty($settings['notifications_email']), true, false) . ' /> Enabled</label></td></tr>';
         echo '<tr><th scope="row"><label for="lc_notifications_sound">Sound notifications</label></th><td><label><input id="lc_notifications_sound" type="checkbox" name="lc_settings[notifications_sound]" value="1" ' . checked(!empty($settings['notifications_sound']), true, false) . ' /> Enabled</label></td></tr>';
         echo '<tr><th scope="row"><label for="lc_human_support_email">Human support email</label></th><td><input id="lc_human_support_email" type="email" name="lc_settings[human_support_email]" value="' . esc_attr($settings['human_support_email']) . '" class="regular-text" /><p class="description">Fallback escalation destination when automated support cannot resolve a case.</p></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_bridge_enabled">Plugin bridge API</label></th><td><label><input id="lc_bridge_enabled" type="checkbox" name="lc_settings[bridge_enabled]" value="1" ' . checked(!empty($settings['bridge_enabled']), true, false) . ' /> Enabled</label><p class="description">Allows app.5n2digital.com to connect through secure REST endpoints.</p></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_bridge_shared_key">Bridge shared key</label></th><td><input id="lc_bridge_shared_key" type="password" name="lc_settings[bridge_shared_key]" value="' . esc_attr((string) $settings['bridge_shared_key']) . '" class="regular-text code" /><p class="description">Send this value as <code>X-LC-Bridge-Key</code> header from the main app.</p></td></tr>';
         echo '<tr><th scope="row"><label for="lc_crm_connectors">CRM connectors</label></th><td><textarea id="lc_crm_connectors" name="lc_settings[crm_connectors]" class="large-text code" rows="4" placeholder="fluentcrm|plugin|enabled&#10;hubspot|api|planned">' . esc_textarea((string) $settings['crm_connectors']) . '</textarea></td></tr>';
         echo '<tr><th scope="row"><label for="lc_social_connectors">Social/forum connectors</label></th><td><textarea id="lc_social_connectors" name="lc_settings[social_connectors]" class="large-text code" rows="4" placeholder="facebook|api|planned&#10;reddit|api|planned">' . esc_textarea((string) $settings['social_connectors']) . '</textarea></td></tr>';
         echo '<tr><th scope="row"><label for="lc_webops_monitors">WebOps monitors</label></th><td><textarea id="lc_webops_monitors" name="lc_settings[webops_monitors]" class="large-text code" rows="4" placeholder="uptime_ping|enabled&#10;ssl_expiry|enabled">' . esc_textarea((string) $settings['webops_monitors']) . '</textarea></td></tr>';
