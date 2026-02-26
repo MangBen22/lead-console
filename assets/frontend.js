@@ -430,23 +430,44 @@
     const content = kbShell.querySelector(".lc-kb-content");
     const searchInput = kbShell.querySelector(".lc-kb-search-input");
     const suggest = kbShell.querySelector(".lc-kb-search-suggest");
-    let kbDocs = [];
+    let kbSections = [];
     try {
       const payload = JSON.parse(dataNode?.textContent || "{}");
-      kbDocs = Array.isArray(payload.docs) ? payload.docs : [];
+      kbSections = Array.isArray(payload.sections) ? payload.sections : [];
     } catch (_err) {
-      kbDocs = [];
+      kbSections = [];
     }
 
-    let activeId = kbDocs[0] ? kbDocs[0].id : "";
-    const byId = new Map(kbDocs.map((doc) => [doc.id, doc]));
+    let activeSectionId = kbSections[0] ? kbSections[0].id : "";
+    const byId = new Map(kbSections.map((section) => [section.id, section]));
+    const searchIndex = [];
+    kbSections.forEach((section) => {
+      (section.topics || []).forEach((topic) => {
+        searchIndex.push({
+          sectionId: section.id,
+          title: topic.title || "",
+          type: "topic",
+          summary: `${topic.explanation || ""} ${topic.details || ""}`,
+          keywords: Array.isArray(topic.keywords) ? topic.keywords : [],
+        });
+      });
+      (section.terms || []).forEach((term) => {
+        searchIndex.push({
+          sectionId: section.id,
+          title: term.term || "",
+          type: "glossary",
+          summary: term.meaning || "",
+          keywords: ["glossary", "definition", term.term || ""],
+        });
+      });
+    });
 
-    const docScore = (doc, query) => {
+    const itemScore = (item, query) => {
       const q = String(query || "").toLowerCase().trim();
       if (!q) return 0;
-      const title = String(doc.title || "").toLowerCase();
-      const summary = String(doc.summary || "").toLowerCase();
-      const keywords = Array.isArray(doc.keywords) ? doc.keywords.join(" ").toLowerCase() : "";
+      const title = String(item.title || "").toLowerCase();
+      const summary = String(item.summary || "").toLowerCase();
+      const keywords = Array.isArray(item.keywords) ? item.keywords.join(" ").toLowerCase() : "";
       if (title === q) return 1000;
       if (title.startsWith(q)) return 800;
       if (title.includes(q)) return 600;
@@ -456,32 +477,48 @@
     };
 
     const renderContent = (id) => {
-      const doc = byId.get(id);
-      if (!doc || !content) return;
-      activeId = id;
-      content.innerHTML = [
-        `<h4>${doc.title || "Untitled"}</h4>`,
-        `<p class="lc-kb-meta">${String(doc.type || "").toUpperCase()} • ${doc.visibility || "reference"}</p>`,
-        `<p><strong>Explanation:</strong> ${doc.summary || ""}</p>`,
-        `<p><strong>Details:</strong> ${doc.details || ""}</p>`,
-        `<p><strong>Example:</strong> ${doc.example || ""}</p>`,
-        `<p class="lc-kb-keywords"><strong>Keywords:</strong> ${(doc.keywords || []).join(", ")}</p>`,
-      ].join("");
+      const section = byId.get(id);
+      if (!section || !content) return;
+      activeSectionId = id;
+      const topicCards = (section.topics || [])
+        .map(
+          (topic) => `
+            <article class="lc-kb-topic-card">
+              <h4>${topic.title || ""}</h4>
+              <p><strong>Explanation:</strong> ${topic.explanation || ""}</p>
+              <p><strong>Details:</strong> ${topic.details || ""}</p>
+              <p><strong>Example:</strong> ${topic.example || ""}</p>
+            </article>
+          `
+        )
+        .join("");
+      const glossaryTable =
+        section.id === "glossary"
+          ? `<div class="lc-kb-glossary"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>${(section.terms || [])
+              .map((t) => `<tr><td>${t.term || ""}</td><td>${t.meaning || ""}</td></tr>`)
+              .join("")}</tbody></table></div>`
+          : "";
+
+      content.innerHTML = `
+        <h4>${section.title || "Knowledge Section"}</h4>
+        <p class="lc-kb-meta">${section.intro || ""}</p>
+        ${section.id === "glossary" ? glossaryTable : `<div class="lc-kb-topic-grid">${topicCards}</div>`}
+      `;
       nav?.querySelectorAll(".lc-kb-nav-item").forEach((btn) => {
         btn.classList.toggle("is-active", btn.getAttribute("data-kb-id") === id);
       });
     };
 
-    const renderNav = (docs) => {
+    const renderNav = (sections) => {
       if (!nav) return;
       nav.innerHTML = "";
-      docs.forEach((doc) => {
+      sections.forEach((section) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "lc-kb-nav-item";
-        btn.setAttribute("data-kb-id", doc.id);
-        btn.innerHTML = `<span>${doc.title}</span><small>${doc.type}</small>`;
-        btn.addEventListener("click", () => renderContent(doc.id));
+        btn.setAttribute("data-kb-id", section.id);
+        btn.innerHTML = `<span>${section.title}</span>`;
+        btn.addEventListener("click", () => renderContent(section.id));
         nav.appendChild(btn);
       });
     };
@@ -499,25 +536,26 @@
         hideSuggest();
         return;
       }
-      const items = kbDocs
-        .map((doc) => ({ doc, score: docScore(doc, q) }))
+      const items = searchIndex
+        .map((item) => ({ item, score: itemScore(item, q) }))
         .filter((x) => x.score > 0)
-        .sort((a, b) => b.score - a.score || String(a.doc.title).localeCompare(String(b.doc.title)))
+        .sort((a, b) => b.score - a.score || String(a.item.title).localeCompare(String(b.item.title)))
         .slice(0, 8);
       suggest.innerHTML = "";
       if (!items.length) {
         hideSuggest();
         return;
       }
-      items.forEach(({ doc }) => {
+      items.forEach(({ item }) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lc-kb-suggest-item";
-        button.innerHTML = `<strong>${doc.title}</strong><span>${doc.type}</span>`;
+        const section = byId.get(item.sectionId);
+        button.innerHTML = `<strong>${item.title}</strong><span>${section ? section.title : item.type}</span>`;
         button.addEventListener("mousedown", (event) => {
           event.preventDefault();
-          if (searchInput) searchInput.value = doc.title || "";
-          renderContent(doc.id);
+          if (searchInput) searchInput.value = item.title || "";
+          renderContent(item.sectionId);
           hideSuggest();
         });
         suggest.appendChild(button);
@@ -525,21 +563,18 @@
       suggest.hidden = false;
     };
 
-    renderNav(kbDocs);
-    if (activeId) renderContent(activeId);
+    renderNav(kbSections);
+    if (activeSectionId) renderContent(activeSectionId);
     searchInput?.addEventListener("input", () => {
       const query = searchInput.value || "";
       renderSuggest(query);
-      const filtered = query
-        ? kbDocs
-            .map((doc) => ({ doc, score: docScore(doc, query) }))
-            .filter((x) => x.score > 0)
-            .sort((a, b) => b.score - a.score || String(a.doc.title).localeCompare(String(b.doc.title)))
-            .map((x) => x.doc)
-        : kbDocs;
-      renderNav(filtered);
-      if (filtered.length > 0) {
-        renderContent(filtered[0].id);
+      const filteredSectionIds = query
+        ? [...new Set(searchIndex.map((item) => ({ id: item.sectionId, score: itemScore(item, query) })).filter((x) => x.score > 0).map((x) => x.id))]
+        : kbSections.map((s) => s.id);
+      const filteredSections = kbSections.filter((section) => filteredSectionIds.includes(section.id));
+      renderNav(filteredSections);
+      if (filteredSections.length > 0) {
+        renderContent(filteredSections[0].id);
       } else if (content) {
         content.innerHTML = "<p>No matching knowledge topics found.</p>";
       }

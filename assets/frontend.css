@@ -661,7 +661,7 @@
 
 .lc-kb-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -683,15 +683,7 @@
   border-radius: 9px !important;
   padding: 8px 10px !important;
   text-align: left;
-  display: grid;
-  gap: 2px;
-}
-
-.lc-kb-nav-item small {
-  font-size: 10px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #9db0d8;
+  display: block;
 }
 
 .lc-kb-nav-item.is-active {
@@ -720,6 +712,34 @@
 
 .lc-kb-keywords {
   font-size: 12px;
+}
+
+.lc-kb-topic-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.lc-kb-topic-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.lc-kb-topic-card h4 {
+  margin-bottom: 6px;
+}
+
+.lc-kb-glossary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lc-kb-glossary th,
+.lc-kb-glossary td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
 }
 
 .lc-settings-form label {

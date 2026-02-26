@@ -539,127 +539,123 @@ class LC_Frontend
 
     private function build_knowledge_base_payload()
     {
-        $docs = [];
-        $known = [
-            'LC_Plugin::activate' => [
-                'summary' => 'Creates/updates plugin database tables and default settings on activation.',
-                'details' => 'Runs table creation for leads, runs, logs, suppression, profiles, and system logs. Also schedules run processing cron and initializes settings.',
-                'example' => 'Triggered by WordPress plugin activation lifecycle.',
-                'keywords' => ['activation', 'schema', 'tables', 'cron', 'settings'],
+        $sections = [
+            [
+                'id' => 'guide-overview',
+                'title' => 'Platform Overview',
+                'intro' => 'How to use the Lead Console day-to-day.',
+                'topics' => [
+                    [
+                        'title' => 'Dashboard Basics',
+                        'explanation' => 'Use Dashboard for the top-level view of leads, run status, and quick actions.',
+                        'details' => 'The dashboard highlights total leads, ready leads, won leads, queued runs, and latest run health.',
+                        'example' => 'If queued runs is high and captured leads are low, review run filters before launching more jobs.',
+                        'keywords' => ['dashboard', 'metrics', 'overview', 'status', 'health'],
+                    ],
+                    [
+                        'title' => 'Lead Lifecycle',
+                        'explanation' => 'Leads move through a status pipeline from New to Won/Lost.',
+                        'details' => 'Update statuses often so exports, reports, and team handoff stay accurate.',
+                        'example' => 'After validating contact details, move from New to Verified, then to Ready.',
+                        'keywords' => ['lead lifecycle', 'status', 'pipeline', 'ready', 'won'],
+                    ],
+                    [
+                        'title' => 'Settings Navigation',
+                        'explanation' => 'Settings are split into top tabs so each area is easy to manage.',
+                        'details' => 'Use System for API controls, Users for access, Logs for audit trail, and Suppression/Reports for operations.',
+                        'example' => 'Change max places per run in System before launching high-volume discovery.',
+                        'keywords' => ['settings', 'users', 'logs', 'suppression', 'reports'],
+                    ],
+                ],
             ],
-            'LC_Plugin::process_run_queue' => [
-                'summary' => 'Processes queued discovery runs and captures lead data.',
-                'details' => 'Takes the oldest queued run, executes API/fallback discovery, enriches socials, writes run logs, and sets final run status.',
-                'example' => 'Scheduled by cron hook lc_process_run or can be triggered manually by hook execution.',
-                'keywords' => ['queue', 'run', 'discovery', 'logs', 'cron'],
+            [
+                'id' => 'guide-discovery',
+                'title' => 'Discovery Run Workflow',
+                'intro' => 'How run queue, monitoring, and review work.',
+                'topics' => [
+                    [
+                        'title' => 'Queueing a Run',
+                        'explanation' => 'Submit query, location, and filters from Queue Discovery Run.',
+                        'details' => 'You can target city/state/country, define rating/review thresholds, and choose website focus.',
+                        'example' => 'Query: Dentist, Country: United States, State: California, City: San Diego.',
+                        'keywords' => ['queue run', 'filters', 'location', 'country', 'state', 'city'],
+                    ],
+                    [
+                        'title' => 'Live Activity Stream',
+                        'explanation' => 'Run progress is shown live while processing.',
+                        'details' => 'The stream shows step-by-step run logs and auto-hides after completion.',
+                        'example' => 'You will see messages for run start, source checks, captures, and completion.',
+                        'keywords' => ['live activity', 'run logs', 'processing', 'stream'],
+                    ],
+                    [
+                        'title' => 'Review Before Save',
+                        'explanation' => 'Captured leads open in a review popup before final save.',
+                        'details' => 'Choose Save Leads to write to the main leads table, or Run Again to discard and retry with adjusted filters.',
+                        'example' => 'If quality looks off, pick Run Again and tighten category/rating filters.',
+                        'keywords' => ['review', 'save leads', 'run again', 'draft', 'popup'],
+                    ],
+                    [
+                        'title' => 'Discovery Health Captured Count',
+                        'explanation' => 'Each run shows how many leads were captured.',
+                        'details' => 'Use captured count to compare run quality and tuning effectiveness over time.',
+                        'example' => 'If captured drops after filter changes, loosen minimum reviews or rating.',
+                        'keywords' => ['captured leads', 'discovery health', 'count', 'run quality'],
+                    ],
+                ],
             ],
-            'LC_Plugin::insert_discovered_lead' => [
-                'summary' => 'Stores discovered lead records or run draft records based on save mode.',
-                'details' => 'Validates suppression/duplicates, calculates score and lead type, then writes either directly to leads or to draft staging.',
-                'example' => 'Called by discovery providers during run processing.',
-                'keywords' => ['lead', 'insert', 'draft', 'score', 'duplicate'],
+            [
+                'id' => 'guide-leads',
+                'title' => 'Leads & Data Operations',
+                'intro' => 'How to manage leads, imports, exports, and quality controls.',
+                'topics' => [
+                    [
+                        'title' => 'Recent Leads Table',
+                        'explanation' => 'Use wider table view with bottom-right pagination controls.',
+                        'details' => 'You can show 10-100 rows and move page by page while staying inside the Leads tab.',
+                        'example' => 'Set Show=100 for audits, then use Prev/Next for full review passes.',
+                        'keywords' => ['recent leads', 'pagination', 'table', 'view', 'rows'],
+                    ],
+                    [
+                        'title' => 'Import and Export',
+                        'explanation' => 'Import supports multiple file formats and export creates outreach-ready CSV.',
+                        'details' => 'Imports map fields automatically; exports focus on ready/verified segments for operations.',
+                        'example' => 'After import, verify duplicates and suppression before outreach export.',
+                        'keywords' => ['import', 'export', 'csv', 'mapping', 'outreach'],
+                    ],
+                    [
+                        'title' => 'Suppression and Compliance',
+                        'explanation' => 'Suppression prevents disallowed data from entering workflows.',
+                        'details' => 'Rules can block by email, phone, domain, or name and apply during lead capture/import.',
+                        'example' => 'Add a domain suppression entry for an internal no-contact list.',
+                        'keywords' => ['suppression', 'compliance', 'blocklist', 'privacy'],
+                    ],
+                ],
             ],
-            'LC_Frontend::handle_queue_run' => [
-                'summary' => 'Validates and queues frontend runs in review-first draft mode.',
-                'details' => 'Performs compliance checks, stores run parameters, and redirects with run id for live frontend monitoring.',
-                'example' => 'Triggered by Queue Run form submit action lc_frontend_queue_run.',
-                'keywords' => ['queue', 'frontend', 'compliance', 'draft'],
-            ],
-            'LC_Frontend::handle_ajax_run_status' => [
-                'summary' => 'Returns live run status, logs, and draft preview via AJAX.',
-                'details' => 'Used by frontend polling to show processing activity and review data once the run finishes.',
-                'example' => 'AJAX action: lc_frontend_run_status.',
-                'keywords' => ['ajax', 'status', 'monitoring', 'logs', 'preview'],
-            ],
-            'LC_Frontend::handle_ajax_run_save_drafts' => [
-                'summary' => 'Commits staged draft leads into the main leads table.',
-                'details' => 'Moves draft rows for the selected run to the permanent leads table and marks run review as saved.',
-                'example' => 'AJAX action: lc_frontend_run_save_drafts.',
-                'keywords' => ['save', 'drafts', 'review', 'leads'],
-            ],
-            'LC_Frontend::handle_ajax_run_discard_drafts' => [
-                'summary' => 'Discards staged draft leads for a run.',
-                'details' => 'Deletes run draft rows and marks review status as discarded for rerun/retry workflows.',
-                'example' => 'AJAX action: lc_frontend_run_discard_drafts.',
-                'keywords' => ['discard', 'drafts', 'rerun', 'review'],
+            [
+                'id' => 'glossary',
+                'title' => 'Glossary',
+                'intro' => 'Plain-language definitions for important terms.',
+                'terms' => [
+                    ['term' => 'Lead', 'meaning' => 'A business record tracked for outreach and conversion.'],
+                    ['term' => 'Run', 'meaning' => 'A discovery job that searches sources and captures candidate leads.'],
+                    ['term' => 'Draft Lead', 'meaning' => 'A captured lead waiting for review before final save.'],
+                    ['term' => 'Captured Leads', 'meaning' => 'How many records were found by a run.'],
+                    ['term' => 'Review Status', 'meaning' => 'Whether captured run results are pending, saved, or discarded.'],
+                    ['term' => 'Save Mode', 'meaning' => 'Direct save or review-first capture mode.'],
+                    ['term' => 'Discovery Mode', 'meaning' => 'Source strategy: hybrid, API-only, or fallback-only.'],
+                    ['term' => 'Website Focus', 'meaning' => 'Filter by website presence (any/no website/has website).'],
+                    ['term' => 'Suppression', 'meaning' => 'Rules that block specific emails, phones, domains, or names.'],
+                    ['term' => 'Run Logs', 'meaning' => 'Timestamped messages showing what happened during processing.'],
+                    ['term' => 'Lead Type', 'meaning' => 'Quality classification tier based on lead signals.'],
+                    ['term' => 'Readiness Score', 'meaning' => 'Calculated score used to prioritize lead follow-up.'],
+                ],
             ],
         ];
-
-        $classes = ['LC_Plugin', 'LC_Frontend'];
-        foreach ($classes as $class_name) {
-            if (!class_exists($class_name)) {
-                continue;
-            }
-            $rc = new ReflectionClass($class_name);
-            $methods = $rc->getMethods();
-            usort($methods, static function ($a, $b) {
-                return strcmp($a->getName(), $b->getName());
-            });
-            foreach ($methods as $method) {
-                if ($method->getDeclaringClass()->getName() !== $class_name) {
-                    continue;
-                }
-                $method_name = $method->getName();
-                $key = $class_name . '::' . $method_name;
-                $doc = $known[$key] ?? null;
-                $visibility = $method->isPublic() ? 'public' : ($method->isProtected() ? 'protected' : 'private');
-                $docs[] = [
-                    'id' => strtolower($class_name . '-' . $method_name),
-                    'title' => $key,
-                    'type' => 'function',
-                    'visibility' => $visibility,
-                    'summary' => $doc['summary'] ?? ('Handles "' . str_replace('_', ' ', $method_name) . '" behavior in ' . $class_name . '.'),
-                    'details' => $doc['details'] ?? 'Internal method in the plugin architecture. Review related hooks, callers, and data tables when modifying this function.',
-                    'example' => $doc['example'] ?? 'Used by internal runtime flow based on action hooks and request lifecycle.',
-                    'keywords' => array_values(array_unique(array_filter(array_merge(
-                        [$class_name, $method_name, $visibility],
-                        isset($doc['keywords']) ? (array) $doc['keywords'] : [],
-                        preg_split('/[_:]+/', strtolower($method_name))
-                    )))),
-                ];
-            }
-        }
-
-        $glossary = [
-            ['term' => 'Lead', 'meaning' => 'A business/entity record that can be qualified and moved through the outreach pipeline.'],
-            ['term' => 'Run', 'meaning' => 'A discovery job that searches sources and captures candidate leads.'],
-            ['term' => 'Draft Lead', 'meaning' => 'A staged run result waiting for user review before final save.'],
-            ['term' => 'Review Status', 'meaning' => 'Run review state: pending, saved, discarded, or na.'],
-            ['term' => 'Save Mode', 'meaning' => 'Run capture behavior: direct save or draft-first review mode.'],
-            ['term' => 'Suppression', 'meaning' => 'Blocklist rule used to prevent capturing disallowed contacts/domains/names.'],
-            ['term' => 'Discovery Mode', 'meaning' => 'Provider strategy for run discovery: hybrid, Google only, or directory fallback only.'],
-            ['term' => 'Website Focus', 'meaning' => 'Run filter for website presence: any, no website, has website.'],
-            ['term' => 'Captured Leads', 'meaning' => 'Count of leads found by a run before user save/discard action.'],
-            ['term' => 'Run Logs', 'meaning' => 'Time-ordered status and progress lines recorded while a run is processing.'],
-            ['term' => 'Readiness Score', 'meaning' => 'Computed score based on contactability and listing signals.'],
-            ['term' => 'Lead Type', 'meaning' => 'Classification tier (A/B/C/E) based on quality and website presence.'],
-        ];
-
-        foreach ($glossary as $entry) {
-            $docs[] = [
-                'id' => 'glossary-' . sanitize_title($entry['term']),
-                'title' => $entry['term'],
-                'type' => 'glossary',
-                'visibility' => 'reference',
-                'summary' => $entry['meaning'],
-                'details' => 'Glossary reference term used throughout the Lead Console interface and workflows.',
-                'example' => 'See related dashboard labels, run forms, and lead detail tables.',
-                'keywords' => [$entry['term'], 'glossary', 'definition', 'terminology'],
-            ];
-        }
-
-        usort($docs, static function ($a, $b) {
-            if ($a['type'] === $b['type']) {
-                return strcmp((string) $a['title'], (string) $b['title']);
-            }
-            return $a['type'] === 'glossary' ? 1 : -1;
-        });
 
         return [
             'version' => LC_PLUGIN_VERSION,
             'generated_at' => current_time('mysql'),
-            'count' => count($docs),
-            'docs' => $docs,
+            'sections' => $sections,
         ];
     }
 
