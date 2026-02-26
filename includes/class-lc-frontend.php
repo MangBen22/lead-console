@@ -53,7 +53,6 @@ class LC_Frontend
         add_action('wp_ajax_lc_frontend_run_status', [$this, 'handle_ajax_run_status']);
         add_action('wp_ajax_lc_frontend_run_save_drafts', [$this, 'handle_ajax_run_save_drafts']);
         add_action('wp_ajax_lc_frontend_run_discard_drafts', [$this, 'handle_ajax_run_discard_drafts']);
-        add_action('wp_ajax_lc_frontend_log_directory_filter', [$this, 'handle_ajax_log_directory_filter']);
     }
 
     public function register_assets()
@@ -787,20 +786,6 @@ class LC_Frontend
         echo '</div></section>';
 
         $directory_presets = LC_Plugin::directory_source_presets();
-        $directory_countries = [];
-        foreach ($directory_presets as $preset_row) {
-            $country_name = sanitize_text_field((string) ($preset_row['country'] ?? 'Global'));
-            if ($country_name === '') {
-                $country_name = 'Global';
-            }
-            $directory_countries[$country_name] = true;
-        }
-        $directory_country_options = array_keys($directory_countries);
-        natcasesort($directory_country_options);
-        $directory_country_options = array_values($directory_country_options);
-        if (!in_array('Global', $directory_country_options, true)) {
-            array_unshift($directory_country_options, 'Global');
-        }
         $selected_directory_presets = [];
         if (isset($settings['directory_source_presets']) && is_array($settings['directory_source_presets'])) {
             $selected_directory_presets = array_values(array_map('sanitize_key', $settings['directory_source_presets']));
@@ -849,18 +834,7 @@ class LC_Frontend
         echo '</div>';
         echo '<div class="lc-col-12 lc-directory-source-card">';
         echo '<h4>Directory Sources</h4>';
-        echo '<p>Select approved directory and service sources by country. Global sources appear in every country view. While editing, any new sources you select stay visible when you switch countries.</p>';
-        echo '<div class="lc-directory-source-filters">';
-        echo '<label class="lc-col-4">Country filter<select class="lc-directory-country-filter">';
-        echo '<option value="all">All countries</option>';
-        foreach ($directory_country_options as $country_name) {
-            echo '<option value="' . esc_attr($country_name) . '">' . esc_html($country_name) . '</option>';
-        }
-        echo '</select></label>';
-        echo '<div class="lc-col-2"><button type="button" class="lc-btn lc-directory-country-apply">Apply</button></div>';
-        echo '<label class="lc-check lc-col-3"><input type="checkbox" class="lc-directory-selected-only" value="1" /> Show selected only</label>';
-        echo '<p class="lc-directory-selected-count lc-col-3"><strong>0</strong> sources selected</p>';
-        echo '</div>';
+        echo '<p>Select approved directory and service sources. The list is shown in two-column rows for faster selection.</p>';
         echo '<div class="lc-directory-source-grid">';
         foreach ($directory_presets as $preset) {
             $preset_id = sanitize_key((string) ($preset['id'] ?? ''));
@@ -874,7 +848,6 @@ class LC_Frontend
             $preset_type = sanitize_key((string) ($preset['source_type'] ?? 'directory'));
             $preset_host = wp_parse_url((string) ($preset['search_url'] ?? ''), PHP_URL_HOST);
             echo '<label class="lc-directory-source-item" data-country="' . esc_attr($preset_country) . '" data-source-type="' . esc_attr($preset_type) . '">';
-            echo '<input type="checkbox" name="lc_settings[directory_source_presets][]" value="' . esc_attr($preset_id) . '" ' . checked(!empty($selected_directory_map[$preset_id]), true, false) . ' />';
             echo '<span><strong>' . esc_html((string) ($preset['name'] ?? $preset_id)) . '</strong>';
             echo '<small>' . esc_html($preset_country) . ' | ' . esc_html(ucwords(str_replace('_', ' ', $preset_type))) . '</small>';
             echo '<small>' . esc_html((string) ($preset_host ?: '')) . ' | Quality ' . esc_html((string) absint($preset['quality_score'] ?? 0)) . '</small>';
@@ -882,6 +855,7 @@ class LC_Frontend
                 echo '<small>' . esc_html((string) $preset['compliance']) . '</small>';
             }
             echo '</span>';
+            echo '<input type="checkbox" name="lc_settings[directory_source_presets][]" value="' . esc_attr($preset_id) . '" ' . checked(!empty($selected_directory_map[$preset_id]), true, false) . ' />';
             echo '</label>';
         }
         echo '</div>';
@@ -1853,53 +1827,6 @@ class LC_Frontend
         $wpdb->update($this->table('lc_runs'), ['review_status' => 'discarded'], ['id' => $run_id], ['%s'], ['%d']);
         $this->log_event('runs', 'info', 'Draft run leads discarded.', ['run_id' => $run_id]);
         wp_send_json_success(['discarded' => true]);
-    }
-
-    public function handle_ajax_log_directory_filter()
-    {
-        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
-        if (!$this->is_frontend_user_ready()) {
-            wp_send_json_error(['message' => 'Not authorized.'], 403);
-        }
-
-        $trigger = sanitize_key((string) ($_POST['trigger'] ?? 'unknown'));
-        $country = sanitize_text_field((string) ($_POST['country'] ?? 'all'));
-        $selected_only = !empty($_POST['selected_only']) ? 1 : 0;
-
-        $selected_ids = json_decode(wp_unslash((string) ($_POST['selected_ids'] ?? '[]')), true);
-        if (!is_array($selected_ids)) {
-            $selected_ids = [];
-        }
-        $visible_ids = json_decode(wp_unslash((string) ($_POST['visible_ids'] ?? '[]')), true);
-        if (!is_array($visible_ids)) {
-            $visible_ids = [];
-        }
-        $selected_labels = json_decode(wp_unslash((string) ($_POST['selected_labels'] ?? '[]')), true);
-        if (!is_array($selected_labels)) {
-            $selected_labels = [];
-        }
-
-        $selected_ids = array_values(array_map('sanitize_key', $selected_ids));
-        $visible_ids = array_values(array_map('sanitize_key', $visible_ids));
-        $selected_labels = array_values(array_map('sanitize_text_field', $selected_labels));
-
-        $this->log_event('settings', 'info', 'Directory source country filter applied.', [
-            'trigger' => $trigger,
-            'country' => $country,
-            'selected_only' => $selected_only,
-            'selected_count' => count($selected_ids),
-            'visible_count' => count($visible_ids),
-            'selected_ids' => $selected_ids,
-            'visible_ids' => $visible_ids,
-            'selected_labels' => $selected_labels,
-        ]);
-
-        wp_send_json_success([
-            'logged' => true,
-            'country' => $country,
-            'selected_count' => count($selected_ids),
-            'visible_count' => count($visible_ids),
-        ]);
     }
 
     private function evaluate_run_compliance($run, $settings)
