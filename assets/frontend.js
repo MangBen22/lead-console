@@ -611,6 +611,151 @@
     if (openKbGuide) openKbGuide(section, query);
   });
 
+  const smtpForm = root.querySelector(".lc-smtp-form");
+  const smtpStatusWrap = root.querySelector(".lc-smtp-health");
+  const smtpTestBtn = root.querySelector(".lc-smtp-test-connection");
+  const smtpTestMsg = root.querySelector(".lc-smtp-test-message");
+  const smtpEmailWrap = root.querySelector(".lc-smtp-email-test");
+  const smtpSendEmailBtn = root.querySelector(".lc-smtp-send-test-email");
+  const smtpEmailTo = root.querySelector(".lc-smtp-test-email-to");
+  const smtpEmailMsg = root.querySelector(".lc-smtp-email-message");
+  const smtpConfirmRow = root.querySelector(".lc-smtp-confirm-row");
+  const smtpConfirmYes = root.querySelector(".lc-smtp-confirm-yes");
+  const smtpConfirmNo = root.querySelector(".lc-smtp-confirm-no");
+  const smtpSaveBtn = root.querySelector(".lc-smtp-save-btn");
+
+  const setSmtpHealthUi = (connected, message) => {
+    if (!smtpStatusWrap) return;
+    smtpStatusWrap.classList.toggle("is-green", !!connected);
+    smtpStatusWrap.classList.toggle("is-red", !connected);
+    const strong = smtpStatusWrap.querySelector("strong");
+    if (strong) strong.textContent = `Connection Status: ${connected ? "Connected" : "Disconnected"}`;
+    const small = smtpStatusWrap.querySelector("small");
+    if (small && message) small.textContent = message;
+    if (smtpEmailWrap) smtpEmailWrap.hidden = !connected;
+  };
+
+  smtpTestBtn?.addEventListener("click", async () => {
+    if (smtpTestMsg) smtpTestMsg.textContent = "Testing connection...";
+    const result = await ajaxPost("lc_frontend_smtp_test_connection", {});
+    const payload = result?.data || {};
+    const ok = !!payload.connected;
+    setSmtpHealthUi(ok, `${payload.message || ""} | Last check: ${payload.checked_at || "n/a"}`);
+    if (smtpTestMsg) smtpTestMsg.textContent = ok ? "Connection verified." : `Connection failed: ${payload.message || "Unknown error"}`;
+    if (!ok && smtpSaveBtn) smtpSaveBtn.disabled = true;
+  });
+
+  smtpSendEmailBtn?.addEventListener("click", async () => {
+    const to = String(smtpEmailTo?.value || "").trim();
+    if (!to) {
+      if (smtpEmailMsg) smtpEmailMsg.textContent = "Enter a recipient email first.";
+      return;
+    }
+    if (smtpEmailMsg) smtpEmailMsg.textContent = "Sending test email...";
+    const result = await ajaxPost("lc_frontend_smtp_send_test_email", { to_email: to });
+    if (result?.success) {
+      if (smtpEmailMsg) smtpEmailMsg.textContent = "Test email sent. Please confirm if received.";
+      if (smtpConfirmRow) smtpConfirmRow.hidden = false;
+    } else {
+      const msg = result?.data?.message || "Send failed. Check SMTP settings.";
+      if (smtpEmailMsg) smtpEmailMsg.textContent = msg;
+      if (smtpConfirmRow) smtpConfirmRow.hidden = true;
+      setSmtpHealthUi(false, msg);
+      if (smtpSaveBtn) smtpSaveBtn.disabled = true;
+    }
+  });
+
+  smtpConfirmYes?.addEventListener("click", async () => {
+    const result = await ajaxPost("lc_frontend_smtp_confirm_test_email", { received: 1 });
+    if (result?.success) {
+      if (smtpEmailMsg) smtpEmailMsg.textContent = "Confirmation saved. You can now save SMTP settings.";
+      if (smtpSaveBtn) smtpSaveBtn.disabled = false;
+      smtpForm?.querySelectorAll("input[type='text'], input[type='email']").forEach((field) => {
+        const input = field;
+        input.type = "password";
+      });
+    }
+  });
+
+  smtpConfirmNo?.addEventListener("click", async () => {
+    await ajaxPost("lc_frontend_smtp_confirm_test_email", { received: 0 });
+    if (smtpEmailMsg) smtpEmailMsg.textContent = "Marked as not received. Please review SMTP settings.";
+    if (smtpSaveBtn) smtpSaveBtn.disabled = true;
+  });
+
+  smtpForm?.addEventListener("input", () => {
+    if (smtpSaveBtn) smtpSaveBtn.disabled = true;
+  });
+
+  const notifyBtn = root.querySelector(".lc-notify-btn");
+  const notifyBadge = root.querySelector(".lc-notify-badge");
+  const notifyPanel = root.querySelector(".lc-notify-panel");
+  const notifyList = root.querySelector(".lc-notify-list");
+  const seenNoticeIds = new Set();
+  let firstNoticePoll = true;
+
+  const playNotifyBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.value = 0.04;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        ctx.close();
+      }, 180);
+    } catch (_e) {
+    }
+  };
+
+  const renderNotifications = (items) => {
+    if (!notifyList || !notifyBadge) return;
+    if (!Array.isArray(items) || items.length === 0) {
+      notifyList.innerHTML = "<p>No notifications.</p>";
+      notifyBadge.hidden = true;
+      return;
+    }
+    notifyBadge.hidden = false;
+    notifyBadge.textContent = String(items.length);
+    notifyList.innerHTML = items
+      .map((item) => `<article class="lc-notice-item is-${item.level || "info"}"><strong>${item.title || "Notice"}</strong><p>${item.message || ""}</p></article>`)
+      .join("");
+    let hasNew = false;
+    items.forEach((item) => {
+      const id = String(item.id || "");
+      if (!id) return;
+      if (!seenNoticeIds.has(id)) {
+        seenNoticeIds.add(id);
+        hasNew = true;
+      }
+    });
+    if (hasNew && !firstNoticePoll) {
+      playNotifyBeep();
+    }
+    firstNoticePoll = false;
+  };
+
+  const pollNotifications = async () => {
+    const result = await ajaxPost("lc_frontend_notifications", {});
+    if (result?.success) {
+      renderNotifications(result.data?.items || []);
+    }
+  };
+
+  notifyBtn?.addEventListener("click", () => {
+    if (!notifyPanel) return;
+    notifyPanel.hidden = !notifyPanel.hidden;
+  });
+  pollNotifications();
+  setInterval(pollNotifications, 30000);
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 

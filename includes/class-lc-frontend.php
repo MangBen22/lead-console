@@ -53,6 +53,10 @@ class LC_Frontend
         add_action('wp_ajax_lc_frontend_run_status', [$this, 'handle_ajax_run_status']);
         add_action('wp_ajax_lc_frontend_run_save_drafts', [$this, 'handle_ajax_run_save_drafts']);
         add_action('wp_ajax_lc_frontend_run_discard_drafts', [$this, 'handle_ajax_run_discard_drafts']);
+        add_action('wp_ajax_lc_frontend_smtp_test_connection', [$this, 'handle_ajax_smtp_test_connection']);
+        add_action('wp_ajax_lc_frontend_smtp_send_test_email', [$this, 'handle_ajax_smtp_send_test_email']);
+        add_action('wp_ajax_lc_frontend_smtp_confirm_test_email', [$this, 'handle_ajax_smtp_confirm_test_email']);
+        add_action('wp_ajax_lc_frontend_notifications', [$this, 'handle_ajax_notifications']);
     }
 
     public function register_assets()
@@ -308,6 +312,10 @@ class LC_Frontend
         echo '<p>Welcome to 5N2 Digital Lead Console.</p>';
         echo '</div>';
         echo '<div class="lc-fe-actions">';
+        echo '<div class="lc-notify-wrap">';
+        echo '<button type="button" class="lc-notify-btn" aria-label="Notifications">Notifications <span class="lc-notify-badge" hidden>0</span></button>';
+        echo '<div class="lc-notify-panel" hidden><h4>Notifications</h4><div class="lc-notify-list"><p>No notifications.</p></div></div>';
+        echo '</div>';
         echo '<div class="lc-account-chip">';
         echo $this->avatar_html((int) $user->ID, 42, $full_name);
         echo '<div class="lc-account-meta"><strong>' . esc_html($full_name) . '</strong></div>';
@@ -764,6 +772,9 @@ class LC_Frontend
         echo '<button type="button" class="lc-settings-btn is-active" data-settings-target="run-checklist">Run Checklist</button>';
         if ($is_primary_admin) {
             echo '<button type="button" class="lc-settings-btn" data-settings-target="system">System</button>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="directory-sources">Directory Sources</button>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="smtp">SMTP</button>';
+            echo '<button type="button" class="lc-settings-btn" data-settings-target="email-templates">Email Templates</button>';
         }
         echo '<button type="button" class="lc-settings-btn" data-settings-target="users">Users</button>';
         echo '<button type="button" class="lc-settings-btn" data-settings-target="logs">Logs</button>';
@@ -800,6 +811,14 @@ class LC_Frontend
             $directory_scan_rows = isset($directory_scan_report['rows']) && is_array($directory_scan_report['rows']) ? $directory_scan_report['rows'] : [];
             $directory_scan_updated = sanitize_text_field((string) ($directory_scan_report['updated_at'] ?? ''));
         }
+        $smtp_health = class_exists('LC_Plugin') ? LC_Plugin::instance()->get_smtp_health_status() : [
+            'connected' => false,
+            'status_color' => 'red',
+            'message' => 'Not checked yet.',
+            'checked_at' => '',
+        ];
+        $smtp_test_confirmed = get_option('lc_smtp_test_confirmed', []);
+        $smtp_is_confirmed = !empty($smtp_test_confirmed['confirmed']);
 
         if ($is_primary_admin) {
         echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="system"><div class="lc-fe-card" id="lc-section-settings">';
@@ -809,6 +828,7 @@ class LC_Frontend
         wp_nonce_field('lc_frontend_save_settings');
         echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<input type="hidden" name="lc_settings[enable_live_api_calls]" value="0" />';
         echo '<label class="lc-col-6">Domain fragment<input type="text" name="lc_settings[domain_fragment]" value="' . esc_attr((string) ($settings['domain_fragment'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-3">Max places per run<input type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) ($settings['max_places_per_run'] ?? 25)) . '" /></label>';
         echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enable live API calls</label>';
@@ -832,9 +852,22 @@ class LC_Frontend
         echo '<button type="button" class="lc-api-ref-open-kb" data-kb-section="settings" data-kb-query="API Setup Reference">Open Full Guide</button>';
         echo '</div>';
         echo '</div>';
+        echo '<button type="submit">Save Settings</button>';
+        echo '</form>';
+        echo '</div></section>';
+        }
+
+        if ($is_primary_admin) {
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="directory-sources"><div class="lc-fe-card" id="lc-section-directory-sources">';
+        echo '<p class="lc-card-kicker">// DIRECTORY SOURCES</p>';
+        echo '<h3>Directory Sources</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-settings-form">';
+        wp_nonce_field('lc_frontend_save_settings');
+        echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<input type="hidden" name="lc_settings[directory_source_presets_present]" value="1" />';
         echo '<div class="lc-col-12 lc-directory-source-card">';
-        echo '<h4>Directory Sources</h4>';
-        echo '<p>Select approved directory and service sources. The list is shown in two-column rows for faster selection.</p>';
+        echo '<p>Select approved directory and service sources. Two sources per row with right-side checkbox selection.</p>';
         echo '<div class="lc-directory-source-grid">';
         foreach ($directory_presets as $preset) {
             $preset_id = sanitize_key((string) ($preset['id'] ?? ''));
@@ -884,6 +917,24 @@ class LC_Frontend
             echo '</div>';
         }
         echo '</div>';
+        echo '<button type="submit">Save Directory Sources</button>';
+        echo '</form>';
+        echo '</div></section>';
+
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="smtp"><div class="lc-fe-card" id="lc-section-smtp">';
+        echo '<p class="lc-card-kicker">// SMTP</p>';
+        echo '<h3>SMTP Settings</h3>';
+        echo '<div class="lc-smtp-health ' . esc_attr(!empty($smtp_health['connected']) ? 'is-green' : 'is-red') . '">';
+        echo '<span class="lc-smtp-dot" aria-hidden="true"></span>';
+        echo '<strong>Connection Status:</strong> ' . esc_html(!empty($smtp_health['connected']) ? 'Connected' : 'Disconnected');
+        echo '<br/><small>' . esc_html((string) ($smtp_health['message'] ?? '')) . ' | Last check: ' . esc_html((string) ($smtp_health['checked_at'] ?? 'n/a')) . '</small>';
+        echo '</div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-settings-form lc-smtp-form">';
+        wp_nonce_field('lc_frontend_save_settings');
+        echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
+        echo '<input type="hidden" name="lc_settings[smtp_enabled]" value="0" />';
+        echo '<input type="hidden" name="lc_settings[smtp_auth]" value="0" />';
         echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';
         echo '<label class="lc-col-5">SMTP Host<input type="text" name="lc_settings[smtp_host]" value="' . esc_attr((string) ($settings['smtp_host'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-2">SMTP Port<input type="number" min="1" name="lc_settings[smtp_port]" value="' . esc_attr((string) ($settings['smtp_port'] ?? 587)) . '" /></label>';
@@ -897,6 +948,33 @@ class LC_Frontend
         echo '<label class="lc-col-3">SMTP Password<input type="password" name="lc_settings[smtp_password]" value="' . esc_attr((string) ($settings['smtp_password'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-3">SMTP From Email<input type="email" name="lc_settings[smtp_from_email]" value="' . esc_attr((string) ($settings['smtp_from_email'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-3">SMTP From Name<input type="text" name="lc_settings[smtp_from_name]" value="' . esc_attr((string) ($settings['smtp_from_name'] ?? '')) . '" /></label>';
+        echo '<div class="lc-col-12 lc-smtp-actions">';
+        echo '<button type="button" class="lc-btn lc-smtp-test-connection">Test Connection</button>';
+        echo '<span class="lc-smtp-test-message"></span>';
+        echo '</div>';
+        echo '<div class="lc-col-12 lc-smtp-email-test" ' . (!empty($smtp_health['connected']) ? '' : 'hidden') . '>';
+        echo '<label>Test email recipient<input type="email" class="lc-smtp-test-email-to" placeholder="name@example.com" /></label>';
+        echo '<div class="lc-smtp-actions">';
+        echo '<button type="button" class="lc-btn lc-smtp-send-test-email">Send Test Email</button>';
+        echo '<span class="lc-smtp-email-message"></span>';
+        echo '</div>';
+        echo '<div class="lc-smtp-confirm-row" hidden>';
+        echo '<span>Did you receive the email?</span>';
+        echo '<button type="button" class="lc-btn lc-smtp-confirm-yes">Yes</button>';
+        echo '<button type="button" class="lc-btn lc-smtp-confirm-no">No</button>';
+        echo '</div>';
+        echo '</div>';
+        echo '<button type="submit" class="lc-smtp-save-btn" ' . ($smtp_is_confirmed ? '' : 'disabled') . '>Save SMTP Settings</button>';
+        echo '</form>';
+        echo '</div></section>';
+
+        echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="email-templates"><div class="lc-fe-card" id="lc-section-email-templates">';
+        echo '<p class="lc-card-kicker">// EMAIL TEMPLATES</p>';
+        echo '<h3>Email Templates</h3>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="lc-fe-form lc-settings-form">';
+        wp_nonce_field('lc_frontend_save_settings');
+        echo '<input type="hidden" name="action" value="lc_frontend_save_settings" />';
+        echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label>Template: Reset Subject<input type="text" name="lc_settings[email_template_reset_subject]" value="' . esc_attr((string) ($settings['email_template_reset_subject'] ?? '')) . '" /></label>';
         echo '<label>Template: Reset Body<textarea name="lc_settings[email_template_reset_body]" rows="4">' . esc_textarea((string) ($settings['email_template_reset_body'] ?? '')) . '</textarea></label>';
         echo '<label>Template: Registration Admin Subject<input type="text" name="lc_settings[email_template_registration_admin_subject]" value="' . esc_attr((string) ($settings['email_template_registration_admin_subject'] ?? '')) . '" /></label>';
@@ -912,7 +990,7 @@ class LC_Frontend
         echo '<label>Template: Admin Password Alert Subject<input type="text" name="lc_settings[email_template_admin_password_changed_subject]" value="' . esc_attr((string) ($settings['email_template_admin_password_changed_subject'] ?? '')) . '" /></label>';
         echo '<label>Template: Admin Password Alert Body<textarea name="lc_settings[email_template_admin_password_changed_body]" rows="4">' . esc_textarea((string) ($settings['email_template_admin_password_changed_body'] ?? '')) . '</textarea></label>';
         echo '<p>Email template shortcodes: {first_name}, {full_name}, {user_email}, {username}, {new_password}, {reset_link}, {revoke_link}, {company}, {phone}, {site_name}, {site_url}, {current_time}</p>';
-        echo '<button type="submit">Save Settings</button>';
+        echo '<button type="submit">Save Email Templates</button>';
         echo '</form>';
         echo '</div></section>';
         }
@@ -1827,6 +1905,114 @@ class LC_Frontend
         $wpdb->update($this->table('lc_runs'), ['review_status' => 'discarded'], ['id' => $run_id], ['%s'], ['%d']);
         $this->log_event('runs', 'info', 'Draft run leads discarded.', ['run_id' => $run_id]);
         wp_send_json_success(['discarded' => true]);
+    }
+
+    public function handle_ajax_smtp_test_connection()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        $plugin = class_exists('LC_Plugin') ? LC_Plugin::instance() : null;
+        if (!$plugin) {
+            wp_send_json_error(['message' => 'SMTP module unavailable.'], 500);
+        }
+        $result = $plugin->smtp_connection_probe();
+        $plugin->update_smtp_health_status($result);
+        $this->log_event('settings', !empty($result['connected']) ? 'info' : 'error', 'SMTP connection test executed.', $result);
+        wp_send_json_success($result);
+    }
+
+    public function handle_ajax_smtp_send_test_email()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        $to = sanitize_email((string) ($_POST['to_email'] ?? ''));
+        $plugin = class_exists('LC_Plugin') ? LC_Plugin::instance() : null;
+        if (!$plugin) {
+            wp_send_json_error(['message' => 'SMTP module unavailable.'], 500);
+        }
+        $result = $plugin->smtp_send_test_email($to);
+        if (empty($result['success'])) {
+            $plugin->update_smtp_health_status([
+                'connected' => false,
+                'message' => 'SMTP send test failed: ' . (string) ($result['message'] ?? 'Unknown send error.'),
+                'checked_at' => current_time('mysql'),
+            ]);
+        }
+        $this->log_event('settings', !empty($result['success']) ? 'info' : 'error', 'SMTP test email action executed.', [
+            'to_email' => $to,
+            'result' => $result,
+        ]);
+        if (!empty($result['success'])) {
+            wp_send_json_success($result);
+        }
+        wp_send_json_error($result, 400);
+    }
+
+    public function handle_ajax_smtp_confirm_test_email()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        $received = !empty($_POST['received']) ? 1 : 0;
+        if ($received) {
+            update_option('lc_smtp_test_confirmed', [
+                'confirmed' => 1,
+                'user_id' => get_current_user_id(),
+                'confirmed_at' => current_time('mysql'),
+            ]);
+            $this->log_event('settings', 'info', 'SMTP test email marked as received.', []);
+        } else {
+            $this->log_event('settings', 'warning', 'SMTP test email marked as not received.', []);
+        }
+        wp_send_json_success(['received' => (bool) $received]);
+    }
+
+    public function handle_ajax_notifications()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        global $wpdb;
+        $notifications = [];
+
+        if (class_exists('LC_Plugin')) {
+            $smtp = LC_Plugin::instance()->get_smtp_health_status();
+            if (empty($smtp['connected'])) {
+                $notifications[] = [
+                    'id' => 'smtp_disconnected',
+                    'level' => 'error',
+                    'title' => 'SMTP disconnected',
+                    'message' => (string) ($smtp['message'] ?? 'SMTP is not connected. Please check settings.'),
+                ];
+            }
+        }
+
+        $pending = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$this->table('lc_runs')} WHERE review_status='pending'");
+        if ($pending > 0) {
+            $notifications[] = [
+                'id' => 'runs_pending_review',
+                'level' => 'info',
+                'title' => 'Leads Ready For Review',
+                'message' => $pending . ' discovery run(s) are waiting for review.',
+            ];
+        }
+        $queued = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$this->table('lc_runs')} WHERE status='queued'");
+        if ($queued > 0) {
+            $notifications[] = [
+                'id' => 'runs_queued',
+                'level' => 'info',
+                'title' => 'Runs In Queue',
+                'message' => $queued . ' run(s) are queued.',
+            ];
+        }
+
+        wp_send_json_success(['items' => $notifications]);
     }
 
     private function evaluate_run_compliance($run, $settings)

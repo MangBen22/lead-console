@@ -180,6 +180,9 @@ class LC_Plugin
         if (!wp_next_scheduled('lc_process_run')) {
             wp_schedule_event(time(), 'hourly', 'lc_process_run');
         }
+        if (!wp_next_scheduled('lc_smtp_health_check')) {
+            wp_schedule_event(time() + 120, 'lc_every_30_minutes', 'lc_smtp_health_check');
+        }
 
         add_option('lc_settings', [
             'domain_fragment' => '',
@@ -217,17 +220,25 @@ class LC_Plugin
             'email_template_registration_rejected_subject' => 'Registration declined',
             'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ]);
+        add_option('lc_smtp_health_status', [
+            'connected' => false,
+            'status_color' => 'red',
+            'message' => 'Not checked yet.',
+            'checked_at' => '',
+        ]);
         update_option('lc_schema_version', '7');
     }
 
     public static function deactivate()
     {
         wp_clear_scheduled_hook('lc_process_run');
+        wp_clear_scheduled_hook('lc_smtp_health_check');
     }
 
     private function __construct()
     {
         add_action('init', [$this, 'maybe_upgrade_schema']);
+        add_action('init', [$this, 'ensure_smtp_health_schedule']);
         add_action('init', [$this, 'bootstrap_primary_admin_user']);
         add_action('init', [$this, 'disable_admin_bar_for_logged_in_users']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
@@ -252,9 +263,29 @@ class LC_Plugin
         add_action('admin_post_lc_admin_create_user', [$this, 'handle_admin_create_user']);
         add_action('admin_post_lc_frontend_save_settings', [$this, 'handle_frontend_save_settings']);
         add_action('phpmailer_init', [$this, 'configure_smtp_mailer']);
+        add_filter('cron_schedules', [$this, 'register_cron_schedules']);
         add_action('lc_log_event', [$this, 'handle_external_log_event'], 10, 4);
         add_action('shutdown', [$this, 'capture_shutdown_errors']);
         add_action('lc_process_run', [$this, 'process_run_queue']);
+        add_action('lc_smtp_health_check', [$this, 'run_smtp_health_check_cron']);
+    }
+
+    public function ensure_smtp_health_schedule()
+    {
+        if (!wp_next_scheduled('lc_smtp_health_check')) {
+            wp_schedule_event(time() + 120, 'lc_every_30_minutes', 'lc_smtp_health_check');
+        }
+    }
+
+    public function register_cron_schedules($schedules)
+    {
+        if (!isset($schedules['lc_every_30_minutes'])) {
+            $schedules['lc_every_30_minutes'] = [
+                'interval' => 30 * MINUTE_IN_SECONDS,
+                'display' => 'Every 30 Minutes (Lead Console)',
+            ];
+        }
+        return $schedules;
     }
 
     public function register_admin_menu()
@@ -307,8 +338,11 @@ class LC_Plugin
         $existing_settings = $this->get_settings();
         $presets = self::directory_source_presets();
         $selected_presets = [];
+        $directory_presets_present = !empty($settings['directory_source_presets_present']);
         if (isset($settings['directory_source_presets']) && is_array($settings['directory_source_presets'])) {
             $selected_presets = $settings['directory_source_presets'];
+        } elseif ($directory_presets_present) {
+            $selected_presets = [];
         } elseif (isset($existing_settings['directory_source_presets']) && is_array($existing_settings['directory_source_presets'])) {
             $selected_presets = $existing_settings['directory_source_presets'];
         } else {
@@ -1117,6 +1151,173 @@ class LC_Plugin
         ];
 
         return wp_parse_args(get_option('lc_settings', []), $defaults);
+    }
+
+    public function get_settings_snapshot()
+    {
+        return $this->get_settings();
+    }
+
+    public function get_smtp_health_status()
+    {
+        $status = get_option('lc_smtp_health_status', []);
+        if (!is_array($status)) {
+            $status = [];
+        }
+        return wp_parse_args($status, [
+            'connected' => false,
+            'status_color' => 'red',
+            'message' => 'Not checked yet.',
+            'checked_at' => '',
+        ]);
+    }
+
+    public function run_smtp_health_check_cron()
+    {
+        $result = $this->smtp_connection_probe();
+        $this->update_smtp_health_status($result);
+        if (empty($result['connected'])) {
+            $this->log_system_event('settings', 'error', 'SMTP health check failed.', [
+                'message' => (string) ($result['message'] ?? 'Unknown SMTP error.'),
+            ]);
+        }
+    }
+
+    public function smtp_connection_probe($settings_override = [])
+    {
+        $settings = wp_parse_args((array) $settings_override, $this->get_settings());
+        if (empty($settings['smtp_enabled'])) {
+            return [
+                'connected' => false,
+                'status_color' => 'red',
+                'message' => 'SMTP is disabled.',
+                'checked_at' => current_time('mysql'),
+            ];
+        }
+        $host = trim((string) ($settings['smtp_host'] ?? ''));
+        if ($host === '') {
+            return [
+                'connected' => false,
+                'status_color' => 'red',
+                'message' => 'SMTP host is missing.',
+                'checked_at' => current_time('mysql'),
+            ];
+        }
+
+        try {
+            $mailer = $this->build_smtp_mailer($settings);
+            $connected = $mailer->smtpConnect();
+            if ($connected) {
+                $mailer->smtpClose();
+                return [
+                    'connected' => true,
+                    'status_color' => 'green',
+                    'message' => 'SMTP connection verified.',
+                    'checked_at' => current_time('mysql'),
+                ];
+            }
+            return [
+                'connected' => false,
+                'status_color' => 'red',
+                'message' => 'SMTP connection failed: ' . (string) $mailer->ErrorInfo,
+                'checked_at' => current_time('mysql'),
+            ];
+        } catch (Throwable $e) {
+            return [
+                'connected' => false,
+                'status_color' => 'red',
+                'message' => 'SMTP error: ' . sanitize_text_field($e->getMessage()),
+                'checked_at' => current_time('mysql'),
+            ];
+        }
+    }
+
+    public function smtp_send_test_email($to_email, $settings_override = [])
+    {
+        $to = sanitize_email((string) $to_email);
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error_code' => 'invalid_email',
+                'message' => 'Recipient email is invalid.',
+            ];
+        }
+
+        $settings = wp_parse_args((array) $settings_override, $this->get_settings());
+        try {
+            $mailer = $this->build_smtp_mailer($settings);
+            $from_email = sanitize_email((string) ($settings['smtp_from_email'] ?? ''));
+            if ($from_email === '') {
+                $from_email = sanitize_email((string) get_option('admin_email'));
+            }
+            $from_name = sanitize_text_field((string) ($settings['smtp_from_name'] ?? get_bloginfo('name')));
+            $mailer->setFrom($from_email, $from_name, false);
+            $mailer->addAddress($to);
+            $mailer->Subject = 'SMTP Test Email - 5N2 Lead Console';
+            $mailer->Body = "This is a test email from 5N2 Lead Console.\nSent at: " . current_time('mysql');
+            $mailer->send();
+            return [
+                'success' => true,
+                'error_code' => '',
+                'message' => 'Test email sent successfully.',
+            ];
+        } catch (Throwable $e) {
+            $message = sanitize_text_field($e->getMessage());
+            $error_code = 'send_failed';
+            if (stripos($message, 'daemon') !== false || stripos($message, 'undeliver') !== false || stripos($message, 'mailbox unavailable') !== false) {
+                $error_code = 'mailer_daemon';
+            }
+            return [
+                'success' => false,
+                'error_code' => $error_code,
+                'message' => $message !== '' ? $message : 'SMTP send failed.',
+            ];
+        }
+    }
+
+    public function update_smtp_health_status($status)
+    {
+        $status = wp_parse_args((array) $status, [
+            'connected' => false,
+            'status_color' => 'red',
+            'message' => 'Unknown SMTP state.',
+            'checked_at' => current_time('mysql'),
+        ]);
+        $status['connected'] = !empty($status['connected']);
+        $status['status_color'] = $status['connected'] ? 'green' : 'red';
+        $status['message'] = sanitize_text_field((string) $status['message']);
+        $status['checked_at'] = sanitize_text_field((string) $status['checked_at']);
+        update_option('lc_smtp_health_status', $status);
+        return $status;
+    }
+
+    private function build_smtp_mailer($settings)
+    {
+        if (!class_exists('\\PHPMailer\\PHPMailer\\PHPMailer')) {
+            require_once ABSPATH . WPINC . '/PHPMailer/PHPMailer.php';
+            require_once ABSPATH . WPINC . '/PHPMailer/SMTP.php';
+            require_once ABSPATH . WPINC . '/PHPMailer/Exception.php';
+        }
+
+        $mailer = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $mailer->isSMTP();
+        $mailer->Host = (string) ($settings['smtp_host'] ?? '');
+        $mailer->Port = max(1, (int) ($settings['smtp_port'] ?? 587));
+        $mailer->SMTPAuth = !empty($settings['smtp_auth']);
+        $mailer->Username = (string) ($settings['smtp_username'] ?? '');
+        $mailer->Password = (string) ($settings['smtp_password'] ?? '');
+        $mailer->Timeout = 12;
+        $mailer->SMTPDebug = 0;
+        $encryption = (string) ($settings['smtp_encryption'] ?? 'tls');
+        if ($encryption === 'ssl') {
+            $mailer->SMTPSecure = 'ssl';
+        } elseif ($encryption === 'none') {
+            $mailer->SMTPSecure = '';
+            $mailer->SMTPAutoTLS = false;
+        } else {
+            $mailer->SMTPSecure = 'tls';
+        }
+        return $mailer;
     }
 
     public function configure_smtp_mailer($phpmailer)
@@ -3130,6 +3331,7 @@ class LC_Plugin
         if (!is_array($input)) {
             $input = [];
         }
+        $input = wp_parse_args($input, $this->get_settings());
         $sanitized = $this->sanitize_settings($input);
         update_option('lc_settings', $sanitized);
         $this->log_system_event('settings', 'info', 'Settings updated from frontend.', []);
