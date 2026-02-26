@@ -625,8 +625,10 @@
       const checked = !!input?.checked;
       if (checked) selectedCount += 1;
       const itemCountry = String(item.getAttribute("data-country") || "Global");
-      const countryMatch = countryValue === "all" || itemCountry === countryValue;
-      const visible = countryMatch && (!selectedOnly || checked);
+      const isGlobal = itemCountry === "Global";
+      const countryMatch = countryValue === "all" || itemCountry === countryValue || isGlobal;
+      const visibleByCountry = countryMatch || checked;
+      const visible = selectedOnly ? checked : visibleByCountry;
       item.hidden = !visible;
     });
     if (directorySelectedCount) {
