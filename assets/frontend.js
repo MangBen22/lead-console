@@ -269,6 +269,154 @@
     });
   }
 
+  const ajaxPost = async (action, payload) => {
+    const body = new URLSearchParams({
+      action,
+      nonce: (window.lcFrontend && window.lcFrontend.runNonce) || "",
+      ...payload,
+    });
+    const response = await fetch((window.lcFrontend && window.lcFrontend.ajaxUrl) || "", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: body.toString(),
+      credentials: "same-origin",
+    });
+    return response.json();
+  };
+
+  const runId = Number(root.dataset.runId || "0");
+  const liveWrap = root.querySelector(".lc-run-live");
+  const liveStatus = root.querySelector(".lc-run-live-status");
+  const liveLog = root.querySelector(".lc-run-live-log");
+  const reviewModal = root.querySelector(".lc-run-review-modal");
+  const reviewBody = root.querySelector(".lc-run-review-body");
+  const reviewClose = root.querySelector(".lc-run-review-close");
+  const reviewSaveBtn = root.querySelector(".lc-run-save-leads");
+  const reviewRerunBtn = root.querySelector(".lc-run-rerun");
+
+  let latestRunPayload = null;
+  let monitorTimer = null;
+
+  const setLiveText = (status, lines) => {
+    if (!liveWrap || !liveStatus || !liveLog) return;
+    liveWrap.hidden = false;
+    liveStatus.textContent = status;
+    liveLog.textContent = lines.join("\n");
+  };
+
+  const hideLive = () => {
+    if (!liveWrap) return;
+    liveWrap.hidden = true;
+    if (liveStatus) liveStatus.textContent = "";
+    if (liveLog) liveLog.textContent = "";
+  };
+
+  const renderReviewModal = (payload) => {
+    if (!reviewModal || !reviewBody) return;
+    const draftRows = payload.draft_preview || [];
+    const count = Number(payload.draft_count || 0);
+    const rows = draftRows
+      .map((row) => {
+        const business = row.business_name || "-";
+        const city = row.city || "-";
+        const category = row.category || "-";
+        const contact = [row.phone || "", row.email || ""].filter(Boolean).join(" | ") || "-";
+        return `<tr><td>${business}</td><td>${city}</td><td>${category}</td><td>${contact}</td></tr>`;
+      })
+      .join("");
+    reviewBody.innerHTML = `<p><strong>Captured leads:</strong> ${count}</p><div class="lc-run-review-table"><table><thead><tr><th>Business</th><th>City</th><th>Category</th><th>Contact</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No preview rows.</td></tr>'}</tbody></table></div>`;
+    reviewModal.hidden = false;
+    reviewModal.setAttribute("aria-hidden", "false");
+  };
+
+  const closeReviewModal = () => {
+    if (!reviewModal) return;
+    reviewModal.hidden = true;
+    reviewModal.setAttribute("aria-hidden", "true");
+  };
+
+  const applyRunParamsToForm = (params) => {
+    const form = root.querySelector(".lc-run-form");
+    if (!form || !params) return;
+    const write = (name, value) => {
+      const field = form.querySelector(`[name='${name}']`);
+      if (!field) return;
+      field.value = value == null ? "" : String(value);
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    write("query_text", params.query_text || "");
+    write("city", params.city || "");
+    write("country", params.country || "");
+    write("state", params.state || "");
+    write("radius_miles", params.radius_miles || 0);
+    write("niche", params.niche || "");
+    write("services", params.services || "");
+    write("website_focus", params.website_focus || "any");
+    write("min_rating", params.min_rating || 0);
+    write("min_reviews", params.min_reviews || 0);
+    write("max_places", params.max_places || "");
+  };
+
+  const monitorRun = async () => {
+    if (!runId) return;
+    try {
+      const res = await ajaxPost("lc_frontend_run_status", { run_id: runId });
+      if (!res || !res.success) return;
+      const payload = res.data || {};
+      latestRunPayload = payload;
+      const run = payload.run || {};
+      const logs = (payload.logs || []).map((item) => `[${item.created_at || ""}] ${String(item.message || "")}`);
+      setLiveText(`Run #${run.id || runId} status: ${run.status || "queued"}`, logs.length ? logs : ["Waiting for run logs..."]);
+
+      const done = ["completed", "failed", "error", "cancelled"].includes(String(run.status || "").toLowerCase());
+      const needsReview = String(run.review_status || "") === "pending";
+      if (done) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+        setTimeout(() => hideLive(), 1800);
+        if (needsReview) {
+          renderReviewModal(payload);
+        }
+      }
+    } catch (_err) {}
+  };
+
+  reviewClose?.addEventListener("click", closeReviewModal);
+  reviewSaveBtn?.addEventListener("click", async () => {
+    if (!runId) return;
+    const res = await ajaxPost("lc_frontend_run_save_drafts", { run_id: runId });
+    if (res && res.success) {
+      closeReviewModal();
+      const url = new URL(window.location.href);
+      url.searchParams.set("lc_msg", "run_saved");
+      url.searchParams.delete("lc_run_id");
+      window.location.href = url.toString();
+    }
+  });
+
+  reviewRerunBtn?.addEventListener("click", async () => {
+    if (!runId) return;
+    await ajaxPost("lc_frontend_run_discard_drafts", { run_id: runId });
+    closeReviewModal();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("lc_run_id");
+    window.history.replaceState({}, "", url.toString());
+    applyRunParamsToForm((latestRunPayload && latestRunPayload.run && latestRunPayload.run.params) || null);
+    const runSection = root.querySelector("#lc-section-runs");
+    if (runSection) runSection.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  if (liveLog) {
+    liveLog.style.userSelect = "none";
+    liveLog.addEventListener("copy", (event) => event.preventDefault());
+  }
+
+  if (runId > 0) {
+    monitorRun();
+    monitorTimer = setInterval(monitorRun, 2200);
+  }
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 

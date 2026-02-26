@@ -50,6 +50,9 @@ class LC_Frontend
         add_action('admin_post_lc_frontend_add_lead', [$this, 'handle_add_lead']);
         add_action('admin_post_lc_frontend_update_status', [$this, 'handle_update_status']);
         add_action('admin_post_lc_frontend_queue_run', [$this, 'handle_queue_run']);
+        add_action('wp_ajax_lc_frontend_run_status', [$this, 'handle_ajax_run_status']);
+        add_action('wp_ajax_lc_frontend_run_save_drafts', [$this, 'handle_ajax_run_save_drafts']);
+        add_action('wp_ajax_lc_frontend_run_discard_drafts', [$this, 'handle_ajax_run_discard_drafts']);
     }
 
     public function register_assets()
@@ -62,12 +65,16 @@ class LC_Frontend
     {
         wp_enqueue_style('lc-frontend');
         wp_enqueue_script('lc-frontend');
+        wp_localize_script('lc-frontend', 'lcFrontend', [
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'runNonce' => wp_create_nonce('lc_frontend_run_monitor'),
+        ]);
 
         $user_id = get_current_user_id();
         $gdpr_accepted = $user_id ? (bool) get_user_meta($user_id, 'lc_gdpr_accepted', true) : false;
 
         ob_start();
-        echo '<section class="lc-fe" data-user-id="' . esc_attr((string) $user_id) . '" data-onboarded="' . ($gdpr_accepted ? '1' : '0') . '">';
+        echo '<section class="lc-fe" data-user-id="' . esc_attr((string) $user_id) . '" data-onboarded="' . ($gdpr_accepted ? '1' : '0') . '" data-run-id="' . esc_attr((string) absint($_GET['lc_run_id'] ?? 0)) . '">';
         echo '<div class="lc-fe-bg"></div>';
         echo '<div class="lc-fe-shell">';
 
@@ -123,6 +130,8 @@ class LC_Frontend
             'lead_added' => 'Lead added successfully.',
             'run_queued' => 'Run queued successfully.',
             'run_compliance_blocked' => 'Run blocked by automatic compliance review. Check Settings checklist and API configuration.',
+            'run_saved' => 'Captured run leads were saved to the leads database.',
+            'run_discarded' => 'Captured run leads were discarded.',
             'status_updated' => 'Lead status updated.',
             'not_allowed' => 'You are not authorized to perform that action.',
         ];
@@ -248,7 +257,7 @@ class LC_Frontend
         $queued_runs = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$runs_table} WHERE status='queued'");
 
         $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT 20");
-        $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
+        $run_rows = $wpdb->get_results("SELECT id,query_text,city,state,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,captured_leads,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
         $run_locations = $wpdb->get_results("SELECT DISTINCT country, city FROM {$runs_table} WHERE city <> '' ORDER BY country ASC, city ASC LIMIT 800");
         $fallback_city_map = $this->load_city_dataset();
         $location_hierarchy = $this->load_location_hierarchy();
@@ -341,6 +350,11 @@ class LC_Frontend
         echo '<button type="submit" class="lc-col-12">Queue Run</button>';
         echo '<div class="lc-run-inline-note lc-run-city-country-note" hidden>Selecting a country with the city improves targeting and search quality.</div>';
         echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage. Choose a state/province for better precision.</div>';
+        echo '<div class="lc-run-live" hidden>';
+        echo '<p class="lc-card-kicker">// LIVE RUN ACTIVITY</p>';
+        echo '<div class="lc-run-live-status">Waiting for updates...</div>';
+        echo '<pre class="lc-run-live-log" aria-live="polite"></pre>';
+        echo '</div>';
         echo '<script type="application/json" class="lc-run-city-map-data">' . wp_json_encode($run_city_map) . '</script>';
         echo '<script type="application/json" class="lc-run-city-fallback-data">' . wp_json_encode($fallback_city_map) . '</script>';
         echo '<script type="application/json" class="lc-run-location-hierarchy-data">' . wp_json_encode($location_hierarchy) . '</script>';
@@ -351,9 +365,12 @@ class LC_Frontend
         echo '<div class="lc-fe-card">';
         echo '<p class="lc-card-kicker">// DISCOVERY HEALTH</p>';
         echo '<h3>Recent Runs</h3>';
-        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Service Focus/Services</th><th>Filters</th><th>Status</th><th>Created</th></tr></thead><tbody>';
+        echo '<table><thead><tr><th>ID</th><th>Query</th><th>Location</th><th>Service Focus/Services</th><th>Filters</th><th>Captured</th><th>Status</th><th>Created</th></tr></thead><tbody>';
         foreach ($run_rows as $run) {
             $location = trim((string) $run->city);
+            if (!empty($run->state)) {
+                $location = trim($location . ', ' . (string) $run->state, ', ');
+            }
             if (!empty($run->country)) {
                 $location = trim($location . ', ' . (string) $run->country, ', ');
             }
@@ -363,10 +380,10 @@ class LC_Frontend
             if ($location === '') {
                 $location = 'Unspecified';
             }
-            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small><br/><small>Website: ' . esc_html(ucwords(str_replace('_', ' ', (string) ($run->website_focus ?: 'any')))) . '</small></td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
+            echo '<tr><td>' . esc_html((string) $run->id) . '</td><td>' . esc_html($run->query_text) . '</td><td>' . esc_html($location) . '</td><td>' . esc_html((string) ($run->niche ?: '-')) . '<br/><small>' . esc_html((string) ($run->services ?: '-')) . '</small></td><td>Rating >= ' . esc_html(number_format((float) ($run->min_rating ?? 0), 1)) . '<br/><small>Reviews >= ' . esc_html((string) ($run->min_reviews ?? 0)) . '</small><br/><small>Website: ' . esc_html(ucwords(str_replace('_', ' ', (string) ($run->website_focus ?: 'any')))) . '</small></td><td>' . esc_html((string) absint($run->captured_leads ?? 0)) . '</td><td>' . esc_html($run->status) . '</td><td>' . esc_html($run->created_at) . '</td></tr>';
         }
         if (empty($run_rows)) {
-            echo '<tr><td colspan="7">No runs queued yet.</td></tr>';
+            echo '<tr><td colspan="8">No runs queued yet.</td></tr>';
         }
         echo '</tbody></table>';
         echo '</div>';
@@ -435,6 +452,22 @@ class LC_Frontend
         echo '</div>';
 
         $this->tutorial_markup();
+        $this->run_review_modal_markup();
+    }
+
+    private function run_review_modal_markup()
+    {
+        echo '<div class="lc-run-review-modal" hidden aria-hidden="true">';
+        echo '<div class="lc-run-review-panel">';
+        echo '<div class="lc-run-review-head"><h3>Run Result Review</h3><button type="button" class="lc-run-review-close" aria-label="Close">x</button></div>';
+        echo '<p class="lc-run-review-sub">Review captured leads before saving to the database.</p>';
+        echo '<div class="lc-run-review-body"></div>';
+        echo '<div class="lc-run-review-actions">';
+        echo '<button type="button" class="lc-run-save-leads">Save Leads</button>';
+        echo '<button type="button" class="lc-run-rerun">Run Again</button>';
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
     }
 
     private function render_admin_console_sections($settings)
@@ -1279,9 +1312,6 @@ class LC_Frontend
         $min_rating = max(0, min(5, (float) ($_POST['min_rating'] ?? 0)));
         $min_reviews = absint($_POST['min_reviews'] ?? 0);
         $city_for_storage = $city;
-        if ($state !== '') {
-            $city_for_storage = $city !== '' ? ($city . ', ' . $state) : $state;
-        }
         $requested_max = absint($_POST['max_places'] ?? 0);
         $max_places = min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']);
         $country_scope = ($country !== '' && $city === '' && $state === '');
@@ -1316,6 +1346,7 @@ class LC_Frontend
         $wpdb->insert($this->table('lc_runs'), [
             'query_text' => $query_text,
             'city' => $city_for_storage,
+            'state' => $state,
             'country' => $country,
             'radius_miles' => $radius_miles,
             'niche' => $service_focus,
@@ -1324,8 +1355,12 @@ class LC_Frontend
             'min_rating' => $min_rating,
             'min_reviews' => $min_reviews,
             'max_places' => $max_places,
+            'save_mode' => 'draft',
+            'review_status' => 'pending',
+            'captured_leads' => 0,
             'status' => 'queued',
         ]);
+        $run_id = (int) $wpdb->insert_id;
 
         $this->log_event('runs', 'info', 'Run queued from frontend.', [
             'query' => $query_text,
@@ -1339,8 +1374,119 @@ class LC_Frontend
             'compliance_review' => 'pass',
             'compliance_checks' => $review['checks'],
             'compliance_warnings' => $review['warnings'],
+            'save_mode' => 'draft',
         ]);
-        $this->redirect_with_msg('run_queued');
+        $this->redirect_with_msg('run_queued', ['lc_run_id' => $run_id]);
+    }
+
+    public function handle_ajax_run_status()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+
+        $run_id = absint($_POST['run_id'] ?? 0);
+        if ($run_id <= 0) {
+            wp_send_json_error(['message' => 'Invalid run id.'], 400);
+        }
+
+        global $wpdb;
+        $run = $wpdb->get_row($wpdb->prepare("SELECT id, query_text, city, state, country, radius_miles, niche, services, website_focus, min_rating, min_reviews, max_places, captured_leads, save_mode, review_status, status, created_at, started_at, finished_at FROM {$this->table('lc_runs')} WHERE id = %d LIMIT 1", $run_id), ARRAY_A);
+        if (!$run) {
+            wp_send_json_error(['message' => 'Run not found.'], 404);
+        }
+
+        $logs = $wpdb->get_results($wpdb->prepare("SELECT level, message, created_at FROM {$this->table('lc_run_logs')} WHERE run_id = %d ORDER BY id ASC LIMIT 120", $run_id), ARRAY_A);
+        $draft_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$this->table('lc_run_drafts')} WHERE run_id = %d", $run_id));
+        $draft_preview = $wpdb->get_results($wpdb->prepare("SELECT business_name, city, category, website, phone, email, score, lead_type, notes FROM {$this->table('lc_run_drafts')} WHERE run_id = %d ORDER BY id DESC LIMIT 40", $run_id), ARRAY_A);
+
+        wp_send_json_success([
+            'run' => [
+                'id' => (int) $run['id'],
+                'status' => (string) ($run['status'] ?? ''),
+                'review_status' => (string) ($run['review_status'] ?? 'na'),
+                'captured_leads' => (int) ($run['captured_leads'] ?? 0),
+                'params' => [
+                    'query_text' => (string) ($run['query_text'] ?? ''),
+                    'city' => (string) ($run['city'] ?? ''),
+                    'state' => (string) ($run['state'] ?? ''),
+                    'country' => (string) ($run['country'] ?? ''),
+                    'niche' => (string) ($run['niche'] ?? ''),
+                    'services' => (string) ($run['services'] ?? ''),
+                    'radius_miles' => (int) ($run['radius_miles'] ?? 0),
+                    'min_rating' => (float) ($run['min_rating'] ?? 0),
+                    'min_reviews' => (int) ($run['min_reviews'] ?? 0),
+                    'max_places' => (int) ($run['max_places'] ?? 0),
+                    'website_focus' => (string) ($run['website_focus'] ?? 'any'),
+                ],
+            ],
+            'logs' => is_array($logs) ? $logs : [],
+            'draft_count' => $draft_count,
+            'draft_preview' => is_array($draft_preview) ? $draft_preview : [],
+        ]);
+    }
+
+    public function handle_ajax_run_save_drafts()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        $run_id = absint($_POST['run_id'] ?? 0);
+        if ($run_id <= 0) {
+            wp_send_json_error(['message' => 'Invalid run id.'], 400);
+        }
+
+        global $wpdb;
+        $drafts = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$this->table('lc_run_drafts')} WHERE run_id = %d ORDER BY id ASC", $run_id), ARRAY_A);
+        $saved = 0;
+        foreach ($drafts as $draft) {
+            $inserted = $wpdb->insert($this->table('lc_leads'), [
+                'business_name' => sanitize_text_field((string) ($draft['business_name'] ?? '')),
+                'city' => sanitize_text_field((string) ($draft['city'] ?? '')),
+                'category' => sanitize_text_field((string) ($draft['category'] ?? '')),
+                'address' => sanitize_text_field((string) ($draft['address'] ?? '')),
+                'website' => esc_url_raw((string) ($draft['website'] ?? '')),
+                'phone' => sanitize_text_field((string) ($draft['phone'] ?? '')),
+                'email' => sanitize_email((string) ($draft['email'] ?? '')),
+                'email_confidence' => '',
+                'review_count' => absint($draft['review_count'] ?? 0),
+                'rating' => (float) ($draft['rating'] ?? 0),
+                'status' => $this->normalize_status((string) ($draft['status'] ?? 'New')),
+                'score' => absint($draft['score'] ?? 0),
+                'lead_type' => sanitize_text_field((string) ($draft['lead_type'] ?? 'C')),
+                'source_url' => esc_url_raw((string) ($draft['source_url'] ?? '')),
+                'notes' => sanitize_textarea_field((string) ($draft['notes'] ?? '')),
+            ]);
+            if ($inserted) {
+                $saved++;
+            }
+        }
+
+        $wpdb->delete($this->table('lc_run_drafts'), ['run_id' => $run_id], ['%d']);
+        $wpdb->update($this->table('lc_runs'), ['review_status' => 'saved'], ['id' => $run_id], ['%s'], ['%d']);
+        $this->log_event('runs', 'info', 'Draft run leads saved to leads database.', ['run_id' => $run_id, 'saved' => $saved]);
+
+        wp_send_json_success(['saved' => $saved]);
+    }
+
+    public function handle_ajax_run_discard_drafts()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+        $run_id = absint($_POST['run_id'] ?? 0);
+        if ($run_id <= 0) {
+            wp_send_json_error(['message' => 'Invalid run id.'], 400);
+        }
+
+        global $wpdb;
+        $wpdb->delete($this->table('lc_run_drafts'), ['run_id' => $run_id], ['%d']);
+        $wpdb->update($this->table('lc_runs'), ['review_status' => 'discarded'], ['id' => $run_id], ['%s'], ['%d']);
+        $this->log_event('runs', 'info', 'Draft run leads discarded.', ['run_id' => $run_id]);
+        wp_send_json_success(['discarded' => true]);
     }
 
     private function evaluate_run_compliance($run, $settings)
@@ -1935,10 +2081,15 @@ class LC_Frontend
         ];
     }
 
-    private function redirect_with_msg($msg)
+    private function redirect_with_msg($msg, $extra_args = [])
     {
         $target = $this->redirect_target();
         $target = add_query_arg('lc_msg', $msg, $target);
+        if (is_array($extra_args)) {
+            foreach ($extra_args as $key => $value) {
+                $target = add_query_arg(sanitize_key((string) $key), sanitize_text_field((string) $value), $target);
+            }
+        }
         wp_safe_redirect($target);
         exit;
     }
@@ -1965,6 +2116,24 @@ class LC_Frontend
     private function has_reset_query()
     {
         return !empty($_GET['lc_reset']) && !empty($_GET['selector']) && !empty($_GET['token']);
+    }
+
+    private function is_frontend_user_ready()
+    {
+        if (!is_user_logged_in()) {
+            return false;
+        }
+        $user_id = get_current_user_id();
+        if ($user_id <= 0) {
+            return false;
+        }
+        if ($this->is_locked_user($user_id)) {
+            return false;
+        }
+        if (!empty(get_user_meta($user_id, 'lc_pending_approval', true))) {
+            return false;
+        }
+        return true;
     }
 
     private function create_timed_token($prefix, $user_id, $ttl_seconds, $extra)

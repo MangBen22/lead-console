@@ -75,6 +75,7 @@ class LC_Plugin
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             query_text VARCHAR(255) NOT NULL,
             city VARCHAR(120) DEFAULT '',
+            state VARCHAR(120) DEFAULT '',
             country VARCHAR(120) DEFAULT '',
             radius_miles INT DEFAULT 0,
             niche VARCHAR(190) DEFAULT '',
@@ -83,12 +84,37 @@ class LC_Plugin
             min_rating DECIMAL(3,1) DEFAULT 0,
             min_reviews INT DEFAULT 0,
             max_places INT DEFAULT 25,
+            save_mode VARCHAR(20) DEFAULT 'direct',
+            review_status VARCHAR(20) DEFAULT 'na',
+            captured_leads INT DEFAULT 0,
             status VARCHAR(20) DEFAULT 'queued',
             started_at DATETIME NULL,
             finished_at DATETIME NULL,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY status (status)
+        ) {$charset};";
+
+        $sql_run_drafts = "CREATE TABLE {$prefix}lc_run_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            run_id BIGINT UNSIGNED NOT NULL,
+            business_name VARCHAR(190) NOT NULL,
+            city VARCHAR(120) DEFAULT '',
+            category VARCHAR(120) DEFAULT '',
+            address VARCHAR(255) DEFAULT '',
+            website VARCHAR(255) DEFAULT '',
+            phone VARCHAR(50) DEFAULT '',
+            email VARCHAR(190) DEFAULT '',
+            review_count INT DEFAULT 0,
+            rating DECIMAL(3,1) DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'New',
+            score TINYINT UNSIGNED DEFAULT 0,
+            lead_type CHAR(1) DEFAULT 'C',
+            source_url VARCHAR(255) DEFAULT '',
+            notes TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY run_id (run_id)
         ) {$charset};";
 
         $sql_logs = "CREATE TABLE {$prefix}lc_run_logs (
@@ -145,6 +171,7 @@ class LC_Plugin
 
         dbDelta($sql_leads);
         dbDelta($sql_runs);
+        dbDelta($sql_run_drafts);
         dbDelta($sql_logs);
         dbDelta($sql_suppression);
         dbDelta($sql_profiles);
@@ -188,7 +215,7 @@ class LC_Plugin
             'email_template_registration_rejected_subject' => 'Registration declined',
             'email_template_registration_rejected_body' => "Hello {first_name},\n\nYour registration request was declined. Please contact admin for details.\n\n{site_name}",
         ]);
-        update_option('lc_schema_version', '6');
+        update_option('lc_schema_version', '7');
     }
 
     public static function deactivate()
@@ -487,7 +514,7 @@ class LC_Plugin
     public function maybe_upgrade_schema()
     {
         $version = get_option('lc_schema_version', '1');
-        if ($version === '6') {
+        if ($version === '7') {
             return;
         }
 
@@ -555,6 +582,7 @@ class LC_Plugin
         $run_columns = $wpdb->get_col("DESC {$runs_table}", 0);
         if (!empty($run_columns) && is_array($run_columns)) {
             $run_column_sql = [
+                'state' => "ALTER TABLE {$runs_table} ADD COLUMN state VARCHAR(120) DEFAULT ''",
                 'country' => "ALTER TABLE {$runs_table} ADD COLUMN country VARCHAR(120) DEFAULT ''",
                 'radius_miles' => "ALTER TABLE {$runs_table} ADD COLUMN radius_miles INT DEFAULT 0",
                 'niche' => "ALTER TABLE {$runs_table} ADD COLUMN niche VARCHAR(190) DEFAULT ''",
@@ -562,6 +590,9 @@ class LC_Plugin
                 'website_focus' => "ALTER TABLE {$runs_table} ADD COLUMN website_focus VARCHAR(20) DEFAULT 'any'",
                 'min_rating' => "ALTER TABLE {$runs_table} ADD COLUMN min_rating DECIMAL(3,1) DEFAULT 0",
                 'min_reviews' => "ALTER TABLE {$runs_table} ADD COLUMN min_reviews INT DEFAULT 0",
+                'save_mode' => "ALTER TABLE {$runs_table} ADD COLUMN save_mode VARCHAR(20) DEFAULT 'direct'",
+                'review_status' => "ALTER TABLE {$runs_table} ADD COLUMN review_status VARCHAR(20) DEFAULT 'na'",
+                'captured_leads' => "ALTER TABLE {$runs_table} ADD COLUMN captured_leads INT DEFAULT 0",
             ];
             foreach ($run_column_sql as $column => $sql) {
                 if (!in_array($column, $run_columns, true)) {
@@ -570,7 +601,31 @@ class LC_Plugin
             }
         }
 
-        update_option('lc_schema_version', '6');
+        $drafts_table = $this->db_table('lc_run_drafts');
+        $sql_run_drafts = "CREATE TABLE {$drafts_table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            run_id BIGINT UNSIGNED NOT NULL,
+            business_name VARCHAR(190) NOT NULL,
+            city VARCHAR(120) DEFAULT '',
+            category VARCHAR(120) DEFAULT '',
+            address VARCHAR(255) DEFAULT '',
+            website VARCHAR(255) DEFAULT '',
+            phone VARCHAR(50) DEFAULT '',
+            email VARCHAR(190) DEFAULT '',
+            review_count INT DEFAULT 0,
+            rating DECIMAL(3,1) DEFAULT 0,
+            status VARCHAR(30) DEFAULT 'New',
+            score TINYINT UNSIGNED DEFAULT 0,
+            lead_type CHAR(1) DEFAULT 'C',
+            source_url VARCHAR(255) DEFAULT '',
+            notes TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY run_id (run_id)
+        ) {$charset};";
+        dbDelta($sql_run_drafts);
+
+        update_option('lc_schema_version', '7');
     }
 
     private function get_settings()
@@ -857,6 +912,7 @@ class LC_Plugin
         $wpdb->insert($this->db_table('lc_runs'), [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
             'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'state' => sanitize_text_field($_POST['state'] ?? ''),
             'country' => sanitize_text_field($_POST['country'] ?? ''),
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
@@ -865,12 +921,15 @@ class LC_Plugin
             'min_rating' => max(0, min(5, (float) ($_POST['min_rating'] ?? 0))),
             'min_reviews' => absint($_POST['min_reviews'] ?? 0),
             'max_places' => min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']),
+            'save_mode' => 'direct',
+            'review_status' => 'na',
             'status' => 'queued',
         ]);
 
         $this->log_system_event('runs', 'info', 'Run queued from admin.', [
             'query_text' => sanitize_text_field($_POST['query_text'] ?? ''),
             'city' => sanitize_text_field($_POST['city'] ?? ''),
+            'state' => sanitize_text_field($_POST['state'] ?? ''),
             'country' => sanitize_text_field($_POST['country'] ?? ''),
             'radius_miles' => absint($_POST['radius_miles'] ?? 0),
             'niche' => sanitize_text_field($_POST['niche'] ?? ''),
@@ -939,6 +998,7 @@ class LC_Plugin
             'run_id' => (int) $run->id,
             'query_text' => (string) $run->query_text,
             'city' => (string) $run->city,
+            'state' => (string) ($run->state ?? ''),
             'country' => (string) ($run->country ?? ''),
             'radius_miles' => (int) ($run->radius_miles ?? 0),
             'niche' => (string) ($run->niche ?? ''),
@@ -981,6 +1041,8 @@ class LC_Plugin
         $social_updated = $this->enrich_leads_with_social_urls($run, $settings, $logs_table);
 
         $summary = $used_api ? 'Google API + fallback processing complete.' : 'Fallback directory processing complete.';
+        $save_mode = sanitize_text_field((string) ($run->save_mode ?? 'direct'));
+        $review_status = ($save_mode === 'draft' && $created > 0) ? 'pending' : 'na';
         $wpdb->insert($logs_table, [
             'run_id' => $run->id,
             'level' => 'info',
@@ -990,12 +1052,16 @@ class LC_Plugin
         $wpdb->update($runs_table, [
             'status' => 'completed',
             'finished_at' => current_time('mysql'),
+            'captured_leads' => (int) $created,
+            'review_status' => $review_status,
         ], ['id' => $run->id]);
 
         $this->log_system_event('runs', 'info', 'Run processing completed.', [
             'run_id' => (int) $run->id,
             'leads_created' => (int) $created,
             'social_updated' => (int) $social_updated,
+            'save_mode' => $save_mode,
+            'review_status' => $review_status,
         ]);
     }
 
@@ -1070,6 +1136,8 @@ class LC_Plugin
             }
 
             $inserted = $this->insert_discovered_lead([
+                'run_id' => (int) $run->id,
+                'save_mode' => (string) ($run->save_mode ?? 'direct'),
                 'business_name' => $name,
                 'city' => sanitize_text_field($run->city),
                 'category' => sanitize_text_field((string) ($run->niche ?: $run->query_text)),
@@ -1153,6 +1221,8 @@ class LC_Plugin
                 }
 
                 $inserted = $this->insert_discovered_lead([
+                    'run_id' => (int) $run->id,
+                    'save_mode' => (string) ($run->save_mode ?? 'direct'),
                     'business_name' => $name,
                     'city' => sanitize_text_field($run->city),
                     'category' => sanitize_text_field((string) ($run->niche ?: $run->query_text)),
@@ -1221,23 +1291,45 @@ class LC_Plugin
         $base_notes = sanitize_textarea_field($data['notes'] ?? '');
         $notes = trim($base_notes . "\n" . $opportunity_notes);
 
-        $inserted = $wpdb->insert($this->db_table('lc_leads'), [
-            'business_name' => $name,
-            'city' => sanitize_text_field($data['city'] ?? ''),
-            'category' => $category,
-            'address' => sanitize_text_field($data['address'] ?? ''),
-            'website' => $website,
-            'phone' => $phone,
-            'email' => $email,
-            'email_confidence' => '',
-            'review_count' => absint($data['review_count'] ?? 0),
-            'rating' => (float) ($data['rating'] ?? 0),
-            'status' => 'New',
-            'score' => $score,
-            'lead_type' => $lead_type,
-            'source_url' => esc_url_raw($data['source_url'] ?? ''),
-            'notes' => $notes,
-        ]);
+        $save_mode = sanitize_text_field((string) ($data['save_mode'] ?? 'direct'));
+        $run_id = absint($data['run_id'] ?? 0);
+        if ($save_mode === 'draft' && $run_id > 0) {
+            $inserted = $wpdb->insert($this->db_table('lc_run_drafts'), [
+                'run_id' => $run_id,
+                'business_name' => $name,
+                'city' => sanitize_text_field($data['city'] ?? ''),
+                'category' => $category,
+                'address' => sanitize_text_field($data['address'] ?? ''),
+                'website' => $website,
+                'phone' => $phone,
+                'email' => $email,
+                'review_count' => absint($data['review_count'] ?? 0),
+                'rating' => (float) ($data['rating'] ?? 0),
+                'status' => 'New',
+                'score' => $score,
+                'lead_type' => $lead_type,
+                'source_url' => esc_url_raw($data['source_url'] ?? ''),
+                'notes' => $notes,
+            ]);
+        } else {
+            $inserted = $wpdb->insert($this->db_table('lc_leads'), [
+                'business_name' => $name,
+                'city' => sanitize_text_field($data['city'] ?? ''),
+                'category' => $category,
+                'address' => sanitize_text_field($data['address'] ?? ''),
+                'website' => $website,
+                'phone' => $phone,
+                'email' => $email,
+                'email_confidence' => '',
+                'review_count' => absint($data['review_count'] ?? 0),
+                'rating' => (float) ($data['rating'] ?? 0),
+                'status' => 'New',
+                'score' => $score,
+                'lead_type' => $lead_type,
+                'source_url' => esc_url_raw($data['source_url'] ?? ''),
+                'notes' => $notes,
+            ]);
+        }
 
         return !empty($inserted);
     }
@@ -1675,10 +1767,14 @@ class LC_Plugin
     private function run_location_text($run)
     {
         $city = trim((string) ($run->city ?? ''));
+        $state = trim((string) ($run->state ?? ''));
         $country = trim((string) ($run->country ?? ''));
         $radius = max(0, (int) ($run->radius_miles ?? 0));
 
         $location = $city;
+        if ($state !== '') {
+            $location = trim($location . ', ' . $state, ', ');
+        }
         if ($country !== '') {
             $location = trim($location . ', ' . $country, ', ');
         }

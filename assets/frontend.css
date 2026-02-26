@@ -527,6 +527,89 @@
   color: #9db3e5;
 }
 
+.lc-run-live {
+  grid-column: span 12;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(3, 9, 22, 0.72);
+}
+
+.lc-run-live-status {
+  font-weight: 700;
+  color: #cfdcff;
+  margin-bottom: 8px;
+}
+
+.lc-run-live-log {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b5c6ef;
+  user-select: none;
+}
+
+.lc-run-review-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 14, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 10010;
+}
+
+.lc-run-review-modal[hidden] {
+  display: none;
+}
+
+.lc-run-review-panel {
+  width: min(92vw, 980px);
+  max-height: 86vh;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  background: linear-gradient(170deg, var(--lc-panel), var(--lc-panel-2));
+  padding: 16px;
+}
+
+.lc-run-review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.lc-run-review-sub {
+  margin: 6px 0 10px !important;
+}
+
+.lc-run-review-body {
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.lc-run-review-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lc-run-review-table th,
+.lc-run-review-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.lc-run-review-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .lc-settings-form label {
   grid-column: span 12;
 }
