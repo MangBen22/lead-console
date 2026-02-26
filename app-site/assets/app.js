@@ -3,6 +3,13 @@
   const notifyPanel = document.getElementById("notifyPanel");
   const notifyList = document.getElementById("notifyList");
   const apiStatus = document.getElementById("apiStatus");
+  const modules = [
+    ["modLeads", "leads.summary"],
+    ["modCrm", "crm.summary"],
+    ["modSocial", "social.summary"],
+    ["modWebops", "webops.summary"],
+    ["modSeo", "seo.summary"],
+  ];
 
   if (notifyToggle && notifyPanel) {
     notifyToggle.addEventListener("click", function () {
@@ -29,4 +36,18 @@
   }
 
   loadStatus();
+
+  modules.forEach(async function (entry) {
+    const el = document.getElementById(entry[0]);
+    if (!el) return;
+    try {
+      const res = await fetch("/api/index.php?action=" + encodeURIComponent(entry[1]), {
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      el.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      el.textContent = "Failed to load: " + entry[1];
+    }
+  });
 })();

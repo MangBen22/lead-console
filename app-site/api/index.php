@@ -32,6 +32,76 @@ if ($action === 'notifications') {
     exit;
 }
 
+if ($action === 'leads.summary') {
+    echo json_encode([
+        'ok' => true,
+        'module' => 'leads',
+        'status' => 'active',
+        'metrics' => [
+            'queued_runs' => 0,
+            'approved_leads' => 0,
+            'pending_review' => 0,
+        ],
+    ]);
+    exit;
+}
+
+if ($action === 'crm.summary') {
+    echo json_encode([
+        'ok' => true,
+        'module' => 'crm_email',
+        'status' => 'bootstrap',
+        'metrics' => [
+            'active_connectors' => 0,
+            'smtp_connected' => false,
+            'failed_deliveries' => 0,
+        ],
+    ]);
+    exit;
+}
+
+if ($action === 'social.summary') {
+    echo json_encode([
+        'ok' => true,
+        'module' => 'social_forums',
+        'status' => 'bootstrap',
+        'metrics' => [
+            'connected_accounts' => 0,
+            'scheduled_posts' => 0,
+            'unread_conversations' => 0,
+        ],
+    ]);
+    exit;
+}
+
+if ($action === 'webops.summary') {
+    echo json_encode([
+        'ok' => true,
+        'module' => 'webops_security',
+        'status' => 'bootstrap',
+        'metrics' => [
+            'sites_monitored' => 0,
+            'active_incidents' => 0,
+            'uptime_percent' => 100,
+        ],
+    ]);
+    exit;
+}
+
+if ($action === 'seo.summary') {
+    echo json_encode([
+        'ok' => true,
+        'module' => 'seo_suite',
+        'status' => 'bootstrap',
+        'metrics' => [
+            'audits_completed' => 0,
+            'critical_issues' => 0,
+            'tracked_projects' => 0,
+        ],
+    ]);
+    exit;
+}
+
 http_response_code(404);
 echo json_encode([
     'ok' => false,

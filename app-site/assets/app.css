@@ -169,6 +169,19 @@ button {
     padding: 12px;
 }
 
+.module-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.module-grid article {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    background: #09142e;
+}
+
 .notifications {
     border-left: 1px solid var(--line);
     background: rgba(8, 16, 34, 0.9);
@@ -202,6 +215,9 @@ button {
         border-bottom: 1px solid var(--line);
     }
     .cards {
+        grid-template-columns: 1fr;
+    }
+    .module-grid {
         grid-template-columns: 1fr;
     }
 }

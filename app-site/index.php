@@ -126,6 +126,32 @@ $user = $_SESSION['app_user'] ?? null;
                 <h2>API Status</h2>
                 <pre id="apiStatus">Loading /api/index.php?action=status ...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>Module Bootstrap</h2>
+                <div class="module-grid">
+                    <article>
+                        <h3>Leads</h3>
+                        <pre id="modLeads">Loading...</pre>
+                    </article>
+                    <article>
+                        <h3>CRM + Email</h3>
+                        <pre id="modCrm">Loading...</pre>
+                    </article>
+                    <article>
+                        <h3>Social + Forums</h3>
+                        <pre id="modSocial">Loading...</pre>
+                    </article>
+                    <article>
+                        <h3>WebOps Security</h3>
+                        <pre id="modWebops">Loading...</pre>
+                    </article>
+                    <article>
+                        <h3>SEO Suite</h3>
+                        <pre id="modSeo">Loading...</pre>
+                    </article>
+                </div>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>
