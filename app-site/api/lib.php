@@ -97,6 +97,56 @@ function app_bridge_request($site, $method, $endpoint, $payload = null)
     ];
 }
 
+function app_http_json_request($method, $url, $headers = [], $payload = null, $timeout = 12)
+{
+    $normalizedHeaders = ['Accept: application/json'];
+    foreach ($headers as $header) {
+        if (is_string($header) && trim($header) !== '') {
+            $normalizedHeaders[] = trim($header);
+        }
+    }
+
+    $opts = [
+        'http' => [
+            'method' => strtoupper($method),
+            'timeout' => max(1, (int) $timeout),
+            'ignore_errors' => true,
+            'header' => implode("\r\n", $normalizedHeaders),
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ],
+    ];
+
+    if ($payload !== null) {
+        $opts['http']['header'] .= "\r\nContent-Type: application/json";
+        $opts['http']['content'] = json_encode($payload);
+    }
+
+    $ctx = stream_context_create($opts);
+    $raw = @file_get_contents($url, false, $ctx);
+    $status = 0;
+    if (isset($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $line) {
+            if (preg_match('#HTTP/\S+\s+(\d{3})#', $line, $m)) {
+                $status = (int) $m[1];
+                break;
+            }
+        }
+    }
+
+    $decoded = is_string($raw) ? json_decode($raw, true) : null;
+
+    return [
+        'ok' => $status >= 200 && $status < 300,
+        'status' => $status,
+        'data' => is_array($decoded) ? $decoded : null,
+        'raw' => is_string($raw) ? $raw : '',
+        'url' => $url,
+    ];
+}
+
 function app_current_user()
 {
     $user = isset($_SESSION['app_user']) && is_array($_SESSION['app_user']) ? $_SESSION['app_user'] : null;

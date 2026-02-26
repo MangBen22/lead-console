@@ -1212,6 +1212,12 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_smtp_health'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/crm-intake', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_crm_intake'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1277,6 +1283,45 @@ class LC_Plugin
         return rest_ensure_response([
             'ok' => true,
             'smtp_health' => $status,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_crm_intake($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $leads = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+        $provider = sanitize_text_field((string) ($payload['provider'] ?? 'unknown'));
+        $connector_id = sanitize_text_field((string) ($payload['connector_id'] ?? ''));
+
+        $accepted = 0;
+        foreach ($leads as $lead) {
+            if (!is_array($lead)) {
+                continue;
+            }
+            $name = trim((string) ($lead['business_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $accepted++;
+        }
+
+        $this->log_system_event('bridge', 'info', 'Bridge CRM intake received.', [
+            'provider' => $provider,
+            'connector_id' => $connector_id,
+            'received' => count($leads),
+            'accepted' => $accepted,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'provider' => $provider,
+            'connector_id' => $connector_id,
+            'received' => count($leads),
+            'accepted' => $accepted,
             'time' => current_time('mysql'),
         ]);
     }

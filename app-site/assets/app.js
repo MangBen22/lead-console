@@ -116,21 +116,54 @@
     const saveBtn = document.getElementById("saveConnectorBtn");
     if (saveBtn) {
       saveBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("connectorId");
         const provider = document.getElementById("connectorProvider");
         const type = document.getElementById("connectorType");
         const status = document.getElementById("connectorStatus");
         const auth = document.getElementById("connectorAuth");
         const caps = document.getElementById("connectorCapabilities");
+        const siteId = document.getElementById("connectorSiteId");
+        const runMode = document.getElementById("connectorRunMode");
+        const accessToken = document.getElementById("connectorAccessToken");
+        const endpoint = document.getElementById("connectorEndpoint");
+        const webhook = document.getElementById("connectorWebhook");
         const payload = {
+          connector_id: connectorId && connectorId.value ? connectorId.value.trim() : "",
           provider: provider ? provider.value.trim() : "",
           type: type ? type.value : "external_api",
           status: status ? status.value : "planned",
           auth_mode: auth ? auth.value : "api_key",
+          site_id: siteId ? siteId.value.trim() : "",
           capabilities: (caps && caps.value ? caps.value.split(",") : []).map(function (v) {
             return v.trim();
           }).filter(Boolean),
+          config: {
+            run_mode: runMode ? runMode.value : "dry_run",
+            bridge_site_id: siteId ? siteId.value.trim() : "",
+            access_token: accessToken ? accessToken.value.trim() : "",
+            endpoint_url: endpoint ? endpoint.value.trim() : "",
+            webhook_url: webhook ? webhook.value.trim() : "",
+          },
         };
         const result = await apiPost("crm.connectors.save", payload);
+        if (crmSyncResult) {
+          crmSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadCrmConnectors();
+      });
+    }
+    const deleteBtn = document.getElementById("deleteConnectorBtn");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("connectorId");
+        const id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+        if (!id) {
+          if (crmSyncResult) {
+            crmSyncResult.textContent = "Enter Connector ID to delete.";
+          }
+          return;
+        }
+        const result = await apiPost("crm.connectors.delete", { connector_id: id });
         if (crmSyncResult) {
           crmSyncResult.textContent = JSON.stringify(result, null, 2);
         }

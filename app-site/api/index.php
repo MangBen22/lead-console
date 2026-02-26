@@ -22,6 +22,204 @@ function all_sites()
     }));
 }
 
+function site_by_id($siteId)
+{
+    foreach (all_sites() as $site) {
+        if ((string) ($site['site_id'] ?? '') === (string) $siteId) {
+            return $site;
+        }
+    }
+    return null;
+}
+
+function sanitize_connector_config($config)
+{
+    if (!is_array($config)) {
+        return [];
+    }
+    $out = [];
+    foreach ($config as $key => $value) {
+        $cleanKey = preg_replace('/[^a-z0-9_\-]/i', '', (string) $key);
+        if ($cleanKey === '') {
+            continue;
+        }
+        if (is_scalar($value) || $value === null) {
+            $out[$cleanKey] = (string) $value;
+        }
+    }
+    return $out;
+}
+
+function mask_connector($connector)
+{
+    if (!is_array($connector)) {
+        return [];
+    }
+    $masked = $connector;
+    if (isset($masked['config']) && is_array($masked['config'])) {
+        foreach (['access_token', 'api_key', 'secret', 'password'] as $secretKey) {
+            if (!empty($masked['config'][$secretKey])) {
+                $masked['config'][$secretKey] = '********';
+            }
+        }
+    }
+    return $masked;
+}
+
+function collect_approved_leads()
+{
+    $all = [];
+    $siteSummaries = [];
+    foreach (all_sites() as $site) {
+        $res = app_bridge_request($site, 'POST', 'bridge/push-approved', []);
+        $rows = [];
+        if (!empty($res['ok']) && isset($res['data']['leads']) && is_array($res['data']['leads'])) {
+            $rows = $res['data']['leads'];
+        }
+        $mapped = [];
+        foreach ($rows as $lead) {
+            if (!is_array($lead)) {
+                continue;
+            }
+            $mapped[] = [
+                'site_id' => (string) ($site['site_id'] ?? ''),
+                'site_label' => (string) ($site['label'] ?? $site['base_url']),
+                'lead_id' => (int) ($lead['id'] ?? 0),
+                'business_name' => (string) ($lead['business_name'] ?? ''),
+                'city' => (string) ($lead['city'] ?? ''),
+                'category' => (string) ($lead['category'] ?? ''),
+                'website' => (string) ($lead['website'] ?? ''),
+                'phone' => (string) ($lead['phone'] ?? ''),
+                'email' => (string) ($lead['email'] ?? ''),
+                'status' => (string) ($lead['status'] ?? ''),
+                'created_at' => (string) ($lead['created_at'] ?? ''),
+            ];
+        }
+        $all = array_merge($all, $mapped);
+        $siteSummaries[] = [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'connected' => !empty($res['ok']),
+            'approved_count' => count($mapped),
+        ];
+    }
+
+    return [
+        'leads' => $all,
+        'sites' => $siteSummaries,
+    ];
+}
+
+function execute_connector_sync($connector, $leads)
+{
+    $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
+    $type = strtolower((string) ($connector['type'] ?? 'external_api'));
+    $config = isset($connector['config']) && is_array($connector['config']) ? $connector['config'] : [];
+    $runMode = strtolower((string) ($config['run_mode'] ?? 'dry_run'));
+    $result = [
+        'connector_id' => (string) ($connector['connector_id'] ?? ''),
+        'provider' => $provider,
+        'type' => $type,
+        'run_mode' => $runMode,
+        'accepted' => 0,
+        'rejected' => 0,
+        'errors' => [],
+    ];
+
+    if ($provider === 'hubspot' && $type === 'external_api') {
+        $token = trim((string) ($config['access_token'] ?? ''));
+        $endpoint = trim((string) ($config['endpoint_url'] ?? 'https://api.hubapi.com/crm/v3/objects/contacts'));
+        if ($token === '') {
+            $result['errors'][] = 'Missing access_token for HubSpot connector.';
+            $result['rejected'] = count($leads);
+            return $result;
+        }
+        foreach ($leads as $lead) {
+            if (!is_array($lead)) {
+                continue;
+            }
+            if ($runMode !== 'live') {
+                $result['accepted']++;
+                continue;
+            }
+            $payload = [
+                'properties' => [
+                    'email' => (string) ($lead['email'] ?? ''),
+                    'company' => (string) ($lead['business_name'] ?? ''),
+                    'phone' => (string) ($lead['phone'] ?? ''),
+                    'website' => (string) ($lead['website'] ?? ''),
+                    'city' => (string) ($lead['city'] ?? ''),
+                ],
+            ];
+            $res = app_http_json_request('POST', $endpoint, [
+                'Authorization: Bearer ' . $token,
+            ], $payload, 15);
+            if (!empty($res['ok'])) {
+                $result['accepted']++;
+            } else {
+                $result['rejected']++;
+                $result['errors'][] = 'HubSpot HTTP ' . (int) ($res['status'] ?? 0);
+            }
+        }
+        return $result;
+    }
+
+    if ($provider === 'fluentcrm' && $type === 'wordpress_plugin') {
+        $targetSiteId = (string) ($config['bridge_site_id'] ?? ($connector['site_id'] ?? ''));
+        $site = $targetSiteId !== '' ? site_by_id($targetSiteId) : null;
+        if ($site === null) {
+            $result['errors'][] = 'FluentCRM connector missing valid bridge_site_id.';
+            $result['rejected'] = count($leads);
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['accepted'] = count($leads);
+            return $result;
+        }
+        $res = app_bridge_request($site, 'POST', 'bridge/crm-intake', [
+            'provider' => 'fluentcrm',
+            'leads' => $leads,
+            'connector_id' => (string) ($connector['connector_id'] ?? ''),
+        ]);
+        if (!empty($res['ok']) && isset($res['data']['accepted'])) {
+            $result['accepted'] = (int) $res['data']['accepted'];
+            $result['rejected'] = max(0, count($leads) - $result['accepted']);
+        } else {
+            $result['rejected'] = count($leads);
+            $result['errors'][] = 'FluentCRM bridge intake request failed.';
+        }
+        return $result;
+    }
+
+    if ($provider === 'custom_webhook' && $type === 'external_api') {
+        $webhook = trim((string) ($config['webhook_url'] ?? ''));
+        if ($webhook === '') {
+            $result['errors'][] = 'Missing webhook_url for custom_webhook connector.';
+            $result['rejected'] = count($leads);
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['accepted'] = count($leads);
+            return $result;
+        }
+        $res = app_http_json_request('POST', $webhook, [], [
+            'connector_id' => (string) ($connector['connector_id'] ?? ''),
+            'leads' => $leads,
+        ], 15);
+        if (!empty($res['ok'])) {
+            $result['accepted'] = count($leads);
+        } else {
+            $result['rejected'] = count($leads);
+            $result['errors'][] = 'Webhook HTTP ' . (int) ($res['status'] ?? 0);
+        }
+        return $result;
+    }
+
+    $result['accepted'] = count($leads);
+    $result['errors'][] = 'No provider adapter; treated as dry mapping only.';
+    return $result;
+}
+
 $publicActions = ['status'];
 if (!in_array($action, $publicActions, true)) {
     app_require_auth();
@@ -78,22 +276,9 @@ if ($action === 'bridge.sites') {
 
 if ($action === 'leads.summary') {
     $queuedRuns = 0;
-    $approved = 0;
-    $bySite = [];
-    foreach (all_sites() as $site) {
-        $res = app_bridge_request($site, 'POST', 'bridge/push-approved', []);
-        $count = 0;
-        if (!empty($res['ok']) && isset($res['data']['count'])) {
-            $count = (int) $res['data']['count'];
-            $approved += $count;
-        }
-        $bySite[] = [
-            'site_id' => (string) ($site['site_id'] ?? ''),
-            'label' => (string) ($site['label'] ?? $site['base_url']),
-            'approved_leads' => $count,
-            'connected' => !empty($res['ok']),
-        ];
-    }
+    $payload = collect_approved_leads();
+    $approved = count($payload['leads']);
+    $bySite = $payload['sites'];
 
     out_json([
         'ok' => true,
@@ -111,10 +296,11 @@ if ($action === 'leads.summary') {
 if ($action === 'crm.connectors.list') {
     $path = app_storage_path('crm_connectors.json');
     $rows = app_read_json_file($path, []);
+    $publicRows = array_map('mask_connector', $rows);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'count' => count($publicRows),
+        'items' => $publicRows,
     ]);
 }
 
@@ -135,6 +321,8 @@ if ($action === 'crm.connectors.save') {
         'status' => strtolower(trim((string) ($data['status'] ?? 'planned'))),
         'auth_mode' => strtolower(trim((string) ($data['auth_mode'] ?? 'api_key'))),
         'capabilities' => isset($data['capabilities']) && is_array($data['capabilities']) ? array_values($data['capabilities']) : [],
+        'site_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['site_id'] ?? '')),
+        'config' => sanitize_connector_config($data['config'] ?? []),
         'updated_at' => gmdate('c'),
     ];
     $path = app_storage_path('crm_connectors.json');
@@ -189,25 +377,13 @@ if ($action === 'crm.push.sync') {
         out_json(['ok' => false, 'error' => 'No active CRM connectors.'], 400);
     }
 
-    $sitePayloads = [];
-    $totalApproved = 0;
-    foreach (all_sites() as $site) {
-        $res = app_bridge_request($site, 'POST', 'bridge/push-approved', []);
-        $count = 0;
-        $sample = [];
-        if (!empty($res['ok']) && isset($res['data']['count'])) {
-            $count = (int) $res['data']['count'];
-            $totalApproved += $count;
-            $rows = isset($res['data']['leads']) && is_array($res['data']['leads']) ? $res['data']['leads'] : [];
-            $sample = array_slice($rows, 0, 3);
-        }
-        $sitePayloads[] = [
-            'site_id' => (string) ($site['site_id'] ?? ''),
-            'label' => (string) ($site['label'] ?? $site['base_url']),
-            'connected' => !empty($res['ok']),
-            'approved_count' => $count,
-            'sample' => $sample,
-        ];
+    $payload = collect_approved_leads();
+    $sitePayloads = $payload['sites'];
+    $leads = $payload['leads'];
+    $totalApproved = count($leads);
+    $connectorResults = [];
+    foreach ($activeConnectors as $connector) {
+        $connectorResults[] = execute_connector_sync($connector, $leads);
     }
 
     $syncId = 'sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
@@ -217,6 +393,7 @@ if ($action === 'crm.push.sync') {
         'connector_count' => count($activeConnectors),
         'site_count' => count($sitePayloads),
         'approved_total' => $totalApproved,
+        'connector_results' => $connectorResults,
         'connectors' => array_map(static function ($row) {
             return [
                 'connector_id' => (string) ($row['connector_id'] ?? ''),

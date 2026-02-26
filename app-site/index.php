@@ -167,6 +167,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="crmConnectors">Loading...</pre>
                 <form id="crmConnectorForm" class="inline-form">
                     <div class="form-row">
+                        <label for="connectorId">Connector ID (optional for update)</label>
+                        <input id="connectorId" type="text" placeholder="connector_abc123">
+                    </div>
+                    <div class="form-row">
                         <label for="connectorProvider">Provider</label>
                         <input id="connectorProvider" type="text" placeholder="fluentcrm" required>
                     </div>
@@ -198,7 +202,31 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="connectorCapabilities">Capabilities (comma)</label>
                         <input id="connectorCapabilities" type="text" placeholder="create_contact,update_contact">
                     </div>
+                    <div class="form-row">
+                        <label for="connectorSiteId">Site ID (for wordpress_plugin)</label>
+                        <input id="connectorSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorRunMode">Run mode</label>
+                        <select id="connectorRunMode">
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorAccessToken">Access token (HubSpot)</label>
+                        <input id="connectorAccessToken" type="password" placeholder="token">
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorEndpoint">Endpoint URL (optional)</label>
+                        <input id="connectorEndpoint" type="text" placeholder="https://api.hubapi.com/crm/v3/objects/contacts">
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorWebhook">Webhook URL (custom_webhook)</label>
+                        <input id="connectorWebhook" type="text" placeholder="https://example.com/webhook">
+                    </div>
                     <button id="saveConnectorBtn" type="button">Save Connector</button>
+                    <button id="deleteConnectorBtn" type="button">Delete Connector ID</button>
                 </form>
             </section>
 
