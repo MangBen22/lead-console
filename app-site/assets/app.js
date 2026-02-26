@@ -18,6 +18,13 @@
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
+  const socialConnectors = document.getElementById("socialConnectors");
+  const socialConnectorForm = document.getElementById("socialConnectorForm");
+  const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
+  const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
+  const socialSyncResult = document.getElementById("socialSyncResult");
+  const socialSyncLog = document.getElementById("socialSyncLog");
+  const socialRetryQueue = document.getElementById("socialRetryQueue");
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -116,10 +123,43 @@
     }
   }
 
+  async function loadSocialConnectors() {
+    if (!socialConnectors) return;
+    try {
+      const data = await apiGet("social.connectors.list");
+      socialConnectors.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialConnectors.textContent = "Failed to load social connectors.";
+    }
+  }
+
+  async function loadSocialSyncLog() {
+    if (!socialSyncLog) return;
+    try {
+      const data = await apiGet("social.push.log");
+      socialSyncLog.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialSyncLog.textContent = "Failed to load social sync log.";
+    }
+  }
+
+  async function loadSocialRetryQueue() {
+    if (!socialRetryQueue) return;
+    try {
+      const data = await apiGet("social.retry.list");
+      socialRetryQueue.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialRetryQueue.textContent = "Failed to load social retry queue.";
+    }
+  }
+
   (async function initCrm() {
     await loadCrmConnectors();
     await loadCrmSyncLog();
     await loadRetryQueue();
+    await loadSocialConnectors();
+    await loadSocialSyncLog();
+    await loadSocialRetryQueue();
   })();
 
   if (crmConnectorForm) {
@@ -231,6 +271,115 @@
       const crmPanel = document.getElementById("modCrm");
       if (crmPanel) {
         crmPanel.textContent = JSON.stringify(crmData, null, 2);
+      }
+    });
+  }
+
+  if (socialConnectorForm) {
+    socialConnectorForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const saveSocialBtn = document.getElementById("saveSocialConnectorBtn");
+    if (saveSocialBtn) {
+      saveSocialBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("socialConnectorId");
+        const provider = document.getElementById("socialProvider");
+        const type = document.getElementById("socialType");
+        const status = document.getElementById("socialStatus");
+        const auth = document.getElementById("socialAuth");
+        const caps = document.getElementById("socialCapabilities");
+        const siteId = document.getElementById("socialSiteId");
+        const runMode = document.getElementById("socialRunMode");
+        const webhook = document.getElementById("socialWebhook");
+        const payload = {
+          connector_id: connectorId && connectorId.value ? connectorId.value.trim() : "",
+          provider: provider ? provider.value.trim() : "",
+          type: type ? type.value : "external_api",
+          status: status ? status.value : "planned",
+          auth_mode: auth ? auth.value : "api_key",
+          site_id: siteId ? siteId.value.trim() : "",
+          capabilities: (caps && caps.value ? caps.value.split(",") : []).map(function (v) {
+            return v.trim();
+          }).filter(Boolean),
+          config: {
+            run_mode: runMode ? runMode.value : "dry_run",
+            bridge_site_id: siteId ? siteId.value.trim() : "",
+            webhook_url: webhook ? webhook.value.trim() : "",
+          },
+        };
+        const result = await apiPost("social.connectors.save", payload);
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialConnectors();
+      });
+    }
+
+    const deleteSocialBtn = document.getElementById("deleteSocialConnectorBtn");
+    if (deleteSocialBtn) {
+      deleteSocialBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("socialConnectorId");
+        const id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+        if (!id) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Enter Social Connector ID to delete.";
+          }
+          return;
+        }
+        const result = await apiPost("social.connectors.delete", { connector_id: id });
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialConnectors();
+      });
+    }
+
+    const testSocialBtn = document.getElementById("testSocialConnectorBtn");
+    if (testSocialBtn) {
+      testSocialBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("socialConnectorId");
+        const id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+        if (!id) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Enter Social Connector ID to test.";
+          }
+          return;
+        }
+        const result = await apiPost("social.connectors.test", { connector_id: id });
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+      });
+    }
+  }
+
+  if (runSocialSyncBtn) {
+    runSocialSyncBtn.addEventListener("click", async function () {
+      const result = await apiPost("social.push.sync", {});
+      if (socialSyncResult) {
+        socialSyncResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadSocialSyncLog();
+      await loadSocialRetryQueue();
+      const socialData = await apiGet("social.summary");
+      const socialPanel = document.getElementById("modSocial");
+      if (socialPanel) {
+        socialPanel.textContent = JSON.stringify(socialData, null, 2);
+      }
+    });
+  }
+
+  if (runSocialRetryQueueBtn) {
+    runSocialRetryQueueBtn.addEventListener("click", async function () {
+      const result = await apiPost("social.retry.run", {});
+      if (socialSyncResult) {
+        socialSyncResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadSocialRetryQueue();
+      const socialData = await apiGet("social.summary");
+      const socialPanel = document.getElementById("modSocial");
+      if (socialPanel) {
+        socialPanel.textContent = JSON.stringify(socialData, null, 2);
       }
     });
   }

@@ -1218,6 +1218,12 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_crm_intake'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/social-intake', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_social_intake'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1321,6 +1327,45 @@ class LC_Plugin
             'provider' => $provider,
             'connector_id' => $connector_id,
             'received' => count($leads),
+            'accepted' => $accepted,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_social_intake($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $drafts = isset($payload['drafts']) && is_array($payload['drafts']) ? $payload['drafts'] : [];
+        $provider = sanitize_text_field((string) ($payload['provider'] ?? 'unknown'));
+        $connector_id = sanitize_text_field((string) ($payload['connector_id'] ?? ''));
+
+        $accepted = 0;
+        foreach ($drafts as $draft) {
+            if (!is_array($draft)) {
+                continue;
+            }
+            $message = trim((string) ($draft['message'] ?? ''));
+            if ($message === '') {
+                continue;
+            }
+            $accepted++;
+        }
+
+        $this->log_system_event('bridge', 'info', 'Bridge social intake received.', [
+            'provider' => $provider,
+            'connector_id' => $connector_id,
+            'received' => count($drafts),
+            'accepted' => $accepted,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'provider' => $provider,
+            'connector_id' => $connector_id,
+            'received' => count($drafts),
             'accepted' => $accepted,
             'time' => current_time('mysql'),
         ]);

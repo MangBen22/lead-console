@@ -243,6 +243,79 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Retry Queue</h3>
                 <pre id="crmRetryQueue">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>Social Connectors</h2>
+                <pre id="socialConnectors">Loading...</pre>
+                <form id="socialConnectorForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialConnectorId">Connector ID (optional for update)</label>
+                        <input id="socialConnectorId" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialProvider">Provider</label>
+                        <input id="socialProvider" type="text" placeholder="wordpress_social_bridge" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialType">Type</label>
+                        <select id="socialType">
+                            <option value="wordpress_plugin">wordpress_plugin</option>
+                            <option value="external_api">external_api</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialStatus">Status</label>
+                        <select id="socialStatus">
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialAuth">Auth</label>
+                        <select id="socialAuth">
+                            <option value="api_key">api_key</option>
+                            <option value="oauth2">oauth2</option>
+                            <option value="token">token</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialCapabilities">Capabilities (comma)</label>
+                        <input id="socialCapabilities" type="text" placeholder="can_publish_post,can_schedule">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSiteId">Site ID (for wordpress_plugin)</label>
+                        <input id="socialSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRunMode">Run mode</label>
+                        <select id="socialRunMode">
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialWebhook">Webhook URL (social_webhook)</label>
+                        <input id="socialWebhook" type="text" placeholder="https://example.com/social-webhook">
+                    </div>
+                    <button id="saveSocialConnectorBtn" type="button">Save Social Connector</button>
+                    <button id="deleteSocialConnectorBtn" type="button">Delete Social Connector</button>
+                    <button id="testSocialConnectorBtn" type="button">Test Social Connector</button>
+                </form>
+            </section>
+
+            <section class="api-status">
+                <h2>Social Push Pipeline</h2>
+                <div class="actions">
+                    <button id="runSocialSyncBtn" type="button">Run Social Sync</button>
+                    <button id="runSocialRetryQueueBtn" type="button">Run Social Retry Queue</button>
+                </div>
+                <pre id="socialSyncResult">No social sync yet.</pre>
+                <h3>Social Sync Log</h3>
+                <pre id="socialSyncLog">Loading...</pre>
+                <h3>Social Retry Queue</h3>
+                <pre id="socialRetryQueue">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

@@ -164,6 +164,149 @@ function enqueue_retry_item($item)
     app_write_json_file(retry_queue_path(), $queue);
 }
 
+function social_connectors_path()
+{
+    return app_storage_path('social_connectors.json');
+}
+
+function social_sync_log_path()
+{
+    return app_storage_path('social_sync_log.json');
+}
+
+function social_retry_queue_path()
+{
+    return app_storage_path('social_retry_queue.json');
+}
+
+function social_connector_by_id($connectorId)
+{
+    $rows = app_read_json_file(social_connectors_path(), []);
+    foreach ($rows as $row) {
+        if ((string) ($row['connector_id'] ?? '') === (string) $connectorId) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function enqueue_social_retry_item($item)
+{
+    $queue = app_read_json_file(social_retry_queue_path(), []);
+    array_unshift($queue, $item);
+    $queue = array_slice($queue, 0, 500);
+    app_write_json_file(social_retry_queue_path(), $queue);
+}
+
+function collect_social_drafts()
+{
+    $payload = collect_approved_leads();
+    $leads = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+    $drafts = [];
+    foreach (array_slice($leads, 0, 30) as $lead) {
+        if (!is_array($lead)) {
+            continue;
+        }
+        $business = trim((string) ($lead['business_name'] ?? ''));
+        if ($business === '') {
+            continue;
+        }
+        $city = trim((string) ($lead['city'] ?? ''));
+        $category = trim((string) ($lead['category'] ?? ''));
+        $drafts[] = [
+            'source_site_id' => (string) ($lead['site_id'] ?? ''),
+            'lead_id' => (int) ($lead['lead_id'] ?? 0),
+            'title' => $business,
+            'message' => 'Spotlight: ' . $business . ($city !== '' ? ' in ' . $city : '') . ($category !== '' ? ' (' . $category . ')' : ''),
+            'url' => (string) ($lead['website'] ?? ''),
+        ];
+    }
+    return $drafts;
+}
+
+function execute_social_connector_sync($connector, $drafts)
+{
+    $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
+    $type = strtolower((string) ($connector['type'] ?? 'external_api'));
+    $config = isset($connector['config']) && is_array($connector['config']) ? $connector['config'] : [];
+    $runMode = strtolower((string) ($config['run_mode'] ?? 'dry_run'));
+    $result = [
+        'connector_id' => (string) ($connector['connector_id'] ?? ''),
+        'provider' => $provider,
+        'type' => $type,
+        'run_mode' => $runMode,
+        'accepted' => 0,
+        'rejected' => 0,
+        'errors' => [],
+        'error_codes' => [],
+    ];
+
+    if ($provider === 'wordpress_social_bridge' && $type === 'wordpress_plugin') {
+        $targetSiteId = (string) ($config['bridge_site_id'] ?? ($connector['site_id'] ?? ''));
+        $site = $targetSiteId !== '' ? site_by_id($targetSiteId) : null;
+        if ($site === null) {
+            $msg = 'Social connector missing valid bridge_site_id.';
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
+            $result['rejected'] = count($drafts);
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['accepted'] = count($drafts);
+            return $result;
+        }
+        $res = app_bridge_request($site, 'POST', 'bridge/social-intake', [
+            'provider' => $provider,
+            'connector_id' => (string) ($connector['connector_id'] ?? ''),
+            'drafts' => $drafts,
+        ]);
+        if (!empty($res['ok']) && isset($res['data']['accepted'])) {
+            $result['accepted'] = (int) $res['data']['accepted'];
+            $result['rejected'] = max(0, count($drafts) - $result['accepted']);
+        } else {
+            $msg = 'Social bridge intake request failed.';
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
+            $result['rejected'] = count($drafts);
+        }
+        return $result;
+    }
+
+    if ($provider === 'social_webhook' && $type === 'external_api') {
+        $webhook = trim((string) ($config['webhook_url'] ?? ''));
+        if ($webhook === '') {
+            $msg = 'Missing webhook_url for social_webhook connector.';
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
+            $result['rejected'] = count($drafts);
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['accepted'] = count($drafts);
+            return $result;
+        }
+        $res = app_http_json_request('POST', $webhook, [], [
+            'connector_id' => (string) ($connector['connector_id'] ?? ''),
+            'drafts' => $drafts,
+        ], 15);
+        if (!empty($res['ok'])) {
+            $result['accepted'] = count($drafts);
+        } else {
+            $msg = 'Social webhook HTTP ' . (int) ($res['status'] ?? 0);
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
+            $result['rejected'] = count($drafts);
+        }
+        return $result;
+    }
+
+    $result['accepted'] = count($drafts);
+    $msg = 'No social adapter implementation; treated as dry mapping only.';
+    $result['errors'][] = $msg;
+    $result['error_codes'][] = normalize_error_code($msg);
+    return $result;
+}
+
 function execute_connector_sync($connector, $leads)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -641,15 +784,24 @@ if ($action === 'crm.summary') {
 }
 
 if ($action === 'social.summary') {
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $active = array_values(array_filter($connectors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $logs = app_read_json_file(social_sync_log_path(), []);
+    $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
+    $retryCount = count(app_read_json_file(social_retry_queue_path(), []));
     out_json([
         'ok' => true,
         'module' => 'social_forums',
         'status' => 'bootstrap',
         'metrics' => [
-            'connected_accounts' => 0,
+            'connected_accounts' => count($active),
             'scheduled_posts' => 0,
-            'unread_conversations' => 0,
+            'unread_conversations' => $retryCount,
         ],
+        'last_sync' => $lastSync,
     ]);
 }
 
@@ -676,6 +828,224 @@ if ($action === 'seo.summary') {
             'critical_issues' => 0,
             'tracked_projects' => 0,
         ],
+    ]);
+}
+
+if ($action === 'social.connectors.list') {
+    $rows = app_read_json_file(social_connectors_path(), []);
+    $publicRows = array_map('mask_connector', $rows);
+    out_json([
+        'ok' => true,
+        'count' => count($publicRows),
+        'items' => $publicRows,
+    ]);
+}
+
+if ($action === 'social.connectors.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $item = [
+        'connector_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['connector_id'] ?? uniqid('social_', false))),
+        'provider' => strtolower(trim((string) ($data['provider'] ?? 'custom'))),
+        'type' => strtolower(trim((string) ($data['type'] ?? 'external_api'))),
+        'status' => strtolower(trim((string) ($data['status'] ?? 'planned'))),
+        'auth_mode' => strtolower(trim((string) ($data['auth_mode'] ?? 'api_key'))),
+        'capabilities' => isset($data['capabilities']) && is_array($data['capabilities']) ? array_values($data['capabilities']) : [],
+        'site_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['site_id'] ?? '')),
+        'config' => sanitize_connector_config($data['config'] ?? []),
+        'updated_at' => gmdate('c'),
+    ];
+    $rows = app_read_json_file(social_connectors_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) use ($item) {
+        return (string) ($row['connector_id'] ?? '') !== $item['connector_id'];
+    }));
+    $rows[] = $item;
+    app_write_json_file(social_connectors_path(), $rows);
+    out_json(['ok' => true, 'item' => $item]);
+}
+
+if ($action === 'social.connectors.delete') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['connector_id'])) {
+        out_json(['ok' => false, 'error' => 'connector_id is required.'], 400);
+    }
+    $connectorId = (string) $data['connector_id'];
+    $rows = app_read_json_file(social_connectors_path(), []);
+    $before = count($rows);
+    $rows = array_values(array_filter($rows, static function ($row) use ($connectorId) {
+        return (string) ($row['connector_id'] ?? '') !== $connectorId;
+    }));
+    app_write_json_file(social_connectors_path(), $rows);
+    out_json([
+        'ok' => true,
+        'deleted' => $before - count($rows),
+        'connector_id' => $connectorId,
+    ]);
+}
+
+if ($action === 'social.connectors.test') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $connector = null;
+    if (!empty($data['connector_id'])) {
+        $connector = social_connector_by_id((string) $data['connector_id']);
+    }
+    if (!is_array($connector)) {
+        out_json(['ok' => false, 'error' => 'Social connector not found.'], 404);
+    }
+    $sampleDrafts = [[
+        'source_site_id' => 'test',
+        'lead_id' => 0,
+        'title' => 'Sample Social Draft',
+        'message' => 'Sample social connector test message.',
+        'url' => 'https://example.com',
+    ]];
+    $result = execute_social_connector_sync($connector, $sampleDrafts);
+    out_json([
+        'ok' => true,
+        'connector_id' => (string) ($connector['connector_id'] ?? ''),
+        'result' => $result,
+    ]);
+}
+
+if ($action === 'social.push.sync') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $activeConnectors = array_values(array_filter($connectors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    if (empty($activeConnectors)) {
+        out_json(['ok' => false, 'error' => 'No active social connectors.'], 400);
+    }
+    $drafts = collect_social_drafts();
+    $connectorResults = [];
+    foreach ($activeConnectors as $connector) {
+        $res = execute_social_connector_sync($connector, $drafts);
+        $connectorResults[] = $res;
+        if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
+            enqueue_social_retry_item([
+                'retry_id' => 'social_retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'connector_id' => (string) ($res['connector_id'] ?? ''),
+                'provider' => (string) ($res['provider'] ?? ''),
+                'type' => (string) ($res['type'] ?? ''),
+                'error_codes' => isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [],
+                'errors' => isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [],
+                'draft_count' => count($drafts),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
+    }
+    $syncId = 'social_sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
+    $logItem = [
+        'sync_id' => $syncId,
+        'created_at' => gmdate('c'),
+        'connector_count' => count($activeConnectors),
+        'draft_total' => count($drafts),
+        'connector_results' => $connectorResults,
+        'connectors' => array_map(static function ($row) {
+            return [
+                'connector_id' => (string) ($row['connector_id'] ?? ''),
+                'provider' => (string) ($row['provider'] ?? ''),
+                'type' => (string) ($row['type'] ?? ''),
+            ];
+        }, $activeConnectors),
+        'status' => 'queued_to_connectors',
+    ];
+    $logs = app_read_json_file(social_sync_log_path(), []);
+    array_unshift($logs, $logItem);
+    $logs = array_slice($logs, 0, 100);
+    app_write_json_file(social_sync_log_path(), $logs);
+    out_json([
+        'ok' => true,
+        'sync' => $logItem,
+        'message' => 'Social push sync queued to active connectors.',
+    ]);
+}
+
+if ($action === 'social.push.log') {
+    $logs = app_read_json_file(social_sync_log_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($logs),
+        'items' => $logs,
+    ]);
+}
+
+if ($action === 'social.retry.list') {
+    $queue = app_read_json_file(social_retry_queue_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($queue),
+        'items' => $queue,
+    ]);
+}
+
+if ($action === 'social.retry.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $queue = app_read_json_file(social_retry_queue_path(), []);
+    if (empty($queue)) {
+        out_json(['ok' => true, 'message' => 'Social retry queue is empty.', 'processed' => 0]);
+    }
+    $drafts = collect_social_drafts();
+    $processed = 0;
+    $succeeded = 0;
+    $remaining = [];
+    foreach ($queue as $item) {
+        $processed++;
+        $connector = social_connector_by_id((string) ($item['connector_id'] ?? ''));
+        if (!is_array($connector)) {
+            $item['status'] = 'failed_missing_connector';
+            $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+            $remaining[] = $item;
+            continue;
+        }
+        $res = execute_social_connector_sync($connector, $drafts);
+        if ((int) ($res['rejected'] ?? 0) === 0 && empty($res['errors'])) {
+            $succeeded++;
+            continue;
+        }
+        $item['status'] = 'queued';
+        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+        $item['errors'] = isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [];
+        $item['error_codes'] = isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [];
+        $remaining[] = $item;
+    }
+    app_write_json_file(social_retry_queue_path(), $remaining);
+    out_json([
+        'ok' => true,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'remaining' => count($remaining),
     ]);
 }
 
