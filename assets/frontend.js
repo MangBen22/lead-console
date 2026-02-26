@@ -623,7 +623,55 @@
     if (!input) return;
     directoryInitialChecked.set(input.value, !!input.checked);
   });
-  const updateDirectorySourceFilter = () => {
+
+  const buildDirectoryFilterSnapshot = () => {
+    const selectedIds = [];
+    const visibleIds = [];
+    const selectedLabels = [];
+    directoryItems.forEach((item) => {
+      const input = item.querySelector("input[type='checkbox']");
+      if (!input) return;
+      const sourceId = String(input.value || "");
+      if (sourceId !== "" && !item.hidden) {
+        visibleIds.push(sourceId);
+      }
+      if (sourceId !== "" && input.checked) {
+        selectedIds.push(sourceId);
+        const title = item.querySelector("strong");
+        selectedLabels.push(String(title?.textContent || sourceId).trim());
+      }
+    });
+    return { selectedIds, visibleIds, selectedLabels };
+  };
+
+  const sendDirectoryFilterLog = async (trigger) => {
+    const ajaxUrl = (window.lcFrontend && window.lcFrontend.ajaxUrl) || "";
+    if (!ajaxUrl) return;
+    const snap = buildDirectoryFilterSnapshot();
+    const payload = new URLSearchParams({
+      action: "lc_frontend_log_directory_filter",
+      nonce: (window.lcFrontend && window.lcFrontend.runNonce) || "",
+      trigger: String(trigger || "unknown"),
+      country: String(directoryCountryFilter?.value || "all"),
+      selected_only: directorySelectedOnly?.checked ? "1" : "0",
+      selected_ids: JSON.stringify(snap.selectedIds),
+      visible_ids: JSON.stringify(snap.visibleIds),
+      selected_labels: JSON.stringify(snap.selectedLabels),
+    });
+    try {
+      await fetch(ajaxUrl, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: payload.toString(),
+      });
+    } catch (_err) {
+    }
+  };
+
+  const updateDirectorySourceFilter = (options = {}) => {
+    const shouldLog = !!options.shouldLog;
+    const trigger = String(options.trigger || "unknown");
     if (!directoryItems.length) return;
     const countryValue = String(directoryCountryFilter?.value || "all");
     const selectedOnly = !!directorySelectedOnly?.checked;
@@ -644,13 +692,10 @@
     if (directorySelectedCount) {
       directorySelectedCount.textContent = String(selectedCount);
     }
+    if (shouldLog) {
+      sendDirectoryFilterLog(trigger);
+    }
   };
-  directoryCountryApply?.addEventListener("click", (event) => {
-    event.preventDefault();
-    updateDirectorySourceFilter();
-  });
-  directoryCountryFilter?.addEventListener("change", updateDirectorySourceFilter);
-  directorySelectedOnly?.addEventListener("change", updateDirectorySourceFilter);
   directoryItems.forEach((item) => {
     const input = item.querySelector("input[type='checkbox']");
     input?.addEventListener("change", () => {
@@ -661,23 +706,24 @@
       } else if (!input.checked) {
         directorySessionCarryover.delete(sourceId);
       }
-      updateDirectorySourceFilter();
+      updateDirectorySourceFilter({ shouldLog: true, trigger: "checkbox_change" });
     });
   });
   root.addEventListener("click", (event) => {
     const applyBtn = event.target.closest(".lc-directory-country-apply");
     if (!applyBtn) return;
     event.preventDefault();
-    updateDirectorySourceFilter();
+    updateDirectorySourceFilter({ shouldLog: true, trigger: "apply_button" });
   });
   root.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (target.matches(".lc-directory-country-filter, .lc-directory-selected-only")) {
-      updateDirectorySourceFilter();
+      const trigger = target.matches(".lc-directory-country-filter") ? "country_change" : "selected_only_change";
+      updateDirectorySourceFilter({ shouldLog: true, trigger });
     }
   });
-  updateDirectorySourceFilter();
+  updateDirectorySourceFilter({ shouldLog: false, trigger: "initial_render" });
 
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;

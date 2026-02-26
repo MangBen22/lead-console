@@ -53,6 +53,7 @@ class LC_Frontend
         add_action('wp_ajax_lc_frontend_run_status', [$this, 'handle_ajax_run_status']);
         add_action('wp_ajax_lc_frontend_run_save_drafts', [$this, 'handle_ajax_run_save_drafts']);
         add_action('wp_ajax_lc_frontend_run_discard_drafts', [$this, 'handle_ajax_run_discard_drafts']);
+        add_action('wp_ajax_lc_frontend_log_directory_filter', [$this, 'handle_ajax_log_directory_filter']);
     }
 
     public function register_assets()
@@ -1852,6 +1853,58 @@ class LC_Frontend
         $wpdb->update($this->table('lc_runs'), ['review_status' => 'discarded'], ['id' => $run_id], ['%s'], ['%d']);
         $this->log_event('runs', 'info', 'Draft run leads discarded.', ['run_id' => $run_id]);
         wp_send_json_success(['discarded' => true]);
+    }
+
+    public function handle_ajax_log_directory_filter()
+    {
+        check_ajax_referer('lc_frontend_run_monitor', 'nonce');
+        if (!$this->is_frontend_user_ready()) {
+            wp_send_json_error(['message' => 'Not authorized.'], 403);
+        }
+
+        $viewer = wp_get_current_user();
+        if (!$this->is_primary_admin($viewer)) {
+            wp_send_json_error(['message' => 'Primary admin only.'], 403);
+        }
+
+        $trigger = sanitize_key((string) ($_POST['trigger'] ?? 'unknown'));
+        $country = sanitize_text_field((string) ($_POST['country'] ?? 'all'));
+        $selected_only = !empty($_POST['selected_only']) ? 1 : 0;
+
+        $selected_ids = json_decode(wp_unslash((string) ($_POST['selected_ids'] ?? '[]')), true);
+        if (!is_array($selected_ids)) {
+            $selected_ids = [];
+        }
+        $visible_ids = json_decode(wp_unslash((string) ($_POST['visible_ids'] ?? '[]')), true);
+        if (!is_array($visible_ids)) {
+            $visible_ids = [];
+        }
+        $selected_labels = json_decode(wp_unslash((string) ($_POST['selected_labels'] ?? '[]')), true);
+        if (!is_array($selected_labels)) {
+            $selected_labels = [];
+        }
+
+        $selected_ids = array_values(array_map('sanitize_key', $selected_ids));
+        $visible_ids = array_values(array_map('sanitize_key', $visible_ids));
+        $selected_labels = array_values(array_map('sanitize_text_field', $selected_labels));
+
+        $this->log_event('settings', 'info', 'Directory source country filter applied.', [
+            'trigger' => $trigger,
+            'country' => $country,
+            'selected_only' => $selected_only,
+            'selected_count' => count($selected_ids),
+            'visible_count' => count($visible_ids),
+            'selected_ids' => $selected_ids,
+            'visible_ids' => $visible_ids,
+            'selected_labels' => $selected_labels,
+        ]);
+
+        wp_send_json_success([
+            'logged' => true,
+            'country' => $country,
+            'selected_count' => count($selected_ids),
+            'visible_count' => count($visible_ids),
+        ]);
     }
 
     private function evaluate_run_compliance($run, $settings)
