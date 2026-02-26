@@ -69,7 +69,8 @@
   const runForm = root.querySelector(".lc-run-form");
   if (runForm) {
     const countrySelect = runForm.querySelector("select[name='country']");
-    const citySelect = runForm.querySelector("select[name='city']");
+    const cityInput = runForm.querySelector("input[name='city']");
+    const cityDatalist = runForm.querySelector("#lc-city-suggestions");
     const cityCountryNote = runForm.querySelector(".lc-run-city-country-note");
     const countryScopeNote = runForm.querySelector(".lc-run-country-scope-note");
     const cityMapNode = runForm.querySelector(".lc-run-city-map-data");
@@ -94,7 +95,11 @@
         .trim();
 
     const allCountryNames = () => {
-      const set = new Set(["United States", ...Object.keys(runCityMap), ...Object.keys(fallbackCityMap)]);
+      const set = new Set([
+        ...Array.from(countrySelect?.options || []).map((opt) => opt.value).filter(Boolean),
+        ...Object.keys(runCityMap),
+        ...Object.keys(fallbackCityMap),
+      ]);
       if (typeof Intl !== "undefined" && typeof Intl.DisplayNames !== "undefined" && typeof Intl.supportedValuesOf === "function") {
         const display = new Intl.DisplayNames(["en"], { type: "region" });
         Intl.supportedValuesOf("region").forEach((code) => {
@@ -123,57 +128,50 @@
       return [...cities].sort((a, b) => a.localeCompare(b));
     };
 
-    const renderCountryOptions = () => {
-      if (!countrySelect) return;
-      const selected = countrySelect.value || "";
-      countrySelect.innerHTML = "";
-      const base = document.createElement("option");
-      base.value = "";
-      base.textContent = "Select country (optional)";
-      countrySelect.appendChild(base);
-      allCountryNames().forEach((country) => {
-        const option = document.createElement("option");
-        option.value = country;
-        option.textContent = country;
-        countrySelect.appendChild(option);
-      });
-      countrySelect.value = selected;
-    };
-
-    const renderCityOptions = () => {
-      if (!citySelect) return;
+    const renderCitySuggestions = () => {
+      if (!cityDatalist) return;
       const country = (countrySelect?.value || "").trim();
-      const selected = citySelect.value || "";
-      citySelect.innerHTML = "";
-      const base = document.createElement("option");
-      base.value = "";
-      base.textContent = country ? "All cities in selected country" : "Select city (optional)";
-      citySelect.appendChild(base);
+      cityDatalist.innerHTML = "";
       cityOptions(country).forEach((city) => {
         const option = document.createElement("option");
         option.value = city;
-        option.textContent = city;
-        citySelect.appendChild(option);
+        cityDatalist.appendChild(option);
       });
-      citySelect.value = selected && [...citySelect.options].some((opt) => opt.value === selected) ? selected : "";
     };
 
     const updateRunNotes = () => {
-      const city = (citySelect?.value || "").trim();
+      const city = (cityInput?.value || "").trim();
       const country = (countrySelect?.value || "").trim();
       if (cityCountryNote) cityCountryNote.hidden = !(city && !country);
       if (countryScopeNote) countryScopeNote.hidden = !(country && !city);
     };
 
-    renderCountryOptions();
-    renderCityOptions();
+    const normalizeTypedCity = () => {
+      if (!cityInput) return;
+      cityInput.value = toTitleCase(cityInput.value || "");
+    };
+
+    if (countrySelect && allCountryNames().length > 0) {
+      const existing = new Set(Array.from(countrySelect.options).map((opt) => opt.value));
+      allCountryNames().forEach((country) => {
+        if (!existing.has(country)) {
+          const option = document.createElement("option");
+          option.value = country;
+          option.textContent = country;
+          countrySelect.appendChild(option);
+        }
+      });
+    }
+
+    renderCitySuggestions();
     updateRunNotes();
 
     countrySelect?.addEventListener("change", () => {
-      renderCityOptions();
+      renderCitySuggestions();
       updateRunNotes();
     });
-    citySelect?.addEventListener("change", updateRunNotes);
+    cityInput?.addEventListener("input", updateRunNotes);
+    cityInput?.addEventListener("blur", normalizeTypedCity);
   }
 
   const modal = root.querySelector(".lc-tutorial");

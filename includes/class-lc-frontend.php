@@ -265,6 +265,10 @@ class LC_Frontend
                 $run_city_map[$country_key][] = $city_name;
             }
         }
+        $country_names = array_unique(array_filter(array_merge(array_keys($fallback_city_map), array_keys($run_city_map)), static function ($value) {
+            return trim((string) $value) !== '';
+        }));
+        natcasesort($country_names);
 
         $settings = $this->settings();
         $user = wp_get_current_user();
@@ -314,8 +318,12 @@ class LC_Frontend
         echo '<input type="hidden" name="action" value="lc_frontend_queue_run" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label class="lc-col-4">Search Query<input type="text" name="query_text" required /></label>';
-        echo '<label class="lc-col-3">City<select name="city"><option value="">Select city (optional)</option></select></label>';
-        echo '<label class="lc-col-3">Country<select name="country"><option value="">Select country (optional)</option></select></label>';
+        echo '<label class="lc-col-3">City<input type="text" name="city" list="lc-city-suggestions" placeholder="Type city name (optional)" autocomplete="off" /></label>';
+        echo '<label class="lc-col-3">Country<select name="country"><option value="">Select country</option>';
+        foreach ($country_names as $country_name) {
+            echo '<option value="' . esc_attr((string) $country_name) . '">' . esc_html((string) $country_name) . '</option>';
+        }
+        echo '</select></label>';
         echo '<label class="lc-col-2">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
         echo '<summary><span>Advanced Options</span></summary>';
@@ -331,6 +339,7 @@ class LC_Frontend
         echo '<button type="submit" class="lc-col-12">Queue Run</button>';
         echo '<div class="lc-run-inline-note lc-run-city-country-note" hidden>Selecting a country with the city improves targeting and search quality.</div>';
         echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage.</div>';
+        echo '<datalist id="lc-city-suggestions"></datalist>';
         echo '<script type="application/json" class="lc-run-city-map-data">' . wp_json_encode($run_city_map) . '</script>';
         echo '<script type="application/json" class="lc-run-city-fallback-data">' . wp_json_encode($fallback_city_map) . '</script>';
         echo '</form>';
