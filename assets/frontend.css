@@ -20,12 +20,13 @@
   min-height: 100vh;
   box-sizing: border-box;
   padding: 28px 16px;
+  overflow-x: clip;
 }
 
 .lc-fe-bg {
   position: absolute;
   inset: 0;
-  border-radius: 18px;
+  border-radius: 0;
   background:
     radial-gradient(1000px 500px at 5% 0%, rgba(240, 66, 60, 0.2), transparent 55%),
     radial-gradient(900px 500px at 95% 0%, rgba(43, 109, 255, 0.2), transparent 55%),
