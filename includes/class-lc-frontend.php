@@ -621,7 +621,7 @@ class LC_Frontend
                         ],
                         'keywords' => ['api setup', 'google places', 'google cse', 'cx', 'credentials', 'step by step'],
                     ],
-                    ['name' => 'Directory Sources', 'type' => 'field', 'what' => 'Fallback source definitions.', 'does' => 'Sets source name, URL template, and quality score entries.', 'example' => 'Yelp|https://...|85', 'outcome' => 'Fallback uses curated source list and quality weights.', 'keywords' => ['directory sources', 'fallback']],
+                    ['name' => 'Directory Sources', 'type' => 'field', 'what' => 'Approved fallback source checklist plus custom domain input.', 'does' => 'Lets you enable compliant preset directories and add custom domains that are compatibility-scanned before applying.', 'example' => 'Check Yelp + BBB, add: Example Directory|example.com', 'outcome' => 'Only compatible sources are saved and used by fallback discovery.', 'keywords' => ['directory sources', 'fallback', 'compatibility', 'custom domain']],
                     ['name' => 'Enable SMTP', 'type' => 'toggle', 'what' => 'Email transport switch.', 'does' => 'Routes system emails through configured SMTP server.', 'example' => 'Enable', 'outcome' => 'Password reset and notices use SMTP.', 'keywords' => ['smtp', 'email']],
                     ['name' => 'SMTP Host / Port / Encryption / Auth', 'type' => 'field', 'what' => 'SMTP connection settings.', 'does' => 'Defines server address, transport security, and auth behavior.', 'example' => 'smtp.mail.com / 587 / TLS / Auth On', 'outcome' => 'Reliable secure outbound email delivery.', 'keywords' => ['smtp host', 'port', 'tls', 'auth']],
                     ['name' => 'SMTP Username / Password', 'type' => 'field', 'what' => 'SMTP credentials.', 'does' => 'Authenticates mail sender account.', 'example' => 'noreply@company.com + app password', 'outcome' => 'Server accepts outgoing mail requests.', 'keywords' => ['smtp credentials', 'username', 'password']],
@@ -785,6 +785,22 @@ class LC_Frontend
         echo '<p><small>The system automatically reviews this checklist on every queued run.</small></p>';
         echo '</div></section>';
 
+        $directory_presets = LC_Plugin::directory_source_presets();
+        $selected_directory_presets = [];
+        if (isset($settings['directory_source_presets']) && is_array($settings['directory_source_presets'])) {
+            $selected_directory_presets = array_values(array_map('sanitize_key', $settings['directory_source_presets']));
+        } else {
+            $selected_directory_presets = LC_Plugin::default_directory_source_preset_ids();
+        }
+        $selected_directory_map = array_fill_keys($selected_directory_presets, true);
+        $directory_scan_report = get_option('lc_directory_source_scan_report', []);
+        $directory_scan_rows = [];
+        $directory_scan_updated = '';
+        if (is_array($directory_scan_report)) {
+            $directory_scan_rows = isset($directory_scan_report['rows']) && is_array($directory_scan_report['rows']) ? $directory_scan_report['rows'] : [];
+            $directory_scan_updated = sanitize_text_field((string) ($directory_scan_report['updated_at'] ?? ''));
+        }
+
         if ($is_primary_admin) {
         echo '<section class="lc-tab-panel lc-settings-panel" data-tab="settings" data-settings-panel="system"><div class="lc-fe-card" id="lc-section-settings">';
         echo '<p class="lc-card-kicker">// SETTINGS</p>';
@@ -816,7 +832,52 @@ class LC_Frontend
         echo '<button type="button" class="lc-api-ref-open-kb" data-kb-section="settings" data-kb-query="API Setup Reference">Open Full Guide</button>';
         echo '</div>';
         echo '</div>';
-        echo '<label>Directory sources<textarea name="lc_settings[directory_sources]" rows="5">' . esc_textarea((string) ($settings['directory_sources'] ?? '')) . '</textarea></label>';
+        echo '<div class="lc-col-12 lc-directory-source-card">';
+        echo '<h4>Directory Sources</h4>';
+        echo '<p>Select approved directory sources below. The system runs a compatibility scan before applying your changes.</p>';
+        echo '<div class="lc-directory-source-grid">';
+        foreach ($directory_presets as $preset) {
+            $preset_id = sanitize_key((string) ($preset['id'] ?? ''));
+            if ($preset_id === '') {
+                continue;
+            }
+            $preset_host = wp_parse_url((string) ($preset['search_url'] ?? ''), PHP_URL_HOST);
+            echo '<label class="lc-directory-source-item">';
+            echo '<input type="checkbox" name="lc_settings[directory_source_presets][]" value="' . esc_attr($preset_id) . '" ' . checked(!empty($selected_directory_map[$preset_id]), true, false) . ' />';
+            echo '<span><strong>' . esc_html((string) ($preset['name'] ?? $preset_id)) . '</strong>';
+            echo '<small>' . esc_html((string) ($preset_host ?: '')) . ' | Quality ' . esc_html((string) absint($preset['quality_score'] ?? 0)) . '</small>';
+            if (!empty($preset['compliance'])) {
+                echo '<small>' . esc_html((string) $preset['compliance']) . '</small>';
+            }
+            echo '</span>';
+            echo '</label>';
+        }
+        echo '</div>';
+        echo '<label class="lc-col-12">Custom directory websites (one per line: Name|domain.com or domain.com)<textarea name="lc_settings[directory_custom_sites]" rows="4" placeholder="Example Directory|example.com&#10;another-example.com">' . esc_textarea((string) ($settings['directory_custom_sites'] ?? '')) . '</textarea></label>';
+        echo '<p><small>Custom domains are verified before use. If a source fails compatibility checks, it will not be applied.</small></p>';
+        if (!empty($directory_scan_rows)) {
+            echo '<div class="lc-directory-source-report">';
+            echo '<h5>Latest Compatibility Scan</h5>';
+            if ($directory_scan_updated !== '') {
+                echo '<p><small>Updated: ' . esc_html($directory_scan_updated) . '</small></p>';
+            }
+            echo '<table><thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Details</th></tr></thead><tbody>';
+            foreach ($directory_scan_rows as $scan_row) {
+                $label = sanitize_text_field((string) ($scan_row['label'] ?? ''));
+                $type = sanitize_text_field((string) ($scan_row['type'] ?? ''));
+                $status = sanitize_text_field((string) ($scan_row['status'] ?? ''));
+                $details = sanitize_text_field((string) ($scan_row['details'] ?? ''));
+                echo '<tr>';
+                echo '<td>' . esc_html($label) . '</td>';
+                echo '<td>' . esc_html($type) . '</td>';
+                echo '<td><span class="lc-scan-status lc-scan-status-' . esc_attr($status) . '">' . esc_html(ucfirst($status)) . '</span></td>';
+                echo '<td>' . esc_html($details) . '</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+            echo '</div>';
+        }
+        echo '</div>';
         echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';
         echo '<label class="lc-col-5">SMTP Host<input type="text" name="lc_settings[smtp_host]" value="' . esc_attr((string) ($settings['smtp_host'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-2">SMTP Port<input type="number" min="1" name="lc_settings[smtp_port]" value="' . esc_attr((string) ($settings['smtp_port'] ?? 587)) . '" /></label>';

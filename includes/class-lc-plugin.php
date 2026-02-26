@@ -188,6 +188,8 @@ class LC_Plugin
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
             'directory_sources' => '',
+            'directory_source_presets' => self::default_directory_source_preset_ids(),
+            'directory_custom_sites' => '',
             'social_discovery_mode' => 'off',
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
@@ -302,13 +304,142 @@ class LC_Plugin
             $social_mode = 'off';
         }
 
+        $existing_settings = $this->get_settings();
+        $presets = self::directory_source_presets();
+        $selected_presets = [];
+        if (isset($settings['directory_source_presets']) && is_array($settings['directory_source_presets'])) {
+            $selected_presets = $settings['directory_source_presets'];
+        } elseif (isset($existing_settings['directory_source_presets']) && is_array($existing_settings['directory_source_presets'])) {
+            $selected_presets = $existing_settings['directory_source_presets'];
+        } else {
+            $selected_presets = self::default_directory_source_preset_ids();
+        }
+        $selected_map = array_fill_keys(array_map('sanitize_key', $selected_presets), true);
+        $active_sources = [];
+        $scan_report = [];
+
+        foreach ($presets as $preset) {
+            $preset_id = sanitize_key((string) ($preset['id'] ?? ''));
+            if ($preset_id === '' || empty($selected_map[$preset_id])) {
+                continue;
+            }
+            $scan = $this->scan_directory_source_compatibility((string) ($preset['search_url'] ?? ''));
+            $scan_report[] = [
+                'label' => sanitize_text_field((string) ($preset['name'] ?? $preset_id)),
+                'type' => 'preset',
+                'status' => $scan['ok'] ? 'compatible' : 'incompatible',
+                'details' => sanitize_text_field((string) ($scan['reason'] ?? '')),
+            ];
+            if ($scan['ok']) {
+                $active_sources[] = [
+                    'name' => sanitize_text_field((string) ($preset['name'] ?? '')),
+                    'search_url' => esc_url_raw((string) ($preset['search_url'] ?? '')),
+                    'quality_score' => absint($preset['quality_score'] ?? 70),
+                ];
+            }
+        }
+
+        $custom_raw = (string) ($settings['directory_custom_sites'] ?? ($existing_settings['directory_custom_sites'] ?? ''));
+        $custom_lines = preg_split('/\r\n|\r|\n/', $custom_raw);
+        if (is_array($custom_lines)) {
+            foreach ($custom_lines as $line) {
+                $line = trim((string) $line);
+                if ($line === '') {
+                    continue;
+                }
+                $parts = array_map('trim', explode('|', $line));
+                $custom_name = '';
+                $custom_domain = '';
+                if (count($parts) >= 2) {
+                    $custom_name = sanitize_text_field((string) $parts[0]);
+                    $custom_domain = sanitize_text_field((string) $parts[1]);
+                } else {
+                    $custom_domain = sanitize_text_field((string) $parts[0]);
+                    $custom_name = ucwords(str_replace(['-', '.'], ' ', $custom_domain));
+                }
+                $custom_domain = strtolower(preg_replace('#^https?://#', '', $custom_domain));
+                $custom_domain = trim($custom_domain, '/');
+                if ($custom_domain === '' || strpos($custom_domain, '.') === false) {
+                    $scan_report[] = [
+                        'label' => $custom_name !== '' ? $custom_name : $custom_domain,
+                        'type' => 'custom',
+                        'status' => 'invalid',
+                        'details' => 'Invalid domain format.',
+                    ];
+                    continue;
+                }
+                $custom_url = 'https://' . $custom_domain . '/search?q={query}+{city}';
+                $scan = $this->scan_directory_source_compatibility($custom_url);
+                $scan_report[] = [
+                    'label' => $custom_name,
+                    'type' => 'custom',
+                    'status' => $scan['ok'] ? 'compatible' : 'incompatible',
+                    'details' => sanitize_text_field((string) ($scan['reason'] ?? '')),
+                ];
+                if ($scan['ok']) {
+                    $active_sources[] = [
+                        'name' => $custom_name,
+                        'search_url' => esc_url_raw($custom_url),
+                        'quality_score' => 60,
+                    ];
+                }
+            }
+        }
+
+        if (empty($active_sources)) {
+            $legacy_raw = trim((string) ($settings['directory_sources'] ?? ''));
+            if ($legacy_raw !== '') {
+                $legacy_lines = preg_split('/\r\n|\r|\n/', $legacy_raw);
+                if (is_array($legacy_lines)) {
+                    foreach ($legacy_lines as $line) {
+                        $line = trim((string) $line);
+                        if ($line === '') {
+                            continue;
+                        }
+                        $parts = array_map('trim', explode('|', $line));
+                        if (count($parts) < 3) {
+                            continue;
+                        }
+                        $legacy_name = sanitize_text_field((string) $parts[0]);
+                        $legacy_url = esc_url_raw((string) $parts[1]);
+                        $legacy_quality = max(1, absint($parts[2]));
+                        $scan = $this->scan_directory_source_compatibility($legacy_url);
+                        $scan_report[] = [
+                            'label' => $legacy_name,
+                            'type' => 'legacy',
+                            'status' => $scan['ok'] ? 'compatible' : 'incompatible',
+                            'details' => sanitize_text_field((string) ($scan['reason'] ?? '')),
+                        ];
+                        if ($scan['ok']) {
+                            $active_sources[] = [
+                                'name' => $legacy_name,
+                                'search_url' => $legacy_url,
+                                'quality_score' => $legacy_quality,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        $compiled_sources = [];
+        foreach ($active_sources as $source) {
+            $compiled_sources[] = $source['name'] . '|' . $source['search_url'] . '|' . (int) $source['quality_score'];
+        }
+        update_option('lc_directory_source_scan_report', [
+            'updated_at' => current_time('mysql'),
+            'rows' => $scan_report,
+        ]);
+
         return [
             'domain_fragment' => sanitize_text_field($settings['domain_fragment'] ?? ''),
             'max_places_per_run' => max(1, absint($settings['max_places_per_run'] ?? 25)),
             'enable_live_api_calls' => !empty($settings['enable_live_api_calls']) ? 1 : 0,
             'google_places_api_key' => sanitize_text_field($settings['google_places_api_key'] ?? ''),
             'discovery_mode' => $mode,
-            'directory_sources' => sanitize_textarea_field($settings['directory_sources'] ?? ''),
+            'directory_sources' => sanitize_textarea_field(implode("\n", $compiled_sources)),
+            'directory_source_presets' => array_values(array_map('sanitize_key', $selected_presets)),
+            'directory_custom_sites' => sanitize_textarea_field($custom_raw),
             'social_discovery_mode' => $social_mode,
             'google_cse_api_key' => sanitize_text_field($settings['google_cse_api_key'] ?? ''),
             'google_cse_cx' => sanitize_text_field($settings['google_cse_cx'] ?? ''),
@@ -336,6 +467,142 @@ class LC_Plugin
             'email_template_registration_rejected_subject' => sanitize_text_field($settings['email_template_registration_rejected_subject'] ?? ''),
             'email_template_registration_rejected_body' => wp_kses_post($settings['email_template_registration_rejected_body'] ?? ''),
         ];
+    }
+
+    public static function directory_source_presets()
+    {
+        return [
+            [
+                'id' => 'google_maps_public',
+                'name' => 'Google Maps Public Search',
+                'search_url' => 'https://www.google.com/maps/search/{query}+{city}',
+                'quality_score' => 90,
+                'compliance' => 'Public search URL only; follow Google terms and approved API policy where applicable.',
+            ],
+            [
+                'id' => 'yelp',
+                'name' => 'Yelp',
+                'search_url' => 'https://www.yelp.com/search?find_desc={query}&find_loc={city}',
+                'quality_score' => 88,
+                'compliance' => 'Use listing metadata from public pages and comply with Yelp platform terms.',
+            ],
+            [
+                'id' => 'yellow_pages',
+                'name' => 'Yellow Pages',
+                'search_url' => 'https://www.yellowpages.com/search?search_terms={query}&geo_location_terms={city}',
+                'quality_score' => 82,
+                'compliance' => 'Public listing directory source; respect site terms and robots policies.',
+            ],
+            [
+                'id' => 'bbb',
+                'name' => 'Better Business Bureau',
+                'search_url' => 'https://www.bbb.org/search?find_text={query}&find_loc={city}',
+                'quality_score' => 85,
+                'compliance' => 'Public accreditation/listing lookup; respect BBB usage policies.',
+            ],
+            [
+                'id' => 'chamber_of_commerce',
+                'name' => 'Chamber of Commerce',
+                'search_url' => 'https://www.chamberofcommerce.com/search?what={query}&where={city}',
+                'quality_score' => 80,
+                'compliance' => 'Public business listing directory; use only lawful contact data processing.',
+            ],
+            [
+                'id' => 'manta',
+                'name' => 'Manta',
+                'search_url' => 'https://www.manta.com/search?search={query}+{city}',
+                'quality_score' => 78,
+                'compliance' => 'Public directory search source; follow Manta terms of use.',
+            ],
+            [
+                'id' => 'hotfrog',
+                'name' => 'Hotfrog',
+                'search_url' => 'https://www.hotfrog.com/search/{query}/{city}',
+                'quality_score' => 74,
+                'compliance' => 'Public listing search endpoint with standard robots/terms checks.',
+            ],
+            [
+                'id' => 'cylex',
+                'name' => 'Cylex',
+                'search_url' => 'https://www.cylex.us.com/s?q={query}+{city}',
+                'quality_score' => 72,
+                'compliance' => 'Public business listings source; usage must stay within published terms.',
+            ],
+            [
+                'id' => 'merchantcircle',
+                'name' => 'MerchantCircle',
+                'search_url' => 'https://www.merchantcircle.com/search?what={query}&where={city}',
+                'quality_score' => 70,
+                'compliance' => 'Public profile directory source; automated scraping restrictions may apply.',
+            ],
+            [
+                'id' => 'superpages',
+                'name' => 'Superpages',
+                'search_url' => 'https://www.superpages.com/search?C={query}&T={city}',
+                'quality_score' => 76,
+                'compliance' => 'Public directory source with HTTPS and robots checks required.',
+            ],
+            [
+                'id' => 'dexknows',
+                'name' => 'DexKnows',
+                'search_url' => 'https://www.dexknows.com/search?query={query}&where={city}',
+                'quality_score' => 73,
+                'compliance' => 'Public local listings source; use only for approved business workflows.',
+            ],
+            [
+                'id' => 'citysearch',
+                'name' => 'Citysearch',
+                'search_url' => 'https://www.citysearch.com/search?what={query}&where={city}',
+                'quality_score' => 69,
+                'compliance' => 'Public search listings source; always respect robots and provider terms.',
+            ],
+        ];
+    }
+
+    public static function default_directory_source_preset_ids()
+    {
+        $ids = [];
+        foreach (self::directory_source_presets() as $preset) {
+            $id = sanitize_key((string) ($preset['id'] ?? ''));
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+        return $ids;
+    }
+
+    private function scan_directory_source_compatibility($search_url)
+    {
+        $url = esc_url_raw((string) $search_url);
+        if ($url === '' || strpos($url, '{query}') === false || strpos($url, '{city}') === false) {
+            return ['ok' => false, 'reason' => 'Missing required placeholders {query} and {city}.'];
+        }
+
+        $host = wp_parse_url(str_replace(['{query}', '{city}'], ['sample', 'sample'], $url), PHP_URL_HOST);
+        if (!$host) {
+            return ['ok' => false, 'reason' => 'Could not parse source domain.'];
+        }
+
+        $probe_url = 'https://' . $host . '/';
+        $head = wp_remote_head($probe_url, ['timeout' => 8]);
+        if (is_wp_error($head)) {
+            return ['ok' => false, 'reason' => 'Host is not reachable over HTTPS.'];
+        }
+        $code = (int) wp_remote_retrieve_response_code($head);
+        if ($code < 200 || $code >= 400) {
+            return ['ok' => false, 'reason' => 'Host response code indicates incompatibility: ' . $code];
+        }
+
+        $robots_url = 'https://' . $host . '/robots.txt';
+        $robots = wp_remote_get($robots_url, ['timeout' => 8]);
+        if (!is_wp_error($robots) && (int) wp_remote_retrieve_response_code($robots) < 400) {
+            $body = strtolower((string) wp_remote_retrieve_body($robots));
+            if (strpos($body, 'user-agent: *') !== false && strpos($body, 'disallow: /') !== false) {
+                return ['ok' => false, 'reason' => 'robots.txt disallows general crawling.'];
+            }
+        }
+
+        return ['ok' => true, 'reason' => 'Compatible: HTTPS reachable and no broad robots block detected.'];
     }
 
     private function ensure_permissions()
@@ -637,6 +904,8 @@ class LC_Plugin
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
             'directory_sources' => '',
+            'directory_source_presets' => self::default_directory_source_preset_ids(),
+            'directory_custom_sites' => '',
             'social_discovery_mode' => 'off',
             'google_cse_api_key' => '',
             'google_cse_cx' => '',
