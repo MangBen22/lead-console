@@ -187,6 +187,15 @@ class LC_Plugin
         add_option('lc_settings', [
             'domain_fragment' => '',
             'max_places_per_run' => 25,
+            'platform_mode' => 'single_tenant',
+            'notifications_web' => 1,
+            'notifications_email' => 1,
+            'notifications_sound' => 0,
+            'crm_connectors' => '',
+            'social_connectors' => '',
+            'webops_monitors' => '',
+            'seo_extension_enabled' => 0,
+            'human_support_email' => '',
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
@@ -307,6 +316,7 @@ class LC_Plugin
         add_submenu_page('lc_dashboard', 'Users', 'Users', $capability, 'lc_users', [$this, 'render_users']);
         add_submenu_page('lc_dashboard', 'Logs', 'Logs', $capability, 'lc_logs', [$this, 'render_logs']);
         add_submenu_page('lc_dashboard', 'Reports', 'Reports', $capability, 'lc_reports', [$this, 'render_reports']);
+        add_submenu_page('lc_dashboard', 'Platform', 'Platform', $capability, 'lc_platform', [$this, 'render_platform']);
         add_submenu_page('lc_dashboard', 'Settings', 'Settings', $capability, 'lc_settings', [$this, 'render_settings']);
     }
 
@@ -468,6 +478,15 @@ class LC_Plugin
         return [
             'domain_fragment' => sanitize_text_field($settings['domain_fragment'] ?? ''),
             'max_places_per_run' => max(1, absint($settings['max_places_per_run'] ?? 25)),
+            'platform_mode' => in_array(($settings['platform_mode'] ?? 'single_tenant'), ['single_tenant', 'multi_tenant_ready'], true) ? sanitize_text_field($settings['platform_mode']) : 'single_tenant',
+            'notifications_web' => !empty($settings['notifications_web']) ? 1 : 0,
+            'notifications_email' => !empty($settings['notifications_email']) ? 1 : 0,
+            'notifications_sound' => !empty($settings['notifications_sound']) ? 1 : 0,
+            'crm_connectors' => sanitize_textarea_field($settings['crm_connectors'] ?? ''),
+            'social_connectors' => sanitize_textarea_field($settings['social_connectors'] ?? ''),
+            'webops_monitors' => sanitize_textarea_field($settings['webops_monitors'] ?? ''),
+            'seo_extension_enabled' => !empty($settings['seo_extension_enabled']) ? 1 : 0,
+            'human_support_email' => sanitize_email($settings['human_support_email'] ?? ''),
             'enable_live_api_calls' => !empty($settings['enable_live_api_calls']) ? 1 : 0,
             'google_places_api_key' => sanitize_text_field($settings['google_places_api_key'] ?? ''),
             'discovery_mode' => $mode,
@@ -1116,6 +1135,15 @@ class LC_Plugin
         $defaults = [
             'domain_fragment' => '',
             'max_places_per_run' => 25,
+            'platform_mode' => 'single_tenant',
+            'notifications_web' => 1,
+            'notifications_email' => 1,
+            'notifications_sound' => 0,
+            'crm_connectors' => '',
+            'social_connectors' => '',
+            'webops_monitors' => '',
+            'seo_extension_enabled' => 0,
+            'human_support_email' => '',
             'enable_live_api_calls' => 0,
             'google_places_api_key' => '',
             'discovery_mode' => 'hybrid',
@@ -3863,6 +3891,78 @@ class LC_Plugin
         $this->render_wrap_end();
     }
 
+    public function render_platform()
+    {
+        $settings = $this->get_settings();
+
+        $this->render_wrap_start('Platform');
+
+        $modules = [
+            [
+                'name' => 'Leads Engine',
+                'status' => 'Active',
+                'scope' => 'Queue, discovery, review, enrichment, export',
+                'next' => 'CRM handoff pipeline and quality scoring improvements.',
+            ],
+            [
+                'name' => 'CRM + Email',
+                'status' => 'Planning',
+                'scope' => 'Connector framework, SMTP health, automation templates',
+                'next' => 'Build connector contracts for WordPress CRM plugins and external APIs.',
+            ],
+            [
+                'name' => 'Social + Forums',
+                'status' => 'Planning',
+                'scope' => 'Per-platform connectors, capability flags, publishing and inbox',
+                'next' => 'Ship MVP connectors with platform-specific feature gates.',
+            ],
+            [
+                'name' => 'WebOps Security',
+                'status' => 'Planning',
+                'scope' => 'Uptime, health checks, remote actions, incident alerts',
+                'next' => 'Implement site heartbeat worker and alert routing.',
+            ],
+            [
+                'name' => 'SEO + Extension',
+                'status' => 'Planning',
+                'scope' => 'Audit suite, rank tracking, browser extension sync',
+                'next' => 'Define extension API contracts and SEO audit baseline.',
+            ],
+        ];
+
+        echo '<div class="lc-card">';
+        echo '<h2>Program Overview</h2>';
+        echo '<p>Single platform operating mode: <strong>' . esc_html($settings['platform_mode']) . '</strong>.</p>';
+        echo '<p>This page is the execution board for the five-module roadmap on branch <code>app</code>.</p>';
+        echo '</div>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Module Status</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>Module</th><th>Status</th><th>Current Scope</th><th>Next Milestone</th></tr></thead><tbody>';
+        foreach ($modules as $module) {
+            echo '<tr>';
+            echo '<td>' . esc_html($module['name']) . '</td>';
+            echo '<td>' . esc_html($module['status']) . '</td>';
+            echo '<td>' . esc_html($module['scope']) . '</td>';
+            echo '<td>' . esc_html($module['next']) . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+        echo '</div>';
+
+        echo '<div class="lc-card" style="margin-top:16px;">';
+        echo '<h2>Default Guardrails</h2>';
+        echo '<ul>';
+        echo '<li>Use official APIs/connectors whenever available.</li>';
+        echo '<li>Respect platform terms and permissions before enabling advanced actions.</li>';
+        echo '<li>Store action logs and connector events in system logs for auditability.</li>';
+        echo '<li>Enable web/email notifications by default; sound alerts are optional.</li>';
+        echo '</ul>';
+        echo '</div>';
+
+        $this->render_wrap_end();
+    }
+
     public function render_settings()
     {
         $settings = $this->get_settings();
@@ -3875,6 +3975,18 @@ class LC_Plugin
         echo '<table class="form-table"><tbody>';
         echo '<tr><th scope="row"><label for="lc_domain_fragment">Domain fragment</label></th><td><input id="lc_domain_fragment" type="text" name="lc_settings[domain_fragment]" value="' . esc_attr($settings['domain_fragment']) . '" class="regular-text" /></td></tr>';
         echo '<tr><th scope="row"><label for="lc_max_places">Max places per run</label></th><td><input id="lc_max_places" type="number" min="1" name="lc_settings[max_places_per_run]" value="' . esc_attr((string) $settings['max_places_per_run']) . '" /></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_platform_mode">Platform mode</label></th><td><select id="lc_platform_mode" name="lc_settings[platform_mode]">';
+        echo '<option value="single_tenant" ' . selected($settings['platform_mode'], 'single_tenant', false) . '>Single tenant (5N2 internal)</option>';
+        echo '<option value="multi_tenant_ready" ' . selected($settings['platform_mode'], 'multi_tenant_ready', false) . '>Multi-tenant ready (future SaaS)</option>';
+        echo '</select></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_notifications_web">Web notifications</label></th><td><label><input id="lc_notifications_web" type="checkbox" name="lc_settings[notifications_web]" value="1" ' . checked(!empty($settings['notifications_web']), true, false) . ' /> Enabled</label></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_notifications_email">Email notifications</label></th><td><label><input id="lc_notifications_email" type="checkbox" name="lc_settings[notifications_email]" value="1" ' . checked(!empty($settings['notifications_email']), true, false) . ' /> Enabled</label></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_notifications_sound">Sound notifications</label></th><td><label><input id="lc_notifications_sound" type="checkbox" name="lc_settings[notifications_sound]" value="1" ' . checked(!empty($settings['notifications_sound']), true, false) . ' /> Enabled</label></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_human_support_email">Human support email</label></th><td><input id="lc_human_support_email" type="email" name="lc_settings[human_support_email]" value="' . esc_attr($settings['human_support_email']) . '" class="regular-text" /><p class="description">Fallback escalation destination when automated support cannot resolve a case.</p></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_crm_connectors">CRM connectors</label></th><td><textarea id="lc_crm_connectors" name="lc_settings[crm_connectors]" class="large-text code" rows="4" placeholder="fluentcrm|plugin|enabled&#10;hubspot|api|planned">' . esc_textarea((string) $settings['crm_connectors']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_social_connectors">Social/forum connectors</label></th><td><textarea id="lc_social_connectors" name="lc_settings[social_connectors]" class="large-text code" rows="4" placeholder="facebook|api|planned&#10;reddit|api|planned">' . esc_textarea((string) $settings['social_connectors']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_webops_monitors">WebOps monitors</label></th><td><textarea id="lc_webops_monitors" name="lc_settings[webops_monitors]" class="large-text code" rows="4" placeholder="uptime_ping|enabled&#10;ssl_expiry|enabled">' . esc_textarea((string) $settings['webops_monitors']) . '</textarea></td></tr>';
+        echo '<tr><th scope="row"><label for="lc_seo_extension_enabled">SEO browser extension</label></th><td><label><input id="lc_seo_extension_enabled" type="checkbox" name="lc_settings[seo_extension_enabled]" value="1" ' . checked(!empty($settings['seo_extension_enabled']), true, false) . ' /> Enable extension sync API (preparation mode)</label></td></tr>';
         echo '<tr><th scope="row"><label for="lc_live_api">Enable live API calls</label></th><td><label><input id="lc_live_api" type="checkbox" name="lc_settings[enable_live_api_calls]" value="1" ' . checked(!empty($settings['enable_live_api_calls']), true, false) . ' /> Enabled</label></td></tr>';
         echo '<tr><th scope="row"><label for="lc_google_key">Google Places API key</label></th><td><input id="lc_google_key" type="text" name="lc_settings[google_places_api_key]" value="' . esc_attr($settings['google_places_api_key']) . '" class="regular-text" /></td></tr>';
         echo '<tr><th scope="row"><label for="lc_discovery_mode">Discovery mode</label></th><td><select id="lc_discovery_mode" name="lc_settings[discovery_mode]">';
