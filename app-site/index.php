@@ -36,6 +36,10 @@ if (isset($_POST['action']) && $_POST['action'] === 'logout') {
 }
 
 $user = $_SESSION['app_user'] ?? null;
+if (!isset($_SESSION['app_csrf_token']) || !is_string($_SESSION['app_csrf_token']) || $_SESSION['app_csrf_token'] === '') {
+    $_SESSION['app_csrf_token'] = bin2hex(random_bytes(16));
+}
+$csrfToken = (string) $_SESSION['app_csrf_token'];
 
 ?>
 <!doctype html>
@@ -161,6 +165,51 @@ $user = $_SESSION['app_user'] ?? null;
             <section class="api-status">
                 <h2>CRM Connectors</h2>
                 <pre id="crmConnectors">Loading...</pre>
+                <form id="crmConnectorForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="connectorProvider">Provider</label>
+                        <input id="connectorProvider" type="text" placeholder="fluentcrm" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorType">Type</label>
+                        <select id="connectorType">
+                            <option value="wordpress_plugin">wordpress_plugin</option>
+                            <option value="external_api">external_api</option>
+                            <option value="csv_export_bridge">csv_export_bridge</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorStatus">Status</label>
+                        <select id="connectorStatus">
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorAuth">Auth</label>
+                        <select id="connectorAuth">
+                            <option value="api_key">api_key</option>
+                            <option value="oauth2">oauth2</option>
+                            <option value="token">token</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="connectorCapabilities">Capabilities (comma)</label>
+                        <input id="connectorCapabilities" type="text" placeholder="create_contact,update_contact">
+                    </div>
+                    <button id="saveConnectorBtn" type="button">Save Connector</button>
+                </form>
+            </section>
+
+            <section class="api-status">
+                <h2>CRM Push Pipeline</h2>
+                <div class="actions">
+                    <button id="runCrmSyncBtn" type="button">Run CRM Sync</button>
+                </div>
+                <pre id="crmSyncResult">No sync yet.</pre>
+                <h3>Sync Log</h3>
+                <pre id="crmSyncLog">Loading...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
@@ -170,6 +219,7 @@ $user = $_SESSION['app_user'] ?? null;
             </ul>
         </aside>
     </div>
+    <script>window.appCsrfToken = "<?php echo esc_js($csrfToken); ?>";</script>
     <script src="/assets/app.js"></script>
 <?php endif; ?>
 </body>

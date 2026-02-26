@@ -22,11 +22,16 @@ function all_sites()
     }));
 }
 
+$publicActions = ['status'];
+if (!in_array($action, $publicActions, true)) {
+    app_require_auth();
+}
+
 if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.2-bridge-data-foundation',
+        'phase' => '1.3-crm-sync-foundation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -114,11 +119,12 @@ if ($action === 'crm.connectors.list') {
 }
 
 if ($action === 'crm.connectors.save') {
+    app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         out_json(['ok' => false, 'error' => 'POST required.'], 405);
     }
-    $raw = file_get_contents('php://input');
-    $data = json_decode((string) $raw, true);
+    app_require_csrf();
+    $data = app_read_json_body();
     if (!is_array($data)) {
         out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
     }
@@ -141,6 +147,109 @@ if ($action === 'crm.connectors.save') {
     out_json(['ok' => true, 'item' => $item]);
 }
 
+if ($action === 'crm.connectors.delete') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['connector_id'])) {
+        out_json(['ok' => false, 'error' => 'connector_id is required.'], 400);
+    }
+    $connectorId = (string) $data['connector_id'];
+    $path = app_storage_path('crm_connectors.json');
+    $rows = app_read_json_file($path, []);
+    $before = count($rows);
+    $rows = array_values(array_filter($rows, static function ($row) use ($connectorId) {
+        return (string) ($row['connector_id'] ?? '') !== $connectorId;
+    }));
+    app_write_json_file($path, $rows);
+    out_json([
+        'ok' => true,
+        'deleted' => $before - count($rows),
+        'connector_id' => $connectorId,
+    ]);
+}
+
+if ($action === 'crm.push.sync') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+
+    $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $activeConnectors = array_values(array_filter($connectors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+
+    if (empty($activeConnectors)) {
+        out_json(['ok' => false, 'error' => 'No active CRM connectors.'], 400);
+    }
+
+    $sitePayloads = [];
+    $totalApproved = 0;
+    foreach (all_sites() as $site) {
+        $res = app_bridge_request($site, 'POST', 'bridge/push-approved', []);
+        $count = 0;
+        $sample = [];
+        if (!empty($res['ok']) && isset($res['data']['count'])) {
+            $count = (int) $res['data']['count'];
+            $totalApproved += $count;
+            $rows = isset($res['data']['leads']) && is_array($res['data']['leads']) ? $res['data']['leads'] : [];
+            $sample = array_slice($rows, 0, 3);
+        }
+        $sitePayloads[] = [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'connected' => !empty($res['ok']),
+            'approved_count' => $count,
+            'sample' => $sample,
+        ];
+    }
+
+    $syncId = 'sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
+    $logItem = [
+        'sync_id' => $syncId,
+        'created_at' => gmdate('c'),
+        'connector_count' => count($activeConnectors),
+        'site_count' => count($sitePayloads),
+        'approved_total' => $totalApproved,
+        'connectors' => array_map(static function ($row) {
+            return [
+                'connector_id' => (string) ($row['connector_id'] ?? ''),
+                'provider' => (string) ($row['provider'] ?? ''),
+                'type' => (string) ($row['type'] ?? ''),
+            ];
+        }, $activeConnectors),
+        'sites' => $sitePayloads,
+        'status' => 'queued_to_connectors',
+    ];
+
+    $logPath = app_storage_path('crm_sync_log.json');
+    $logs = app_read_json_file($logPath, []);
+    array_unshift($logs, $logItem);
+    $logs = array_slice($logs, 0, 100);
+    app_write_json_file($logPath, $logs);
+
+    out_json([
+        'ok' => true,
+        'sync' => $logItem,
+        'message' => 'CRM push sync queued to active connectors.',
+    ]);
+}
+
+if ($action === 'crm.push.log') {
+    $logs = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    out_json([
+        'ok' => true,
+        'count' => count($logs),
+        'items' => $logs,
+    ]);
+}
+
 if ($action === 'crm.summary') {
     $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
     $smtpConnected = false;
@@ -161,6 +270,9 @@ if ($action === 'crm.summary') {
         ];
     }
 
+    $logs = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
+
     out_json([
         'ok' => true,
         'module' => 'crm_email',
@@ -170,6 +282,7 @@ if ($action === 'crm.summary') {
             'smtp_connected' => $smtpConnected,
             'failed_deliveries' => 0,
         ],
+        'last_sync' => $lastSync,
         'smtp_sites' => $smtpBySite,
     ]);
 }

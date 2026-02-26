@@ -1,5 +1,9 @@
 <?php
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
 function app_config()
 {
     $defaults = [
@@ -91,4 +95,72 @@ function app_bridge_request($site, $method, $endpoint, $payload = null)
         'error' => ($status === 0) ? 'Request failed or timed out.' : '',
         'url' => $url,
     ];
+}
+
+function app_current_user()
+{
+    $user = isset($_SESSION['app_user']) && is_array($_SESSION['app_user']) ? $_SESSION['app_user'] : null;
+    return $user;
+}
+
+function app_is_authenticated()
+{
+    return app_current_user() !== null;
+}
+
+function app_is_owner()
+{
+    $user = app_current_user();
+    return is_array($user) && (string) ($user['role'] ?? '') === 'owner';
+}
+
+function app_json_error($message, $code = 400, $extra = [])
+{
+    http_response_code($code);
+    echo json_encode(array_merge([
+        'ok' => false,
+        'error' => $message,
+    ], $extra));
+    exit;
+}
+
+function app_require_auth()
+{
+    if (!app_is_authenticated()) {
+        app_json_error('Authentication required.', 401);
+    }
+}
+
+function app_require_owner()
+{
+    app_require_auth();
+    if (!app_is_owner()) {
+        app_json_error('Owner permission required.', 403);
+    }
+}
+
+function app_read_json_body()
+{
+    $raw = file_get_contents('php://input');
+    $data = json_decode((string) $raw, true);
+    return is_array($data) ? $data : null;
+}
+
+function app_get_csrf_token()
+{
+    $token = isset($_SESSION['app_csrf_token']) ? (string) $_SESSION['app_csrf_token'] : '';
+    if ($token === '') {
+        $token = bin2hex(random_bytes(16));
+        $_SESSION['app_csrf_token'] = $token;
+    }
+    return $token;
+}
+
+function app_require_csrf()
+{
+    $expected = isset($_SESSION['app_csrf_token']) ? (string) $_SESSION['app_csrf_token'] : '';
+    $incoming = isset($_SERVER['HTTP_X_CSRF_TOKEN']) ? (string) $_SERVER['HTTP_X_CSRF_TOKEN'] : '';
+    if ($expected === '' || $incoming === '' || !hash_equals($expected, $incoming)) {
+        app_json_error('Invalid CSRF token.', 403);
+    }
 }
