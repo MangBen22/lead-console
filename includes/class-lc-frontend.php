@@ -320,12 +320,12 @@ class LC_Frontend
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label class="lc-col-4">Search Query<input type="text" name="query_text" required /></label>';
         echo '<label class="lc-col-3">City<div class="lc-city-autocomplete"><input type="text" name="city" placeholder="Type city name (optional)" autocomplete="off" /><div class="lc-city-suggest-box" hidden></div></div></label>';
+        echo '<label class="lc-col-2">State/Province<select name="state"><option value="">Select state/province (optional)</option></select></label>';
         echo '<label class="lc-col-3">Country<select name="country"><option value="">Select country</option>';
         foreach ($country_names as $country_name) {
             echo '<option value="' . esc_attr((string) $country_name) . '">' . esc_html((string) $country_name) . '</option>';
         }
         echo '</select></label>';
-        echo '<label class="lc-col-2">State/Province<select name="state"><option value="">Select state/province (optional)</option></select></label>';
         echo '<label class="lc-col-2">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
         echo '<summary><span>Advanced Options</span></summary>';
