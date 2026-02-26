@@ -227,6 +227,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </div>
                     <button id="saveConnectorBtn" type="button">Save Connector</button>
                     <button id="deleteConnectorBtn" type="button">Delete Connector ID</button>
+                    <button id="testConnectorBtn" type="button">Test Connector ID</button>
                 </form>
             </section>
 
@@ -234,10 +235,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h2>CRM Push Pipeline</h2>
                 <div class="actions">
                     <button id="runCrmSyncBtn" type="button">Run CRM Sync</button>
+                    <button id="runRetryQueueBtn" type="button">Run Retry Queue</button>
                 </div>
                 <pre id="crmSyncResult">No sync yet.</pre>
                 <h3>Sync Log</h3>
                 <pre id="crmSyncLog">Loading...</pre>
+                <h3>Retry Queue</h3>
+                <pre id="crmRetryQueue">Loading...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">

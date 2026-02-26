@@ -14,8 +14,10 @@
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
+  const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmSyncLog = document.getElementById("crmSyncLog");
+  const crmRetryQueue = document.getElementById("crmRetryQueue");
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -84,7 +86,7 @@
     }
   })();
 
-  (async function loadCrmConnectors() {
+  async function loadCrmConnectors() {
     if (!crmConnectors) return;
     try {
       const data = await apiGet("crm.connectors.list");
@@ -104,9 +106,20 @@
     }
   }
 
+  async function loadRetryQueue() {
+    if (!crmRetryQueue) return;
+    try {
+      const data = await apiGet("crm.retry.list");
+      crmRetryQueue.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmRetryQueue.textContent = "Failed to load retry queue.";
+    }
+  }
+
   (async function initCrm() {
     await loadCrmConnectors();
     await loadCrmSyncLog();
+    await loadRetryQueue();
   })();
 
   if (crmConnectorForm) {
@@ -170,6 +183,23 @@
         await loadCrmConnectors();
       });
     }
+    const testBtn = document.getElementById("testConnectorBtn");
+    if (testBtn) {
+      testBtn.addEventListener("click", async function () {
+        const connectorId = document.getElementById("connectorId");
+        const id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+        if (!id) {
+          if (crmSyncResult) {
+            crmSyncResult.textContent = "Enter Connector ID to test.";
+          }
+          return;
+        }
+        const result = await apiPost("crm.connectors.test", { connector_id: id });
+        if (crmSyncResult) {
+          crmSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+      });
+    }
   }
 
   if (runCrmSyncBtn) {
@@ -179,6 +209,7 @@
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadCrmSyncLog();
+      await loadRetryQueue();
       modules.forEach(async function (entry) {
         if (entry[1] !== "crm.summary") return;
         const el = document.getElementById(entry[0]);
@@ -186,6 +217,21 @@
         const data = await apiGet("crm.summary");
         el.textContent = JSON.stringify(data, null, 2);
       });
+    });
+  }
+
+  if (runRetryQueueBtn) {
+    runRetryQueueBtn.addEventListener("click", async function () {
+      const result = await apiPost("crm.retry.run", {});
+      if (crmSyncResult) {
+        crmSyncResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadRetryQueue();
+      const crmData = await apiGet("crm.summary");
+      const crmPanel = document.getElementById("modCrm");
+      if (crmPanel) {
+        crmPanel.textContent = JSON.stringify(crmData, null, 2);
+      }
     });
   }
 })();

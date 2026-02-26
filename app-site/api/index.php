@@ -32,6 +32,17 @@ function site_by_id($siteId)
     return null;
 }
 
+function connector_by_id($connectorId)
+{
+    $rows = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    foreach ($rows as $row) {
+        if ((string) ($row['connector_id'] ?? '') === (string) $connectorId) {
+            return $row;
+        }
+    }
+    return null;
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -110,6 +121,49 @@ function collect_approved_leads()
     ];
 }
 
+function normalize_error_code($message)
+{
+    $m = strtolower((string) $message);
+    if (strpos($m, 'missing access_token') !== false) {
+        return 'missing_access_token';
+    }
+    if (strpos($m, 'missing webhook_url') !== false) {
+        return 'missing_webhook_url';
+    }
+    if (strpos($m, 'missing valid bridge_site_id') !== false) {
+        return 'missing_bridge_site';
+    }
+    if (strpos($m, 'http 401') !== false || strpos($m, 'http 403') !== false) {
+        return 'auth_failed';
+    }
+    if (strpos($m, 'http 429') !== false) {
+        return 'rate_limited';
+    }
+    if (strpos($m, 'http 5') !== false) {
+        return 'provider_unavailable';
+    }
+    if (strpos($m, 'request failed') !== false || strpos($m, 'timed out') !== false) {
+        return 'network_error';
+    }
+    if (strpos($m, 'no provider adapter') !== false) {
+        return 'adapter_not_implemented';
+    }
+    return 'unknown_error';
+}
+
+function retry_queue_path()
+{
+    return app_storage_path('crm_retry_queue.json');
+}
+
+function enqueue_retry_item($item)
+{
+    $queue = app_read_json_file(retry_queue_path(), []);
+    array_unshift($queue, $item);
+    $queue = array_slice($queue, 0, 500);
+    app_write_json_file(retry_queue_path(), $queue);
+}
+
 function execute_connector_sync($connector, $leads)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -124,6 +178,7 @@ function execute_connector_sync($connector, $leads)
         'accepted' => 0,
         'rejected' => 0,
         'errors' => [],
+        'error_codes' => [],
     ];
 
     if ($provider === 'hubspot' && $type === 'external_api') {
@@ -131,6 +186,7 @@ function execute_connector_sync($connector, $leads)
         $endpoint = trim((string) ($config['endpoint_url'] ?? 'https://api.hubapi.com/crm/v3/objects/contacts'));
         if ($token === '') {
             $result['errors'][] = 'Missing access_token for HubSpot connector.';
+            $result['error_codes'][] = normalize_error_code('Missing access_token for HubSpot connector.');
             $result['rejected'] = count($leads);
             return $result;
         }
@@ -158,7 +214,9 @@ function execute_connector_sync($connector, $leads)
                 $result['accepted']++;
             } else {
                 $result['rejected']++;
-                $result['errors'][] = 'HubSpot HTTP ' . (int) ($res['status'] ?? 0);
+                $msg = 'HubSpot HTTP ' . (int) ($res['status'] ?? 0);
+                $result['errors'][] = $msg;
+                $result['error_codes'][] = normalize_error_code($msg);
             }
         }
         return $result;
@@ -169,6 +227,7 @@ function execute_connector_sync($connector, $leads)
         $site = $targetSiteId !== '' ? site_by_id($targetSiteId) : null;
         if ($site === null) {
             $result['errors'][] = 'FluentCRM connector missing valid bridge_site_id.';
+            $result['error_codes'][] = normalize_error_code('FluentCRM connector missing valid bridge_site_id.');
             $result['rejected'] = count($leads);
             return $result;
         }
@@ -186,7 +245,9 @@ function execute_connector_sync($connector, $leads)
             $result['rejected'] = max(0, count($leads) - $result['accepted']);
         } else {
             $result['rejected'] = count($leads);
-            $result['errors'][] = 'FluentCRM bridge intake request failed.';
+            $msg = 'FluentCRM bridge intake request failed.';
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
         }
         return $result;
     }
@@ -195,6 +256,7 @@ function execute_connector_sync($connector, $leads)
         $webhook = trim((string) ($config['webhook_url'] ?? ''));
         if ($webhook === '') {
             $result['errors'][] = 'Missing webhook_url for custom_webhook connector.';
+            $result['error_codes'][] = normalize_error_code('Missing webhook_url for custom_webhook connector.');
             $result['rejected'] = count($leads);
             return $result;
         }
@@ -210,13 +272,17 @@ function execute_connector_sync($connector, $leads)
             $result['accepted'] = count($leads);
         } else {
             $result['rejected'] = count($leads);
-            $result['errors'][] = 'Webhook HTTP ' . (int) ($res['status'] ?? 0);
+            $msg = 'Webhook HTTP ' . (int) ($res['status'] ?? 0);
+            $result['errors'][] = $msg;
+            $result['error_codes'][] = normalize_error_code($msg);
         }
         return $result;
     }
 
     $result['accepted'] = count($leads);
-    $result['errors'][] = 'No provider adapter; treated as dry mapping only.';
+    $msg = 'No provider adapter; treated as dry mapping only.';
+    $result['errors'][] = $msg;
+    $result['error_codes'][] = normalize_error_code($msg);
     return $result;
 }
 
@@ -229,7 +295,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.3-crm-sync-foundation',
+        'phase' => '1.4-connector-test-retry',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -360,6 +426,46 @@ if ($action === 'crm.connectors.delete') {
     ]);
 }
 
+if ($action === 'crm.connectors.test') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+
+    $connector = null;
+    if (!empty($data['connector_id'])) {
+        $connector = connector_by_id((string) $data['connector_id']);
+    }
+    if (!is_array($connector)) {
+        out_json(['ok' => false, 'error' => 'Connector not found.'], 404);
+    }
+
+    $sampleLead = [[
+        'site_id' => 'test',
+        'site_label' => 'test',
+        'lead_id' => 0,
+        'business_name' => 'Sample Lead Co',
+        'city' => 'Sample City',
+        'category' => 'Sample Category',
+        'website' => 'https://example.com',
+        'phone' => '0000000000',
+        'email' => 'sample@example.com',
+        'status' => 'Ready',
+        'created_at' => gmdate('c'),
+    ]];
+    $result = execute_connector_sync($connector, $sampleLead);
+    out_json([
+        'ok' => true,
+        'connector_id' => (string) ($connector['connector_id'] ?? ''),
+        'result' => $result,
+    ]);
+}
+
 if ($action === 'crm.push.sync') {
     app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -383,7 +489,22 @@ if ($action === 'crm.push.sync') {
     $totalApproved = count($leads);
     $connectorResults = [];
     foreach ($activeConnectors as $connector) {
-        $connectorResults[] = execute_connector_sync($connector, $leads);
+        $res = execute_connector_sync($connector, $leads);
+        $connectorResults[] = $res;
+        if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
+            enqueue_retry_item([
+                'retry_id' => 'retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'connector_id' => (string) ($res['connector_id'] ?? ''),
+                'provider' => (string) ($res['provider'] ?? ''),
+                'type' => (string) ($res['type'] ?? ''),
+                'error_codes' => isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [],
+                'errors' => isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [],
+                'lead_count' => count($leads),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
     }
 
     $syncId = 'sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
@@ -427,6 +548,61 @@ if ($action === 'crm.push.log') {
     ]);
 }
 
+if ($action === 'crm.retry.list') {
+    $queue = app_read_json_file(retry_queue_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($queue),
+        'items' => $queue,
+    ]);
+}
+
+if ($action === 'crm.retry.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+
+    $queue = app_read_json_file(retry_queue_path(), []);
+    if (empty($queue)) {
+        out_json(['ok' => true, 'message' => 'Retry queue is empty.', 'processed' => 0]);
+    }
+
+    $payload = collect_approved_leads();
+    $leads = $payload['leads'];
+    $processed = 0;
+    $succeeded = 0;
+    $remaining = [];
+    foreach ($queue as $item) {
+        $processed++;
+        $connector = connector_by_id((string) ($item['connector_id'] ?? ''));
+        if (!is_array($connector)) {
+            $item['status'] = 'failed_missing_connector';
+            $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+            $remaining[] = $item;
+            continue;
+        }
+        $res = execute_connector_sync($connector, $leads);
+        if ((int) ($res['rejected'] ?? 0) === 0 && empty($res['errors'])) {
+            $succeeded++;
+            continue;
+        }
+        $item['status'] = 'queued';
+        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+        $item['errors'] = isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [];
+        $item['error_codes'] = isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [];
+        $remaining[] = $item;
+    }
+    app_write_json_file(retry_queue_path(), $remaining);
+    out_json([
+        'ok' => true,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'remaining' => count($remaining),
+    ]);
+}
+
 if ($action === 'crm.summary') {
     $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
     $smtpConnected = false;
@@ -457,7 +633,7 @@ if ($action === 'crm.summary') {
         'metrics' => [
             'active_connectors' => count($connectors),
             'smtp_connected' => $smtpConnected,
-            'failed_deliveries' => 0,
+            'failed_deliveries' => count(app_read_json_file(retry_queue_path(), [])),
         ],
         'last_sync' => $lastSync,
         'smtp_sites' => $smtpBySite,
