@@ -612,6 +612,7 @@
   });
 
   const directoryCountryFilter = root.querySelector(".lc-directory-country-filter");
+  const directoryCountryApply = root.querySelector(".lc-directory-country-apply");
   const directorySelectedOnly = root.querySelector(".lc-directory-selected-only");
   const directorySelectedCount = root.querySelector(".lc-directory-selected-count strong");
   const directoryItems = [...root.querySelectorAll(".lc-directory-source-item")];
@@ -644,7 +645,7 @@
       directorySelectedCount.textContent = String(selectedCount);
     }
   };
-  directoryCountryFilter?.addEventListener("change", updateDirectorySourceFilter);
+  directoryCountryApply?.addEventListener("click", updateDirectorySourceFilter);
   directorySelectedOnly?.addEventListener("change", updateDirectorySourceFilter);
   directoryItems.forEach((item) => {
     const input = item.querySelector("input[type='checkbox']");

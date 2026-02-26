@@ -844,6 +844,14 @@
   grid-column: span 4;
 }
 
+.lc-directory-source-filters .lc-col-3 {
+  grid-column: span 3;
+}
+
+.lc-directory-source-filters .lc-col-2 {
+  grid-column: span 2;
+}
+
 .lc-directory-source-filters .lc-check {
   margin-bottom: 5px;
 }
@@ -1148,6 +1156,11 @@
     grid-column: span 6;
   }
 
+  .lc-directory-source-filters .lc-col-3,
+  .lc-directory-source-filters .lc-col-2 {
+    grid-column: span 6;
+  }
+
   .lc-run-form .lc-col-6,
   .lc-run-form .lc-col-4,
   .lc-run-form .lc-col-3,
@@ -1185,6 +1198,11 @@
   }
 
   .lc-directory-source-filters .lc-col-4 {
+    grid-column: span 12;
+  }
+
+  .lc-directory-source-filters .lc-col-3,
+  .lc-directory-source-filters .lc-col-2 {
     grid-column: span 12;
   }
 

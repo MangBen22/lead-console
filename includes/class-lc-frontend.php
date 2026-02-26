@@ -856,8 +856,9 @@ class LC_Frontend
             echo '<option value="' . esc_attr($country_name) . '">' . esc_html($country_name) . '</option>';
         }
         echo '</select></label>';
-        echo '<label class="lc-check lc-col-4"><input type="checkbox" class="lc-directory-selected-only" value="1" /> Show selected only</label>';
-        echo '<p class="lc-directory-selected-count lc-col-4"><strong>0</strong> sources selected</p>';
+        echo '<div class="lc-col-2"><button type="button" class="lc-btn lc-directory-country-apply">Apply</button></div>';
+        echo '<label class="lc-check lc-col-3"><input type="checkbox" class="lc-directory-selected-only" value="1" /> Show selected only</label>';
+        echo '<p class="lc-directory-selected-count lc-col-3"><strong>0</strong> sources selected</p>';
         echo '</div>';
         echo '<div class="lc-directory-source-grid">';
         foreach ($directory_presets as $preset) {
