@@ -524,7 +524,7 @@ class LC_Frontend
         echo '<h3>Program Knowledge Base</h3>';
         echo '<div class="lc-kb-shell">';
         echo '<div class="lc-kb-search-wrap">';
-        echo '<input type="text" class="lc-kb-search-input" placeholder="Search functions, flows, glossary terms..." autocomplete="off" />';
+        echo '<input type="text" class="lc-kb-search-input" placeholder="Search Dashboard, Leads, Settings items..." autocomplete="off" />';
         echo '<div class="lc-kb-search-suggest" hidden></div>';
         echo '</div>';
         echo '<div class="lc-kb-layout">';
@@ -541,122 +541,115 @@ class LC_Frontend
     {
         $sections = [
             [
-                'id' => 'guide-overview',
-                'title' => 'Platform Overview',
-                'intro' => 'How to use the Lead Console day-to-day.',
-                'topics' => [
-                    [
-                        'title' => 'Dashboard Basics',
-                        'explanation' => 'Use Dashboard for the top-level view of leads, run status, and quick actions.',
-                        'details' => 'The dashboard highlights total leads, ready leads, won leads, queued runs, and latest run health.',
-                        'example' => 'If queued runs is high and captured leads are low, review run filters before launching more jobs.',
-                        'keywords' => ['dashboard', 'metrics', 'overview', 'status', 'health'],
-                    ],
-                    [
-                        'title' => 'Lead Lifecycle',
-                        'explanation' => 'Leads move through a status pipeline from New to Won/Lost.',
-                        'details' => 'Update statuses often so exports, reports, and team handoff stay accurate.',
-                        'example' => 'After validating contact details, move from New to Verified, then to Ready.',
-                        'keywords' => ['lead lifecycle', 'status', 'pipeline', 'ready', 'won'],
-                    ],
-                    [
-                        'title' => 'Settings Navigation',
-                        'explanation' => 'Settings are split into top tabs so each area is easy to manage.',
-                        'details' => 'Use System for API controls, Users for access, Logs for audit trail, and Suppression/Reports for operations.',
-                        'example' => 'Change max places per run in System before launching high-volume discovery.',
-                        'keywords' => ['settings', 'users', 'logs', 'suppression', 'reports'],
-                    ],
+                'id' => 'dashboard',
+                'title' => 'Dashboard',
+                'intro' => 'Everything in this section explains the Dashboard tab items: metrics, run queue fields, live stream, and discovery table.',
+                'items' => [
+                    ['name' => 'Search Query', 'type' => 'field', 'what' => 'Main keyword phrase used for discovery.', 'does' => 'Controls which business type is searched (for example dentist, plumber, salon).', 'example' => 'Dentist', 'outcome' => 'Run targets businesses related to dentist in selected location.', 'keywords' => ['search query', 'query', 'keyword', 'run']],
+                    ['name' => 'City', 'type' => 'field', 'what' => 'City target input with suggestion support.', 'does' => 'Narrows search to specific city area.', 'example' => 'San Diego', 'outcome' => 'Results focus on San Diego listings.', 'keywords' => ['city', 'location', 'target']],
+                    ['name' => 'State/Province', 'type' => 'field', 'what' => 'State/province filter linked to selected country.', 'does' => 'Improves precision before city-level targeting.', 'example' => 'California', 'outcome' => 'City suggestions and run scope are aligned to California.', 'keywords' => ['state', 'province', 'location']],
+                    ['name' => 'Country', 'type' => 'field', 'what' => 'Country selector for regional targeting.', 'does' => 'Defines regional scope and affects state/city lists.', 'example' => 'United States', 'outcome' => 'Search limited to United States context.', 'keywords' => ['country', 'region']],
+                    ['name' => 'Max Places', 'type' => 'field', 'what' => 'Maximum number of lead captures per run.', 'does' => 'Sets upper limit of records gathered by a run.', 'example' => '50', 'outcome' => 'Run stops adding new captures after 50.', 'keywords' => ['max places', 'limit', 'capture']],
+                    ['name' => 'Advanced Options Button', 'type' => 'button', 'what' => 'Expands advanced filters.', 'does' => 'Shows radius, service focus, services, website focus, and quality thresholds.', 'example' => 'Click Advanced Options', 'outcome' => 'Additional filters become visible for tuning.', 'keywords' => ['advanced', 'filters']],
+                    ['name' => 'Radius (miles)', 'type' => 'field', 'what' => 'Distance around location center.', 'does' => 'Extends search area beyond the exact city.', 'example' => '15', 'outcome' => 'Search includes nearby areas within 15 miles.', 'keywords' => ['radius', 'distance']],
+                    ['name' => 'Service Focus', 'type' => 'field', 'what' => 'Business niche detail.', 'does' => 'Refines captures within broader query category.', 'example' => 'Cosmetic Dentistry', 'outcome' => 'Results prioritize cosmetic dentistry signals.', 'keywords' => ['service focus', 'niche']],
+                    ['name' => 'Services', 'type' => 'field', 'what' => 'Comma-separated service list.', 'does' => 'Adds context to run and scoring analysis.', 'example' => 'implants, whitening, emergency', 'outcome' => 'Notes and relevance become more specific to listed services.', 'keywords' => ['services', 'comma', 'context']],
+                    ['name' => 'Website Focus', 'type' => 'field', 'what' => 'Website presence filter.', 'does' => 'Includes any / no-website / has-website only businesses.', 'example' => 'No Website Listed', 'outcome' => 'Run filters businesses with no listed site.', 'keywords' => ['website focus', 'filter']],
+                    ['name' => 'Minimum Rating', 'type' => 'field', 'what' => 'Lowest accepted rating.', 'does' => 'Rejects captures below this threshold.', 'example' => '4.2', 'outcome' => 'Only 4.2+ rating candidates remain.', 'keywords' => ['rating', 'minimum']],
+                    ['name' => 'Minimum Reviews', 'type' => 'field', 'what' => 'Lowest accepted review count.', 'does' => 'Prevents low-signal listings from being captured.', 'example' => '20', 'outcome' => 'Only listings with 20+ reviews are included.', 'keywords' => ['reviews', 'minimum']],
+                    ['name' => 'Queue Run', 'type' => 'button', 'what' => 'Starts a new discovery run.', 'does' => 'Saves run config and sends it to queue processing.', 'example' => 'Click Queue Run', 'outcome' => 'Run appears in Discovery Health and starts processing.', 'keywords' => ['queue run', 'start', 'submit']],
+                    ['name' => 'Live Run Activity', 'type' => 'panel', 'what' => 'Real-time run progress stream.', 'does' => 'Shows step-by-step processing logs while waiting.', 'example' => 'Watch activity after queue', 'outcome' => 'User sees ongoing processing details, then panel auto-hides.', 'keywords' => ['live activity', 'logs', 'progress']],
+                    ['name' => 'Run Review Popup', 'type' => 'modal', 'what' => 'Preview window for captured draft leads.', 'does' => 'Lets user save to leads table or rerun with edits.', 'example' => 'Review results and click Save Leads', 'outcome' => 'Draft captures become permanent leads only after approval.', 'keywords' => ['review popup', 'save leads', 'rerun']],
+                    ['name' => 'Discovery Health Table', 'type' => 'table', 'what' => 'Recent runs status board.', 'does' => 'Displays query, location, filters, captured count, status, and created date.', 'example' => 'Check captured count for run #25', 'outcome' => 'User can compare performance across recent runs.', 'keywords' => ['discovery health', 'captured', 'status']],
                 ],
             ],
             [
-                'id' => 'guide-discovery',
-                'title' => 'Discovery Run Workflow',
-                'intro' => 'How run queue, monitoring, and review work.',
-                'topics' => [
-                    [
-                        'title' => 'Queueing a Run',
-                        'explanation' => 'Submit query, location, and filters from Queue Discovery Run.',
-                        'details' => 'You can target city/state/country, define rating/review thresholds, and choose website focus.',
-                        'example' => 'Query: Dentist, Country: United States, State: California, City: San Diego.',
-                        'keywords' => ['queue run', 'filters', 'location', 'country', 'state', 'city'],
-                    ],
-                    [
-                        'title' => 'Live Activity Stream',
-                        'explanation' => 'Run progress is shown live while processing.',
-                        'details' => 'The stream shows step-by-step run logs and auto-hides after completion.',
-                        'example' => 'You will see messages for run start, source checks, captures, and completion.',
-                        'keywords' => ['live activity', 'run logs', 'processing', 'stream'],
-                    ],
-                    [
-                        'title' => 'Review Before Save',
-                        'explanation' => 'Captured leads open in a review popup before final save.',
-                        'details' => 'Choose Save Leads to write to the main leads table, or Run Again to discard and retry with adjusted filters.',
-                        'example' => 'If quality looks off, pick Run Again and tighten category/rating filters.',
-                        'keywords' => ['review', 'save leads', 'run again', 'draft', 'popup'],
-                    ],
-                    [
-                        'title' => 'Discovery Health Captured Count',
-                        'explanation' => 'Each run shows how many leads were captured.',
-                        'details' => 'Use captured count to compare run quality and tuning effectiveness over time.',
-                        'example' => 'If captured drops after filter changes, loosen minimum reviews or rating.',
-                        'keywords' => ['captured leads', 'discovery health', 'count', 'run quality'],
-                    ],
+                'id' => 'leads',
+                'title' => 'Leads',
+                'intro' => 'This section covers each control in Leads tab: export, import, table actions, and pagination.',
+                'items' => [
+                    ['name' => 'Download CSV', 'type' => 'button', 'what' => 'Exports outreach-ready lead file.', 'does' => 'Generates CSV from ready/verified records.', 'example' => 'Click Download CSV', 'outcome' => 'CSV file downloads to browser.', 'keywords' => ['download csv', 'export', 'file']],
+                    ['name' => 'Import File', 'type' => 'field', 'what' => 'Upload field for lead imports.', 'does' => 'Accepts csv/tsv/txt/json/xlsx and maps fields automatically.', 'example' => 'Upload leads.xlsx', 'outcome' => 'Rows are parsed and inserted/skipped based on validation.', 'keywords' => ['import', 'upload', 'xlsx', 'csv']],
+                    ['name' => 'Import Leads', 'type' => 'button', 'what' => 'Submits selected import file.', 'does' => 'Runs import parser and reports imported/skipped counts.', 'example' => 'Click Import Leads', 'outcome' => 'Alert confirms import result.', 'keywords' => ['import leads', 'submit']],
+                    ['name' => 'Recent Leads Table', 'type' => 'table', 'what' => 'Primary lead list viewer.', 'does' => 'Shows business details, contact, score/type, notes, and current status.', 'example' => 'Scan top 100 recent leads', 'outcome' => 'Team can review and update leads quickly.', 'keywords' => ['recent leads', 'table', 'list']],
+                    ['name' => 'Status Dropdown', 'type' => 'field', 'what' => 'Per-row status selector.', 'does' => 'Changes lead stage in pipeline.', 'example' => 'Set status to Ready', 'outcome' => 'Lead moves to Ready stage immediately.', 'keywords' => ['status', 'pipeline', 'update']],
+                    ['name' => 'Save (Row)', 'type' => 'button', 'what' => 'Commits selected status update.', 'does' => 'Writes selected status for that lead.', 'example' => 'Choose Won then click Save', 'outcome' => 'Lead status updates to Won.', 'keywords' => ['save row', 'status save']],
+                    ['name' => 'Show (10-100)', 'type' => 'field', 'what' => 'Rows-per-page control in 10-step increments.', 'does' => 'Adjusts number of leads displayed per page.', 'example' => 'Show 100', 'outcome' => 'Table displays up to 100 leads per page.', 'keywords' => ['show', 'pagination', 'rows per page']],
+                    ['name' => 'Apply', 'type' => 'button', 'what' => 'Applies selected rows-per-page value.', 'does' => 'Reloads leads table with selected page size.', 'example' => 'Set 50 and click Apply', 'outcome' => 'Page refreshes showing 50 leads.', 'keywords' => ['apply', 'rows']],
+                    ['name' => 'Prev / Next', 'type' => 'button', 'what' => 'Pagination controls in Recent Leads footer.', 'does' => 'Moves between pages based on selected page size.', 'example' => 'Click Next', 'outcome' => 'Next lead set loads while staying on Leads tab.', 'keywords' => ['prev', 'next', 'page']],
+                    ['name' => 'Showing X-Y of Z', 'type' => 'label', 'what' => 'Current table range summary.', 'does' => 'Shows current window and total lead count.', 'example' => 'Showing 1-50 of 420', 'outcome' => 'User knows exact progress through lead list.', 'keywords' => ['showing', 'count', 'range']],
                 ],
             ],
             [
-                'id' => 'guide-leads',
-                'title' => 'Leads & Data Operations',
-                'intro' => 'How to manage leads, imports, exports, and quality controls.',
-                'topics' => [
-                    [
-                        'title' => 'Recent Leads Table',
-                        'explanation' => 'Use wider table view with bottom-right pagination controls.',
-                        'details' => 'You can show 10-100 rows and move page by page while staying inside the Leads tab.',
-                        'example' => 'Set Show=100 for audits, then use Prev/Next for full review passes.',
-                        'keywords' => ['recent leads', 'pagination', 'table', 'view', 'rows'],
-                    ],
-                    [
-                        'title' => 'Import and Export',
-                        'explanation' => 'Import supports multiple file formats and export creates outreach-ready CSV.',
-                        'details' => 'Imports map fields automatically; exports focus on ready/verified segments for operations.',
-                        'example' => 'After import, verify duplicates and suppression before outreach export.',
-                        'keywords' => ['import', 'export', 'csv', 'mapping', 'outreach'],
-                    ],
-                    [
-                        'title' => 'Suppression and Compliance',
-                        'explanation' => 'Suppression prevents disallowed data from entering workflows.',
-                        'details' => 'Rules can block by email, phone, domain, or name and apply during lead capture/import.',
-                        'example' => 'Add a domain suppression entry for an internal no-contact list.',
-                        'keywords' => ['suppression', 'compliance', 'blocklist', 'privacy'],
-                    ],
-                ],
-            ],
-            [
-                'id' => 'glossary',
-                'title' => 'Glossary',
-                'intro' => 'Plain-language definitions for important terms.',
-                'terms' => [
-                    ['term' => 'Lead', 'meaning' => 'A business record tracked for outreach and conversion.'],
-                    ['term' => 'Run', 'meaning' => 'A discovery job that searches sources and captures candidate leads.'],
-                    ['term' => 'Draft Lead', 'meaning' => 'A captured lead waiting for review before final save.'],
-                    ['term' => 'Captured Leads', 'meaning' => 'How many records were found by a run.'],
-                    ['term' => 'Review Status', 'meaning' => 'Whether captured run results are pending, saved, or discarded.'],
-                    ['term' => 'Save Mode', 'meaning' => 'Direct save or review-first capture mode.'],
-                    ['term' => 'Discovery Mode', 'meaning' => 'Source strategy: hybrid, API-only, or fallback-only.'],
-                    ['term' => 'Website Focus', 'meaning' => 'Filter by website presence (any/no website/has website).'],
-                    ['term' => 'Suppression', 'meaning' => 'Rules that block specific emails, phones, domains, or names.'],
-                    ['term' => 'Run Logs', 'meaning' => 'Timestamped messages showing what happened during processing.'],
-                    ['term' => 'Lead Type', 'meaning' => 'Quality classification tier based on lead signals.'],
-                    ['term' => 'Readiness Score', 'meaning' => 'Calculated score used to prioritize lead follow-up.'],
+                'id' => 'settings',
+                'title' => 'Settings',
+                'intro' => 'Complete guide for all settings controls including system, users, logs, suppression, intelligence, and reports.',
+                'items' => [
+                    ['name' => 'Domain Fragment', 'type' => 'field', 'what' => 'Optional domain hint used for filtering context.', 'does' => 'Helps align captures with target domain patterns.', 'example' => 'dental', 'outcome' => 'Discovery and scoring use a clearer domain context.', 'keywords' => ['domain fragment', 'domain']],
+                    ['name' => 'Max Places Per Run', 'type' => 'field', 'what' => 'Global hard cap for run capture volume.', 'does' => 'Prevents oversized runs and controls cost/load.', 'example' => '100', 'outcome' => 'No run can capture beyond 100 records.', 'keywords' => ['max places', 'global limit']],
+                    ['name' => 'Enable Live API Calls', 'type' => 'toggle', 'what' => 'Master switch for external API use.', 'does' => 'Turns live API discovery on/off.', 'example' => 'Enable', 'outcome' => 'Google Places calls are allowed when key exists.', 'keywords' => ['live api', 'toggle']],
+                    ['name' => 'Google Places API Key', 'type' => 'field', 'what' => 'Credential for Places API queries.', 'does' => 'Authenticates live discovery requests.', 'example' => 'AIza...key', 'outcome' => 'Runs can fetch live Google Places results.', 'keywords' => ['google places', 'api key']],
+                    ['name' => 'Discovery Mode', 'type' => 'field', 'what' => 'Source strategy selector.', 'does' => 'Sets hybrid, Google-only, or directory-only behavior.', 'example' => 'Hybrid', 'outcome' => 'Run tries API first, then fallback when needed.', 'keywords' => ['discovery mode', 'hybrid']],
+                    ['name' => 'Social Discovery Mode', 'type' => 'field', 'what' => 'Social profile enrichment mode.', 'does' => 'Controls whether social URL discovery is off or enabled.', 'example' => 'URL discovery only', 'outcome' => 'System enriches social URLs without direct scraping.', 'keywords' => ['social', 'url discovery']],
+                    ['name' => 'Google CSE API Key', 'type' => 'field', 'what' => 'Custom Search API key for social URL discovery.', 'does' => 'Authenticates programmable search requests.', 'example' => 'AIza...cse', 'outcome' => 'Social URL lookups can execute.', 'keywords' => ['cse key', 'search api']],
+                    ['name' => 'Google CSE cx', 'type' => 'field', 'what' => 'Custom Search Engine ID.', 'does' => 'Defines configured search engine scope for enrichment.', 'example' => '12345:abcde', 'outcome' => 'Search requests run against correct engine.', 'keywords' => ['cx', 'custom search engine']],
+                    ['name' => 'Directory Sources', 'type' => 'field', 'what' => 'Fallback source definitions.', 'does' => 'Sets source name, URL template, and quality score entries.', 'example' => 'Yelp|https://...|85', 'outcome' => 'Fallback uses curated source list and quality weights.', 'keywords' => ['directory sources', 'fallback']],
+                    ['name' => 'Enable SMTP', 'type' => 'toggle', 'what' => 'Email transport switch.', 'does' => 'Routes system emails through configured SMTP server.', 'example' => 'Enable', 'outcome' => 'Password reset and notices use SMTP.', 'keywords' => ['smtp', 'email']],
+                    ['name' => 'SMTP Host / Port / Encryption / Auth', 'type' => 'field', 'what' => 'SMTP connection settings.', 'does' => 'Defines server address, transport security, and auth behavior.', 'example' => 'smtp.mail.com / 587 / TLS / Auth On', 'outcome' => 'Reliable secure outbound email delivery.', 'keywords' => ['smtp host', 'port', 'tls', 'auth']],
+                    ['name' => 'SMTP Username / Password', 'type' => 'field', 'what' => 'SMTP credentials.', 'does' => 'Authenticates mail sender account.', 'example' => 'noreply@company.com + app password', 'outcome' => 'Server accepts outgoing mail requests.', 'keywords' => ['smtp credentials', 'username', 'password']],
+                    ['name' => 'SMTP From Email / Name', 'type' => 'field', 'what' => 'Default sender identity.', 'does' => 'Controls sender address/name shown to recipients.', 'example' => 'noreply@5n2digital.com / 5N2 Lead Console', 'outcome' => 'Emails look consistent and trusted.', 'keywords' => ['from email', 'from name']],
+                    ['name' => 'Email Templates', 'type' => 'field', 'what' => 'All system notification subject/body templates.', 'does' => 'Customizes registration, reset, and alert messages.', 'example' => 'Reset Subject: Password Reset Requested', 'outcome' => 'Email copy matches your brand and policy language.', 'keywords' => ['email template', 'subject', 'body']],
+                    ['name' => 'Run Checklist', 'type' => 'reference', 'what' => 'Compliance guidance block.', 'does' => 'Documents rules automatically enforced during run queueing.', 'example' => 'Review before launching campaigns', 'outcome' => 'Team follows compliant data capture practices.', 'keywords' => ['run checklist', 'compliance']],
+                    ['name' => 'Users: Create User', 'type' => 'button', 'what' => 'Adds a new team user profile.', 'does' => 'Creates account with role/access level and metadata.', 'example' => 'Create manager-level user', 'outcome' => 'New user appears in management list.', 'keywords' => ['create user', 'access level']],
+                    ['name' => 'Users: Approve / Reject', 'type' => 'button', 'what' => 'Registration approval controls.', 'does' => 'Approves pending registrations or rejects them.', 'example' => 'Approve pending registration', 'outcome' => 'User can sign in and operate based on access.', 'keywords' => ['approve', 'reject', 'registration']],
+                    ['name' => 'Users: Reset / Lock / Unlock', 'type' => 'button', 'what' => 'Security controls for account maintenance.', 'does' => 'Forces password reset or account lock status changes.', 'example' => 'Lock suspicious account', 'outcome' => 'Account is prevented from login until unlocked.', 'keywords' => ['reset', 'lock', 'unlock']],
+                    ['name' => 'Logs Table', 'type' => 'table', 'what' => 'System and user event records.', 'does' => 'Provides traceability for auth, runs, and operational actions.', 'example' => 'Check run warning logs', 'outcome' => 'Issues can be diagnosed quickly.', 'keywords' => ['logs', 'audit', 'events']],
+                    ['name' => 'Suppression Management', 'type' => 'table', 'what' => 'Blocklist administration view.', 'does' => 'Adds/removes suppression entries by type and value.', 'example' => 'Add domain suppression', 'outcome' => 'Future captures skip blocked entries.', 'keywords' => ['suppression management', 'blocklist']],
+                    ['name' => 'Lead Intelligence', 'type' => 'table', 'what' => 'Enrichment operation and profile scores.', 'does' => 'Runs enrichment and displays confidence/completeness outputs.', 'example' => 'Enrich 25 Recent Leads', 'outcome' => 'Profiles gain emails/social/context signals.', 'keywords' => ['intelligence', 'enrich', 'confidence']],
+                    ['name' => 'Reports: Funnel and Run Health', 'type' => 'table', 'what' => 'Operational reporting views.', 'does' => 'Shows lead funnel distribution and run status totals.', 'example' => 'Open Reports section', 'outcome' => 'Team sees pipeline conversion and run performance snapshots.', 'keywords' => ['reports', 'funnel', 'run health']],
+                    ['name' => 'Save Settings', 'type' => 'button', 'what' => 'Commits all settings changes.', 'does' => 'Writes updated settings values to plugin configuration.', 'example' => 'Update discovery and SMTP then Save Settings', 'outcome' => 'New settings apply to next runs and emails.', 'keywords' => ['save settings', 'apply']],
                 ],
             ],
         ];
+
+        foreach ($sections as &$section) {
+            if (!isset($section['items']) || !is_array($section['items'])) {
+                continue;
+            }
+            foreach ($section['items'] as &$item) {
+                $item['image'] = $this->kb_example_image_data_uri(
+                    (string) ($item['name'] ?? 'Example'),
+                    (string) ($item['outcome'] ?? '')
+                );
+            }
+            unset($item);
+        }
+        unset($section);
 
         return [
             'version' => LC_PLUGIN_VERSION,
             'generated_at' => current_time('mysql'),
             'sections' => $sections,
         ];
+    }
+
+    private function kb_example_image_data_uri($title, $outcome)
+    {
+        $title = sanitize_text_field($title);
+        $outcome = sanitize_text_field($outcome);
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="260" viewBox="0 0 900 260">'
+            . '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+            . '<stop offset="0%" stop-color="#111a2d"/><stop offset="100%" stop-color="#1e2c4d"/>'
+            . '</linearGradient></defs>'
+            . '<rect width="900" height="260" fill="url(#g)"/>'
+            . '<rect x="18" y="18" width="864" height="224" rx="14" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)"/>'
+            . '<text x="40" y="72" fill="#f5b031" font-size="24" font-family="Arial, sans-serif">Example Item</text>'
+            . '<text x="40" y="112" fill="#f5f7ff" font-size="28" font-family="Arial, sans-serif">' . esc_html($title) . '</text>'
+            . '<text x="40" y="162" fill="#c5d4f5" font-size="20" font-family="Arial, sans-serif">Outcome:</text>'
+            . '<text x="130" y="162" fill="#e8f0ff" font-size="20" font-family="Arial, sans-serif">' . esc_html($outcome) . '</text>'
+            . '</svg>';
+
+        return 'data:image/svg+xml;utf8,' . rawurlencode($svg);
     }
 
     private function render_admin_console_sections($settings)

@@ -442,22 +442,13 @@
     const byId = new Map(kbSections.map((section) => [section.id, section]));
     const searchIndex = [];
     kbSections.forEach((section) => {
-      (section.topics || []).forEach((topic) => {
+      (section.items || []).forEach((item) => {
         searchIndex.push({
           sectionId: section.id,
-          title: topic.title || "",
-          type: "topic",
-          summary: `${topic.explanation || ""} ${topic.details || ""}`,
-          keywords: Array.isArray(topic.keywords) ? topic.keywords : [],
-        });
-      });
-      (section.terms || []).forEach((term) => {
-        searchIndex.push({
-          sectionId: section.id,
-          title: term.term || "",
-          type: "glossary",
-          summary: term.meaning || "",
-          keywords: ["glossary", "definition", term.term || ""],
+          title: item.name || "",
+          type: item.type || "item",
+          summary: `${item.what || ""} ${item.does || ""} ${item.outcome || ""}`,
+          keywords: Array.isArray(item.keywords) ? item.keywords : [],
         });
       });
     });
@@ -480,29 +471,26 @@
       const section = byId.get(id);
       if (!section || !content) return;
       activeSectionId = id;
-      const topicCards = (section.topics || [])
+      const itemCards = (section.items || [])
         .map(
-          (topic) => `
+          (item) => `
             <article class="lc-kb-topic-card">
-              <h4>${topic.title || ""}</h4>
-              <p><strong>Explanation:</strong> ${topic.explanation || ""}</p>
-              <p><strong>Details:</strong> ${topic.details || ""}</p>
-              <p><strong>Example:</strong> ${topic.example || ""}</p>
+              <h4>${item.name || ""}</h4>
+              <p class="lc-kb-item-type">${String(item.type || "").toUpperCase()}</p>
+              <p><strong>What is it?</strong> ${item.what || ""}</p>
+              <p><strong>What does it do?</strong> ${item.does || ""}</p>
+              <p><strong>Example:</strong> ${item.example || ""}</p>
+              <p><strong>Outcome:</strong> ${item.outcome || ""}</p>
+              ${item.image ? `<img class="lc-kb-example-image" src="${item.image}" alt="Example outcome for ${item.name || "item"}" />` : ""}
             </article>
           `
         )
         .join("");
-      const glossaryTable =
-        section.id === "glossary"
-          ? `<div class="lc-kb-glossary"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>${(section.terms || [])
-              .map((t) => `<tr><td>${t.term || ""}</td><td>${t.meaning || ""}</td></tr>`)
-              .join("")}</tbody></table></div>`
-          : "";
 
       content.innerHTML = `
         <h4>${section.title || "Knowledge Section"}</h4>
         <p class="lc-kb-meta">${section.intro || ""}</p>
-        ${section.id === "glossary" ? glossaryTable : `<div class="lc-kb-topic-grid">${topicCards}</div>`}
+        <div class="lc-kb-topic-grid">${itemCards}</div>
       `;
       nav?.querySelectorAll(".lc-kb-nav-item").forEach((btn) => {
         btn.classList.toggle("is-active", btn.getAttribute("data-kb-id") === id);
