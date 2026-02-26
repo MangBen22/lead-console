@@ -588,11 +588,39 @@ class LC_Frontend
                     ['name' => 'Domain Fragment', 'type' => 'field', 'what' => 'Optional domain hint used for filtering context.', 'does' => 'Helps align captures with target domain patterns.', 'example' => 'dental', 'outcome' => 'Discovery and scoring use a clearer domain context.', 'keywords' => ['domain fragment', 'domain']],
                     ['name' => 'Max Places Per Run', 'type' => 'field', 'what' => 'Global hard cap for run capture volume.', 'does' => 'Prevents oversized runs and controls cost/load.', 'example' => '100', 'outcome' => 'No run can capture beyond 100 records.', 'keywords' => ['max places', 'global limit']],
                     ['name' => 'Enable Live API Calls', 'type' => 'toggle', 'what' => 'Master switch for external API use.', 'does' => 'Turns live API discovery on/off.', 'example' => 'Enable', 'outcome' => 'Google Places calls are allowed when key exists.', 'keywords' => ['live api', 'toggle']],
-                    ['name' => 'Google Places API Key', 'type' => 'field', 'what' => 'Credential for Places API queries.', 'does' => 'Authenticates live discovery requests.', 'example' => 'AIza...key', 'outcome' => 'Runs can fetch live Google Places results.', 'keywords' => ['google places', 'api key']],
+                    ['name' => 'Google Places API Key', 'type' => 'field', 'what' => 'Credential for Places API queries.', 'does' => 'Authenticates live discovery requests. Full setup is documented in API Setup Reference below.', 'example' => 'AIza...key', 'outcome' => 'Runs can fetch live Google Places results.', 'keywords' => ['google places', 'api key']],
                     ['name' => 'Discovery Mode', 'type' => 'field', 'what' => 'Source strategy selector.', 'does' => 'Sets hybrid, Google-only, or directory-only behavior.', 'example' => 'Hybrid', 'outcome' => 'Run tries API first, then fallback when needed.', 'keywords' => ['discovery mode', 'hybrid']],
                     ['name' => 'Social Discovery Mode', 'type' => 'field', 'what' => 'Social profile enrichment mode.', 'does' => 'Controls whether social URL discovery is off or enabled.', 'example' => 'URL discovery only', 'outcome' => 'System enriches social URLs without direct scraping.', 'keywords' => ['social', 'url discovery']],
                     ['name' => 'Google CSE API Key', 'type' => 'field', 'what' => 'Custom Search API key for social URL discovery.', 'does' => 'Authenticates programmable search requests.', 'example' => 'AIza...cse', 'outcome' => 'Social URL lookups can execute.', 'keywords' => ['cse key', 'search api']],
                     ['name' => 'Google CSE cx', 'type' => 'field', 'what' => 'Custom Search Engine ID.', 'does' => 'Defines configured search engine scope for enrichment.', 'example' => '12345:abcde', 'outcome' => 'Search requests run against correct engine.', 'keywords' => ['cx', 'custom search engine']],
+                    [
+                        'name' => 'API Setup Reference',
+                        'type' => 'guide',
+                        'what' => 'Complete setup checklist for all APIs used by the system.',
+                        'does' => 'Provides exact steps to generate, capture, secure, and connect Google Places + Programmable Search credentials.',
+                        'example' => 'Follow every step then save keys in System Settings.',
+                        'outcome' => 'Discovery and enrichment APIs connect cleanly with fewer setup errors.',
+                        'steps' => [
+                            'Google Places API: Open Google Cloud Console and create/select a project.',
+                            'Enable Places API from API Library.',
+                            'Create API key in Credentials.',
+                            'Restrict key to Places API and your allowed usage context (referrer/IP).',
+                            'Paste key into Google Places API key field and Save Settings.',
+                            'Programmable Search: Create search engine and copy cx value.',
+                            'Enable Custom Search API in Google Cloud project.',
+                            'Create API key for Custom Search and apply key restrictions.',
+                            'Paste Google CSE API key + cx into settings and save.',
+                            'Set Social Discovery Mode based on your enrichment policy.',
+                        ],
+                        'links' => [
+                            ['label' => 'Google Cloud Console', 'url' => 'https://console.cloud.google.com/'],
+                            ['label' => 'Google API Library', 'url' => 'https://console.cloud.google.com/apis/library'],
+                            ['label' => 'Google Credentials', 'url' => 'https://console.cloud.google.com/apis/credentials'],
+                            ['label' => 'Programmable Search Engine', 'url' => 'https://programmablesearchengine.google.com/'],
+                            ['label' => 'Custom Search API (direct)', 'url' => 'https://console.cloud.google.com/apis/library/customsearch.googleapis.com'],
+                        ],
+                        'keywords' => ['api setup', 'google places', 'google cse', 'cx', 'credentials', 'step by step'],
+                    ],
                     ['name' => 'Directory Sources', 'type' => 'field', 'what' => 'Fallback source definitions.', 'does' => 'Sets source name, URL template, and quality score entries.', 'example' => 'Yelp|https://...|85', 'outcome' => 'Fallback uses curated source list and quality weights.', 'keywords' => ['directory sources', 'fallback']],
                     ['name' => 'Enable SMTP', 'type' => 'toggle', 'what' => 'Email transport switch.', 'does' => 'Routes system emails through configured SMTP server.', 'example' => 'Enable', 'outcome' => 'Password reset and notices use SMTP.', 'keywords' => ['smtp', 'email']],
                     ['name' => 'SMTP Host / Port / Encryption / Auth', 'type' => 'field', 'what' => 'SMTP connection settings.', 'does' => 'Defines server address, transport security, and auth behavior.', 'example' => 'smtp.mail.com / 587 / TLS / Auth On', 'outcome' => 'Reliable secure outbound email delivery.', 'keywords' => ['smtp host', 'port', 'tls', 'auth']],
@@ -781,24 +809,12 @@ class LC_Frontend
         echo '</select></label>';
         echo '<label class="lc-col-6">Google CSE API key<input type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr((string) ($settings['google_cse_api_key'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-6">Google CSE cx<input type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr((string) ($settings['google_cse_cx'] ?? '')) . '" /></label>';
-        echo '<div class="lc-col-12 lc-api-guide">';
-        echo '<h4>API Setup References</h4>';
-        echo '<p><strong>Google Places API (for discovery runs):</strong></p>';
-        echo '<ol>';
-        echo '<li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a> and select/create a project.</li>';
-        echo '<li>Enable Places API from <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer">API Library</a>.</li>';
-        echo '<li>Create API key in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Credentials</a>.</li>';
-        echo '<li>Restrict key to Places API + allowed referrers/IPs.</li>';
-        echo '<li>Paste key into Google Places API key field and save settings.</li>';
-        echo '</ol>';
-        echo '<p><strong>Google Programmable Search (for social URL discovery):</strong></p>';
-        echo '<ol>';
-        echo '<li>Create/search engine at <a href="https://programmablesearchengine.google.com/" target="_blank" rel="noopener noreferrer">Programmable Search Engine</a>.</li>';
-        echo '<li>Copy your search engine id (cx).</li>';
-        echo '<li>Enable Custom Search API from <a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener noreferrer">API Library</a>.</li>';
-        echo '<li>Create API key in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Credentials</a>.</li>';
-        echo '<li>Paste API key + cx in settings, set Social Discovery Mode, then save.</li>';
-        echo '</ol>';
+        echo '<div class="lc-col-12 lc-api-ref-mini">';
+        echo '<button type="button" class="lc-api-ref-trigger">API Setup Reference</button>';
+        echo '<div class="lc-api-ref-pop" hidden>';
+        echo '<p>Need setup steps for API keys and cx? Open the full guide in Knowledge Base.</p>';
+        echo '<button type="button" class="lc-api-ref-open-kb" data-kb-section="settings" data-kb-query="API Setup Reference">Open Full Guide</button>';
+        echo '</div>';
         echo '</div>';
         echo '<label>Directory sources<textarea name="lc_settings[directory_sources]" rows="5">' . esc_textarea((string) ($settings['directory_sources'] ?? '')) . '</textarea></label>';
         echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';

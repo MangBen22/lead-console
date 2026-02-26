@@ -424,6 +424,7 @@
   }
 
   const kbShell = root.querySelector(".lc-kb-shell");
+  let openKbGuide = null;
   if (kbShell) {
     const dataNode = kbShell.querySelector(".lc-kb-data");
     const nav = kbShell.querySelector(".lc-kb-nav");
@@ -481,6 +482,21 @@
               <p><strong>What does it do?</strong> ${item.does || ""}</p>
               <p><strong>Example:</strong> ${item.example || ""}</p>
               <p><strong>Outcome:</strong> ${item.outcome || ""}</p>
+              ${
+                Array.isArray(item.steps) && item.steps.length
+                  ? `<div class="lc-kb-steps"><strong>Step-by-step:</strong><ol>${item.steps.map((step) => `<li>${step}</li>`).join("")}</ol></div>`
+                  : ""
+              }
+              ${
+                Array.isArray(item.links) && item.links.length
+                  ? `<div class="lc-kb-links"><strong>Reference Links:</strong><ul>${item.links
+                      .map(
+                        (link) =>
+                          `<li><a href="${link.url || "#"}" target="_blank" rel="noopener noreferrer">${link.label || link.url || "Link"}</a></li>`
+                      )
+                      .join("")}</ul></div>`
+                  : ""
+              }
               ${item.image ? `<img class="lc-kb-example-image" src="${item.image}" alt="Example outcome for ${item.name || "item"}" />` : ""}
             </article>
           `
@@ -553,6 +569,16 @@
 
     renderNav(kbSections);
     if (activeSectionId) renderContent(activeSectionId);
+    openKbGuide = (sectionId, query) => {
+      activateTab("knowledge");
+      if (sectionId && byId.has(sectionId)) {
+        renderContent(sectionId);
+      }
+      if (searchInput && query) {
+        searchInput.value = query;
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
     searchInput?.addEventListener("input", () => {
       const query = searchInput.value || "";
       renderSuggest(query);
@@ -570,6 +596,20 @@
     searchInput?.addEventListener("focus", () => renderSuggest(searchInput.value || ""));
     searchInput?.addEventListener("blur", () => setTimeout(hideSuggest, 120));
   }
+
+  const apiRefTrigger = root.querySelector(".lc-api-ref-trigger");
+  const apiRefPop = root.querySelector(".lc-api-ref-pop");
+  const apiRefOpenKb = root.querySelector(".lc-api-ref-open-kb");
+  apiRefTrigger?.addEventListener("click", () => {
+    if (!apiRefPop) return;
+    apiRefPop.hidden = !apiRefPop.hidden;
+  });
+  apiRefOpenKb?.addEventListener("click", () => {
+    if (apiRefPop) apiRefPop.hidden = true;
+    const section = apiRefOpenKb.getAttribute("data-kb-section") || "settings";
+    const query = apiRefOpenKb.getAttribute("data-kb-query") || "API Setup Reference";
+    if (openKbGuide) openKbGuide(section, query);
+  });
 
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
