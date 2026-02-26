@@ -146,6 +146,86 @@
       if (countryScopeNote) countryScopeNote.hidden = !(country && !city);
     };
 
+    const scoreCityMatch = (city, query) => {
+      const c = city.toLowerCase();
+      const q = query.toLowerCase().trim();
+      if (!q) return 0;
+      if (c === q) return 1000;
+      if (c.startsWith(q)) return 700;
+      if (c.includes(q)) return 450;
+      let qi = 0;
+      for (let i = 0; i < c.length && qi < q.length; i += 1) {
+        if (c[i] === q[qi]) qi += 1;
+      }
+      return qi === q.length ? 250 : 0;
+    };
+
+    const collectMatches = (query) => {
+      const selectedCountry = (countrySelect?.value || "").trim();
+      const map = {};
+      const add = (country, city) => {
+        const key = `${city}|${country}`;
+        if (!map[key]) {
+          const score = scoreCityMatch(city, query);
+          if (score <= 0) return;
+          map[key] = {
+            city,
+            country,
+            score: score + (selectedCountry && selectedCountry === country ? 120 : 0),
+          };
+        }
+      };
+      Object.keys(fallbackCityMap).forEach((country) => {
+        (fallbackCityMap[country] || []).forEach((city) => add(country, toTitleCase(String(city || ""))));
+      });
+      Object.keys(runCityMap).forEach((country) => {
+        (runCityMap[country] || []).forEach((city) => add(country, toTitleCase(String(city || ""))));
+      });
+      return Object.values(map)
+        .sort((a, b) => b.score - a.score || a.city.localeCompare(b.city))
+        .slice(0, 8);
+    };
+
+    let suggestionBox = null;
+    const ensureSuggestionBox = () => {
+      if (!cityInput || suggestionBox) return;
+      suggestionBox = document.createElement("div");
+      suggestionBox.className = "lc-city-suggest-box";
+      suggestionBox.hidden = true;
+      cityInput.insertAdjacentElement("afterend", suggestionBox);
+    };
+
+    const hideSuggestions = () => {
+      if (!suggestionBox) return;
+      suggestionBox.hidden = true;
+      suggestionBox.innerHTML = "";
+    };
+
+    const showSuggestions = (items) => {
+      if (!suggestionBox) return;
+      suggestionBox.innerHTML = "";
+      if (!items.length) {
+        hideSuggestions();
+        return;
+      }
+      items.forEach((item) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lc-city-suggest-item";
+        button.innerHTML = `<strong>${item.city}</strong><span>${item.country}</span>`;
+        button.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          if (cityInput) cityInput.value = item.city;
+          if (countrySelect) countrySelect.value = item.country;
+          renderCitySuggestions();
+          updateRunNotes();
+          hideSuggestions();
+        });
+        suggestionBox.appendChild(button);
+      });
+      suggestionBox.hidden = false;
+    };
+
     const normalizeTypedCity = () => {
       if (!cityInput) return;
       cityInput.value = toTitleCase(cityInput.value || "");
@@ -165,13 +245,28 @@
 
     renderCitySuggestions();
     updateRunNotes();
+    ensureSuggestionBox();
 
     countrySelect?.addEventListener("change", () => {
       renderCitySuggestions();
       updateRunNotes();
+      if (cityInput && cityInput.value.trim() !== "") {
+        showSuggestions(collectMatches(cityInput.value));
+      }
     });
-    cityInput?.addEventListener("input", updateRunNotes);
+    cityInput?.addEventListener("input", () => {
+      updateRunNotes();
+      showSuggestions(collectMatches(cityInput.value || ""));
+    });
+    cityInput?.addEventListener("focus", () => {
+      if ((cityInput.value || "").trim() !== "") {
+        showSuggestions(collectMatches(cityInput.value || ""));
+      }
+    });
     cityInput?.addEventListener("blur", normalizeTypedCity);
+    cityInput?.addEventListener("blur", () => {
+      setTimeout(() => hideSuggestions(), 120);
+    });
   }
 
   const modal = root.querySelector(".lc-tutorial");

@@ -483,6 +483,42 @@
   color: #9dc0ff;
 }
 
+.lc-city-suggest-box {
+  grid-column: span 12;
+  margin-top: -4px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(6, 12, 28, 0.98);
+  overflow: hidden;
+}
+
+.lc-city-suggest-item {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent !important;
+  color: #e8efff !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.lc-city-suggest-item:last-child {
+  border-bottom: 0;
+}
+
+.lc-city-suggest-item:hover {
+  background: rgba(43, 109, 255, 0.18) !important;
+  transform: none !important;
+}
+
+.lc-city-suggest-item span {
+  font-size: 12px;
+  color: #9db3e5;
+}
+
 .lc-settings-form label {
   grid-column: span 12;
 }
