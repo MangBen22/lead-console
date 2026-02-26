@@ -610,6 +610,118 @@
   margin-top: 12px;
 }
 
+.lc-kb-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.lc-kb-search-wrap {
+  position: relative;
+}
+
+.lc-kb-search-input {
+  width: 100%;
+}
+
+.lc-kb-search-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 8;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(7, 12, 24, 0.98);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.lc-kb-suggest-item {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent !important;
+  color: #eaf1ff !important;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.lc-kb-suggest-item:last-child {
+  border-bottom: 0;
+}
+
+.lc-kb-suggest-item span {
+  font-size: 12px;
+  color: #93abd9;
+  text-transform: uppercase;
+}
+
+.lc-kb-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.lc-kb-nav {
+  max-height: 68vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 6px;
+  display: grid;
+  gap: 6px;
+}
+
+.lc-kb-nav-item {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #dce4fa !important;
+  border-radius: 9px !important;
+  padding: 8px 10px !important;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}
+
+.lc-kb-nav-item small {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9db0d8;
+}
+
+.lc-kb-nav-item.is-active {
+  background: rgba(245, 157, 31, 0.2) !important;
+  border-color: #f59d1f !important;
+}
+
+.lc-kb-content {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 260px;
+}
+
+.lc-kb-content h4 {
+  margin: 0 0 8px;
+}
+
+.lc-kb-meta {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb1d8 !important;
+  margin-bottom: 8px !important;
+}
+
+.lc-kb-keywords {
+  font-size: 12px;
+}
+
 .lc-settings-form label {
   grid-column: span 12;
 }
@@ -863,6 +975,10 @@
   .lc-run-form .lc-col-3,
   .lc-run-form .lc-col-2 {
     grid-column: span 6;
+  }
+
+  .lc-kb-layout {
+    grid-template-columns: 1fr;
   }
 }
 

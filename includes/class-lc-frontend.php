@@ -321,6 +321,7 @@ class LC_Frontend
         echo '<aside class="lc-side-tabs" aria-label="Console tabs">';
         echo '<button type="button" class="lc-tab-btn is-active" data-tab="dashboard">Dashboard</button>';
         echo '<button type="button" class="lc-tab-btn" data-tab="leads">Leads</button>';
+        echo '<button type="button" class="lc-tab-btn" data-tab="knowledge">Knowledge Base</button>';
         echo '<button type="button" class="lc-tab-btn" data-tab="settings">Settings</button>';
         echo '</aside>';
         echo '<div class="lc-tab-content">';
@@ -490,6 +491,7 @@ class LC_Frontend
         echo '</div>';
         echo '</div>';
         echo '</section>';
+        $this->render_knowledge_base_panel();
         $this->render_admin_console_sections($settings);
         echo '</div>';
         echo '</div>';
@@ -511,6 +513,154 @@ class LC_Frontend
         echo '</div>';
         echo '</div>';
         echo '</div>';
+    }
+
+    private function render_knowledge_base_panel()
+    {
+        $kb = $this->build_knowledge_base_payload();
+        echo '<section class="lc-tab-panel" data-tab="knowledge">';
+        echo '<div class="lc-fe-card" id="lc-section-knowledge">';
+        echo '<p class="lc-card-kicker">// KNOWLEDGE BASE</p>';
+        echo '<h3>Program Knowledge Base</h3>';
+        echo '<div class="lc-kb-shell">';
+        echo '<div class="lc-kb-search-wrap">';
+        echo '<input type="text" class="lc-kb-search-input" placeholder="Search functions, flows, glossary terms..." autocomplete="off" />';
+        echo '<div class="lc-kb-search-suggest" hidden></div>';
+        echo '</div>';
+        echo '<div class="lc-kb-layout">';
+        echo '<aside class="lc-kb-nav"></aside>';
+        echo '<article class="lc-kb-content"></article>';
+        echo '</div>';
+        echo '<script type="application/json" class="lc-kb-data">' . wp_json_encode($kb) . '</script>';
+        echo '</div>';
+        echo '</div>';
+        echo '</section>';
+    }
+
+    private function build_knowledge_base_payload()
+    {
+        $docs = [];
+        $known = [
+            'LC_Plugin::activate' => [
+                'summary' => 'Creates/updates plugin database tables and default settings on activation.',
+                'details' => 'Runs table creation for leads, runs, logs, suppression, profiles, and system logs. Also schedules run processing cron and initializes settings.',
+                'example' => 'Triggered by WordPress plugin activation lifecycle.',
+                'keywords' => ['activation', 'schema', 'tables', 'cron', 'settings'],
+            ],
+            'LC_Plugin::process_run_queue' => [
+                'summary' => 'Processes queued discovery runs and captures lead data.',
+                'details' => 'Takes the oldest queued run, executes API/fallback discovery, enriches socials, writes run logs, and sets final run status.',
+                'example' => 'Scheduled by cron hook lc_process_run or can be triggered manually by hook execution.',
+                'keywords' => ['queue', 'run', 'discovery', 'logs', 'cron'],
+            ],
+            'LC_Plugin::insert_discovered_lead' => [
+                'summary' => 'Stores discovered lead records or run draft records based on save mode.',
+                'details' => 'Validates suppression/duplicates, calculates score and lead type, then writes either directly to leads or to draft staging.',
+                'example' => 'Called by discovery providers during run processing.',
+                'keywords' => ['lead', 'insert', 'draft', 'score', 'duplicate'],
+            ],
+            'LC_Frontend::handle_queue_run' => [
+                'summary' => 'Validates and queues frontend runs in review-first draft mode.',
+                'details' => 'Performs compliance checks, stores run parameters, and redirects with run id for live frontend monitoring.',
+                'example' => 'Triggered by Queue Run form submit action lc_frontend_queue_run.',
+                'keywords' => ['queue', 'frontend', 'compliance', 'draft'],
+            ],
+            'LC_Frontend::handle_ajax_run_status' => [
+                'summary' => 'Returns live run status, logs, and draft preview via AJAX.',
+                'details' => 'Used by frontend polling to show processing activity and review data once the run finishes.',
+                'example' => 'AJAX action: lc_frontend_run_status.',
+                'keywords' => ['ajax', 'status', 'monitoring', 'logs', 'preview'],
+            ],
+            'LC_Frontend::handle_ajax_run_save_drafts' => [
+                'summary' => 'Commits staged draft leads into the main leads table.',
+                'details' => 'Moves draft rows for the selected run to the permanent leads table and marks run review as saved.',
+                'example' => 'AJAX action: lc_frontend_run_save_drafts.',
+                'keywords' => ['save', 'drafts', 'review', 'leads'],
+            ],
+            'LC_Frontend::handle_ajax_run_discard_drafts' => [
+                'summary' => 'Discards staged draft leads for a run.',
+                'details' => 'Deletes run draft rows and marks review status as discarded for rerun/retry workflows.',
+                'example' => 'AJAX action: lc_frontend_run_discard_drafts.',
+                'keywords' => ['discard', 'drafts', 'rerun', 'review'],
+            ],
+        ];
+
+        $classes = ['LC_Plugin', 'LC_Frontend'];
+        foreach ($classes as $class_name) {
+            if (!class_exists($class_name)) {
+                continue;
+            }
+            $rc = new ReflectionClass($class_name);
+            $methods = $rc->getMethods();
+            usort($methods, static function ($a, $b) {
+                return strcmp($a->getName(), $b->getName());
+            });
+            foreach ($methods as $method) {
+                if ($method->getDeclaringClass()->getName() !== $class_name) {
+                    continue;
+                }
+                $method_name = $method->getName();
+                $key = $class_name . '::' . $method_name;
+                $doc = $known[$key] ?? null;
+                $visibility = $method->isPublic() ? 'public' : ($method->isProtected() ? 'protected' : 'private');
+                $docs[] = [
+                    'id' => strtolower($class_name . '-' . $method_name),
+                    'title' => $key,
+                    'type' => 'function',
+                    'visibility' => $visibility,
+                    'summary' => $doc['summary'] ?? ('Handles "' . str_replace('_', ' ', $method_name) . '" behavior in ' . $class_name . '.'),
+                    'details' => $doc['details'] ?? 'Internal method in the plugin architecture. Review related hooks, callers, and data tables when modifying this function.',
+                    'example' => $doc['example'] ?? 'Used by internal runtime flow based on action hooks and request lifecycle.',
+                    'keywords' => array_values(array_unique(array_filter(array_merge(
+                        [$class_name, $method_name, $visibility],
+                        isset($doc['keywords']) ? (array) $doc['keywords'] : [],
+                        preg_split('/[_:]+/', strtolower($method_name))
+                    )))),
+                ];
+            }
+        }
+
+        $glossary = [
+            ['term' => 'Lead', 'meaning' => 'A business/entity record that can be qualified and moved through the outreach pipeline.'],
+            ['term' => 'Run', 'meaning' => 'A discovery job that searches sources and captures candidate leads.'],
+            ['term' => 'Draft Lead', 'meaning' => 'A staged run result waiting for user review before final save.'],
+            ['term' => 'Review Status', 'meaning' => 'Run review state: pending, saved, discarded, or na.'],
+            ['term' => 'Save Mode', 'meaning' => 'Run capture behavior: direct save or draft-first review mode.'],
+            ['term' => 'Suppression', 'meaning' => 'Blocklist rule used to prevent capturing disallowed contacts/domains/names.'],
+            ['term' => 'Discovery Mode', 'meaning' => 'Provider strategy for run discovery: hybrid, Google only, or directory fallback only.'],
+            ['term' => 'Website Focus', 'meaning' => 'Run filter for website presence: any, no website, has website.'],
+            ['term' => 'Captured Leads', 'meaning' => 'Count of leads found by a run before user save/discard action.'],
+            ['term' => 'Run Logs', 'meaning' => 'Time-ordered status and progress lines recorded while a run is processing.'],
+            ['term' => 'Readiness Score', 'meaning' => 'Computed score based on contactability and listing signals.'],
+            ['term' => 'Lead Type', 'meaning' => 'Classification tier (A/B/C/E) based on quality and website presence.'],
+        ];
+
+        foreach ($glossary as $entry) {
+            $docs[] = [
+                'id' => 'glossary-' . sanitize_title($entry['term']),
+                'title' => $entry['term'],
+                'type' => 'glossary',
+                'visibility' => 'reference',
+                'summary' => $entry['meaning'],
+                'details' => 'Glossary reference term used throughout the Lead Console interface and workflows.',
+                'example' => 'See related dashboard labels, run forms, and lead detail tables.',
+                'keywords' => [$entry['term'], 'glossary', 'definition', 'terminology'],
+            ];
+        }
+
+        usort($docs, static function ($a, $b) {
+            if ($a['type'] === $b['type']) {
+                return strcmp((string) $a['title'], (string) $b['title']);
+            }
+            return $a['type'] === 'glossary' ? 1 : -1;
+        });
+
+        return [
+            'version' => LC_PLUGIN_VERSION,
+            'generated_at' => current_time('mysql'),
+            'count' => count($docs),
+            'docs' => $docs,
+        ];
     }
 
     private function render_admin_console_sections($settings)

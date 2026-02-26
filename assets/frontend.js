@@ -423,6 +423,131 @@
     monitorTimer = setInterval(monitorRun, 2200);
   }
 
+  const kbShell = root.querySelector(".lc-kb-shell");
+  if (kbShell) {
+    const dataNode = kbShell.querySelector(".lc-kb-data");
+    const nav = kbShell.querySelector(".lc-kb-nav");
+    const content = kbShell.querySelector(".lc-kb-content");
+    const searchInput = kbShell.querySelector(".lc-kb-search-input");
+    const suggest = kbShell.querySelector(".lc-kb-search-suggest");
+    let kbDocs = [];
+    try {
+      const payload = JSON.parse(dataNode?.textContent || "{}");
+      kbDocs = Array.isArray(payload.docs) ? payload.docs : [];
+    } catch (_err) {
+      kbDocs = [];
+    }
+
+    let activeId = kbDocs[0] ? kbDocs[0].id : "";
+    const byId = new Map(kbDocs.map((doc) => [doc.id, doc]));
+
+    const docScore = (doc, query) => {
+      const q = String(query || "").toLowerCase().trim();
+      if (!q) return 0;
+      const title = String(doc.title || "").toLowerCase();
+      const summary = String(doc.summary || "").toLowerCase();
+      const keywords = Array.isArray(doc.keywords) ? doc.keywords.join(" ").toLowerCase() : "";
+      if (title === q) return 1000;
+      if (title.startsWith(q)) return 800;
+      if (title.includes(q)) return 600;
+      if (keywords.includes(q)) return 500;
+      if (summary.includes(q)) return 350;
+      return 0;
+    };
+
+    const renderContent = (id) => {
+      const doc = byId.get(id);
+      if (!doc || !content) return;
+      activeId = id;
+      content.innerHTML = [
+        `<h4>${doc.title || "Untitled"}</h4>`,
+        `<p class="lc-kb-meta">${String(doc.type || "").toUpperCase()} • ${doc.visibility || "reference"}</p>`,
+        `<p><strong>Explanation:</strong> ${doc.summary || ""}</p>`,
+        `<p><strong>Details:</strong> ${doc.details || ""}</p>`,
+        `<p><strong>Example:</strong> ${doc.example || ""}</p>`,
+        `<p class="lc-kb-keywords"><strong>Keywords:</strong> ${(doc.keywords || []).join(", ")}</p>`,
+      ].join("");
+      nav?.querySelectorAll(".lc-kb-nav-item").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.getAttribute("data-kb-id") === id);
+      });
+    };
+
+    const renderNav = (docs) => {
+      if (!nav) return;
+      nav.innerHTML = "";
+      docs.forEach((doc) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lc-kb-nav-item";
+        btn.setAttribute("data-kb-id", doc.id);
+        btn.innerHTML = `<span>${doc.title}</span><small>${doc.type}</small>`;
+        btn.addEventListener("click", () => renderContent(doc.id));
+        nav.appendChild(btn);
+      });
+    };
+
+    const hideSuggest = () => {
+      if (!suggest) return;
+      suggest.hidden = true;
+      suggest.innerHTML = "";
+    };
+
+    const renderSuggest = (query) => {
+      if (!suggest) return;
+      const q = String(query || "").trim();
+      if (!q) {
+        hideSuggest();
+        return;
+      }
+      const items = kbDocs
+        .map((doc) => ({ doc, score: docScore(doc, q) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score || String(a.doc.title).localeCompare(String(b.doc.title)))
+        .slice(0, 8);
+      suggest.innerHTML = "";
+      if (!items.length) {
+        hideSuggest();
+        return;
+      }
+      items.forEach(({ doc }) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "lc-kb-suggest-item";
+        button.innerHTML = `<strong>${doc.title}</strong><span>${doc.type}</span>`;
+        button.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          if (searchInput) searchInput.value = doc.title || "";
+          renderContent(doc.id);
+          hideSuggest();
+        });
+        suggest.appendChild(button);
+      });
+      suggest.hidden = false;
+    };
+
+    renderNav(kbDocs);
+    if (activeId) renderContent(activeId);
+    searchInput?.addEventListener("input", () => {
+      const query = searchInput.value || "";
+      renderSuggest(query);
+      const filtered = query
+        ? kbDocs
+            .map((doc) => ({ doc, score: docScore(doc, query) }))
+            .filter((x) => x.score > 0)
+            .sort((a, b) => b.score - a.score || String(a.doc.title).localeCompare(String(b.doc.title)))
+            .map((x) => x.doc)
+        : kbDocs;
+      renderNav(filtered);
+      if (filtered.length > 0) {
+        renderContent(filtered[0].id);
+      } else if (content) {
+        content.innerHTML = "<p>No matching knowledge topics found.</p>";
+      }
+    });
+    searchInput?.addEventListener("focus", () => renderSuggest(searchInput.value || ""));
+    searchInput?.addEventListener("blur", () => setTimeout(hideSuggest, 120));
+  }
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 
