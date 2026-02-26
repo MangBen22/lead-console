@@ -645,7 +645,11 @@
       directorySelectedCount.textContent = String(selectedCount);
     }
   };
-  directoryCountryApply?.addEventListener("click", updateDirectorySourceFilter);
+  directoryCountryApply?.addEventListener("click", (event) => {
+    event.preventDefault();
+    updateDirectorySourceFilter();
+  });
+  directoryCountryFilter?.addEventListener("change", updateDirectorySourceFilter);
   directorySelectedOnly?.addEventListener("change", updateDirectorySourceFilter);
   directoryItems.forEach((item) => {
     const input = item.querySelector("input[type='checkbox']");
@@ -659,6 +663,19 @@
       }
       updateDirectorySourceFilter();
     });
+  });
+  root.addEventListener("click", (event) => {
+    const applyBtn = event.target.closest(".lc-directory-country-apply");
+    if (!applyBtn) return;
+    event.preventDefault();
+    updateDirectorySourceFilter();
+  });
+  root.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches(".lc-directory-country-filter, .lc-directory-selected-only")) {
+      updateDirectorySourceFilter();
+    }
   });
   updateDirectorySourceFilter();
 
