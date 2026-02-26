@@ -842,6 +842,19 @@
   grid-column: span 12;
 }
 
+.lc-settings-form > p {
+  grid-column: span 12;
+}
+
+.lc-settings-form > button,
+.lc-settings-form .lc-smtp-save-btn {
+  grid-column: span 12;
+  justify-self: start;
+  align-self: start;
+  min-height: 40px;
+  width: auto;
+}
+
 .lc-settings-form .lc-col-12 {
   grid-column: span 12;
 }
