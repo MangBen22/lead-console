@@ -152,6 +152,16 @@ $user = $_SESSION['app_user'] ?? null;
                     </article>
                 </div>
             </section>
+
+            <section class="api-status">
+                <h2>Bridge Site Status</h2>
+                <pre id="bridgeSites">Loading...</pre>
+            </section>
+
+            <section class="api-status">
+                <h2>CRM Connectors</h2>
+                <pre id="crmConnectors">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

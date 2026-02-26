@@ -10,6 +10,8 @@
     ["modWebops", "webops.summary"],
     ["modSeo", "seo.summary"],
   ];
+  const bridgeSites = document.getElementById("bridgeSites");
+  const crmConnectors = document.getElementById("crmConnectors");
 
   if (notifyToggle && notifyPanel) {
     notifyToggle.addEventListener("click", function () {
@@ -50,4 +52,30 @@
       el.textContent = "Failed to load: " + entry[1];
     }
   });
+
+  (async function loadBridgeSites() {
+    if (!bridgeSites) return;
+    try {
+      const res = await fetch("/api/index.php?action=bridge.sites", {
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      bridgeSites.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      bridgeSites.textContent = "Failed to load bridge sites.";
+    }
+  })();
+
+  (async function loadCrmConnectors() {
+    if (!crmConnectors) return;
+    try {
+      const res = await fetch("/api/index.php?action=crm.connectors.list", {
+        credentials: "same-origin",
+      });
+      const data = await res.json();
+      crmConnectors.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmConnectors.textContent = "Failed to load CRM connectors.";
+    }
+  })();
 })();

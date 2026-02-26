@@ -7,4 +7,13 @@ return [
     'demo_admin_email' => 'admin@5n2digital.com',
     'demo_admin_password' => 'change-me',
     'notification_sound_enabled' => false,
+    'plugin_sites' => [
+        // Example:
+        // [
+        //     'site_id' => 'hq-main',
+        //     'label' => '5N2 Main WP',
+        //     'base_url' => 'https://example.com',
+        //     'bridge_key' => 'replace-with-bridge-shared-key',
+        // ],
+    ],
 ];

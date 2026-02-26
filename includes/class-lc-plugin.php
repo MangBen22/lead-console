@@ -1206,6 +1206,12 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_push_approved'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/smtp-health', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_smtp_health'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1256,6 +1262,21 @@ class LC_Plugin
             'ok' => true,
             'count' => count($leads),
             'leads' => $leads,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_smtp_health($request)
+    {
+        $status = $this->get_smtp_health_status();
+        $this->log_system_event('bridge', 'info', 'Bridge SMTP health requested.', [
+            'connected' => !empty($status['connected']),
+            'checked_at' => (string) ($status['checked_at'] ?? ''),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'smtp_health' => $status,
             'time' => current_time('mysql'),
         ]);
     }
