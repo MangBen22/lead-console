@@ -1862,11 +1862,6 @@ class LC_Frontend
             wp_send_json_error(['message' => 'Not authorized.'], 403);
         }
 
-        $viewer = wp_get_current_user();
-        if (!$this->is_primary_admin($viewer)) {
-            wp_send_json_error(['message' => 'Primary admin only.'], 403);
-        }
-
         $trigger = sanitize_key((string) ($_POST['trigger'] ?? 'unknown'));
         $country = sanitize_text_field((string) ($_POST['country'] ?? 'all'));
         $selected_only = !empty($_POST['selected_only']) ? 1 : 0;

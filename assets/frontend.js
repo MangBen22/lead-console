@@ -709,7 +709,12 @@
       updateDirectorySourceFilter({ shouldLog: true, trigger: "checkbox_change" });
     });
   });
+  directoryCountryApply?.addEventListener("click", (event) => {
+    event.preventDefault();
+    updateDirectorySourceFilter({ shouldLog: true, trigger: "apply_button_direct" });
+  });
   root.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
     const applyBtn = event.target.closest(".lc-directory-country-apply");
     if (!applyBtn) return;
     event.preventDefault();

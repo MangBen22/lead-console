@@ -852,6 +852,13 @@
   grid-column: span 2;
 }
 
+.lc-directory-country-apply {
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .lc-directory-source-filters .lc-check {
   margin-bottom: 5px;
 }
