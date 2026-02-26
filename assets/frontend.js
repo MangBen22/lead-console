@@ -69,14 +69,17 @@
   const runForm = root.querySelector(".lc-run-form");
   if (runForm) {
     const countrySelect = runForm.querySelector("select[name='country']");
+    const stateSelect = runForm.querySelector("select[name='state']");
     const cityInput = runForm.querySelector("input[name='city']");
-    const cityDatalist = runForm.querySelector("#lc-city-suggestions");
+    const suggestionBox = runForm.querySelector(".lc-city-suggest-box");
     const cityCountryNote = runForm.querySelector(".lc-run-city-country-note");
     const countryScopeNote = runForm.querySelector(".lc-run-country-scope-note");
     const cityMapNode = runForm.querySelector(".lc-run-city-map-data");
     const fallbackMapNode = runForm.querySelector(".lc-run-city-fallback-data");
+    const hierarchyNode = runForm.querySelector(".lc-run-location-hierarchy-data");
     let runCityMap = {};
     let fallbackCityMap = {};
+    let locationHierarchy = {};
     try {
       runCityMap = JSON.parse(cityMapNode?.textContent || "{}");
     } catch (_err) {
@@ -87,6 +90,11 @@
     } catch (_err) {
       fallbackCityMap = {};
     }
+    try {
+      locationHierarchy = JSON.parse(hierarchyNode?.textContent || "{}");
+    } catch (_err) {
+      locationHierarchy = {};
+    }
 
     const toTitleCase = (value) =>
       value
@@ -94,49 +102,31 @@
         .replace(/\b\w/g, (char) => char.toUpperCase())
         .trim();
 
-    const allCountryNames = () => {
-      const set = new Set([
-        ...Array.from(countrySelect?.options || []).map((opt) => opt.value).filter(Boolean),
-        ...Object.keys(runCityMap),
-        ...Object.keys(fallbackCityMap),
-      ]);
-      if (typeof Intl !== "undefined" && typeof Intl.DisplayNames !== "undefined" && typeof Intl.supportedValuesOf === "function") {
-        const display = new Intl.DisplayNames(["en"], { type: "region" });
-        Intl.supportedValuesOf("region").forEach((code) => {
-          const name = display.of(code);
-          if (name) set.add(name);
-        });
-      }
-      return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b));
-    };
+    const allCountryNames = () =>
+      [...new Set([...Object.keys(locationHierarchy), ...Object.keys(fallbackCityMap), ...Object.keys(runCityMap)])]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
 
-    const cityOptions = (country) => {
-      const cities = new Set();
-      const append = (items) => {
-        (items || []).forEach((city) => {
-          const clean = toTitleCase(String(city || ""));
-          if (clean) cities.add(clean);
-        });
-      };
-      if (country) {
-        append(runCityMap[country]);
-        append(fallbackCityMap[country]);
-      } else {
-        Object.keys(runCityMap).forEach((key) => append(runCityMap[key]));
-        Object.keys(fallbackCityMap).forEach((key) => append(fallbackCityMap[key]));
-      }
-      return [...cities].sort((a, b) => a.localeCompare(b));
-    };
+    const stateOptions = (country) =>
+      country && locationHierarchy[country] ? Object.keys(locationHierarchy[country]).sort((a, b) => a.localeCompare(b)) : [];
 
-    const renderCitySuggestions = () => {
-      if (!cityDatalist) return;
+    const renderStateOptions = () => {
+      if (!stateSelect) return;
       const country = (countrySelect?.value || "").trim();
-      cityDatalist.innerHTML = "";
-      cityOptions(country).forEach((city) => {
+      const selected = stateSelect.value || "";
+      stateSelect.innerHTML = "";
+      const base = document.createElement("option");
+      base.value = "";
+      base.textContent = country ? "All states/provinces" : "Select state/province (optional)";
+      stateSelect.appendChild(base);
+      stateOptions(country).forEach((state) => {
         const option = document.createElement("option");
-        option.value = city;
-        cityDatalist.appendChild(option);
+        option.value = state;
+        option.textContent = state;
+        stateSelect.appendChild(option);
       });
+      stateSelect.value = selected && [...stateSelect.options].some((o) => o.value === selected) ? selected : "";
+      stateSelect.disabled = country === "" || stateOptions(country).length === 0;
     };
 
     const updateRunNotes = () => {
@@ -146,10 +136,10 @@
       if (countryScopeNote) countryScopeNote.hidden = !(country && !city);
     };
 
-    const scoreCityMatch = (city, query) => {
-      const c = city.toLowerCase();
+    const scoreCityMatch = (entry, query) => {
+      const c = entry.city.toLowerCase();
       const q = query.toLowerCase().trim();
-      if (!q) return 0;
+      if (!q) return 120;
       if (c === q) return 1000;
       if (c.startsWith(q)) return 700;
       if (c.includes(q)) return 450;
@@ -162,37 +152,43 @@
 
     const collectMatches = (query) => {
       const selectedCountry = (countrySelect?.value || "").trim();
+      const selectedState = (stateSelect?.value || "").trim();
       const map = {};
-      const add = (country, city) => {
-        const key = `${city}|${country}`;
+      const add = (country, state, city) => {
+        const key = `${city}|${state}|${country}`;
         if (!map[key]) {
-          const score = scoreCityMatch(city, query);
+          const entry = { city, state, country };
+          const score = scoreCityMatch(entry, query);
           if (score <= 0) return;
           map[key] = {
-            city,
-            country,
-            score: score + (selectedCountry && selectedCountry === country ? 120 : 0),
+            ...entry,
+            score:
+              score +
+              (selectedCountry && selectedCountry === country ? 120 : 0) +
+              (selectedState && selectedState === state ? 90 : 0),
           };
         }
       };
+
+      Object.keys(locationHierarchy).forEach((country) => {
+        Object.keys(locationHierarchy[country] || {}).forEach((state) => {
+          (locationHierarchy[country][state] || []).forEach((city) => add(country, state, toTitleCase(String(city || ""))));
+        });
+      });
       Object.keys(fallbackCityMap).forEach((country) => {
-        (fallbackCityMap[country] || []).forEach((city) => add(country, toTitleCase(String(city || ""))));
+        (fallbackCityMap[country] || []).forEach((city) => add(country, "", toTitleCase(String(city || ""))));
       });
       Object.keys(runCityMap).forEach((country) => {
-        (runCityMap[country] || []).forEach((city) => add(country, toTitleCase(String(city || ""))));
+        (runCityMap[country] || []).forEach((city) => add(country, "", toTitleCase(String(city || ""))));
       });
       return Object.values(map)
+        .filter((item) => {
+          if (selectedCountry && item.country !== selectedCountry) return false;
+          if (selectedState && item.state && item.state !== selectedState) return false;
+          return true;
+        })
         .sort((a, b) => b.score - a.score || a.city.localeCompare(b.city))
         .slice(0, 8);
-    };
-
-    let suggestionBox = null;
-    const ensureSuggestionBox = () => {
-      if (!cityInput || suggestionBox) return;
-      suggestionBox = document.createElement("div");
-      suggestionBox.className = "lc-city-suggest-box";
-      suggestionBox.hidden = true;
-      cityInput.insertAdjacentElement("afterend", suggestionBox);
     };
 
     const hideSuggestions = () => {
@@ -212,12 +208,13 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "lc-city-suggest-item";
-        button.innerHTML = `<strong>${item.city}</strong><span>${item.country}</span>`;
+        button.innerHTML = `<strong>${item.city}</strong><span>${item.state ? `${item.state}, ` : ""}${item.country}</span>`;
         button.addEventListener("mousedown", (event) => {
           event.preventDefault();
           if (cityInput) cityInput.value = item.city;
           if (countrySelect) countrySelect.value = item.country;
-          renderCitySuggestions();
+          renderStateOptions();
+          if (stateSelect && item.state) stateSelect.value = item.state;
           updateRunNotes();
           hideSuggestions();
         });
@@ -243,12 +240,17 @@
       });
     }
 
-    renderCitySuggestions();
+    renderStateOptions();
     updateRunNotes();
-    ensureSuggestionBox();
 
     countrySelect?.addEventListener("change", () => {
-      renderCitySuggestions();
+      renderStateOptions();
+      updateRunNotes();
+      if (cityInput && cityInput.value.trim() !== "") {
+        showSuggestions(collectMatches(cityInput.value));
+      }
+    });
+    stateSelect?.addEventListener("change", () => {
       updateRunNotes();
       if (cityInput && cityInput.value.trim() !== "") {
         showSuggestions(collectMatches(cityInput.value));
@@ -259,9 +261,7 @@
       showSuggestions(collectMatches(cityInput.value || ""));
     });
     cityInput?.addEventListener("focus", () => {
-      if ((cityInput.value || "").trim() !== "") {
-        showSuggestions(collectMatches(cityInput.value || ""));
-      }
+      showSuggestions(collectMatches(cityInput.value || ""));
     });
     cityInput?.addEventListener("blur", normalizeTypedCity);
     cityInput?.addEventListener("blur", () => {

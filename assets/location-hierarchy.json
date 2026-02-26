@@ -1,0 +1,51 @@
+{
+  "United States": {
+    "California": ["Los Angeles", "San Diego", "San Jose", "San Francisco", "Sacramento"],
+    "Texas": ["Houston", "Dallas", "Austin", "San Antonio", "Fort Worth"],
+    "Florida": ["Miami", "Orlando", "Tampa", "Jacksonville", "St. Petersburg"],
+    "New York": ["New York", "Buffalo", "Rochester", "Albany", "Syracuse"],
+    "Illinois": ["Chicago", "Aurora", "Naperville", "Joliet", "Rockford"]
+  },
+  "Canada": {
+    "Ontario": ["Toronto", "Ottawa", "Mississauga", "Hamilton", "London"],
+    "British Columbia": ["Vancouver", "Surrey", "Burnaby", "Richmond", "Victoria"],
+    "Quebec": ["Montreal", "Quebec City", "Laval", "Gatineau", "Longueuil"],
+    "Alberta": ["Calgary", "Edmonton", "Red Deer", "Lethbridge", "Medicine Hat"]
+  },
+  "Australia": {
+    "New South Wales": ["Sydney", "Newcastle", "Wollongong", "Central Coast"],
+    "Victoria": ["Melbourne", "Geelong", "Ballarat", "Bendigo"],
+    "Queensland": ["Brisbane", "Gold Coast", "Sunshine Coast", "Townsville", "Cairns"],
+    "Western Australia": ["Perth", "Bunbury", "Geraldton", "Albany"]
+  },
+  "United Kingdom": {
+    "England": ["London", "Birmingham", "Manchester", "Leeds", "Liverpool", "Bristol"],
+    "Scotland": ["Glasgow", "Edinburgh", "Aberdeen", "Dundee", "Inverness"],
+    "Wales": ["Cardiff", "Swansea", "Newport", "Wrexham"],
+    "Northern Ireland": ["Belfast", "Derry", "Lisburn", "Newry"]
+  },
+  "Philippines": {
+    "Metro Manila": ["Manila", "Quezon City", "Makati", "Taguig", "Pasig", "Mandaluyong"],
+    "Cebu": ["Cebu City", "Mandaue", "Lapu-Lapu", "Talisay"],
+    "Davao del Sur": ["Davao City", "Digos"],
+    "Iloilo": ["Iloilo City", "Passi"]
+  },
+  "India": {
+    "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik"],
+    "Delhi": ["New Delhi", "Delhi"],
+    "Karnataka": ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi"],
+    "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli"]
+  },
+  "Germany": {
+    "Bavaria": ["Munich", "Nuremberg", "Augsburg", "Regensburg"],
+    "North Rhine-Westphalia": ["Cologne", "Dusseldorf", "Dortmund", "Essen"],
+    "Berlin": ["Berlin"],
+    "Hesse": ["Frankfurt", "Wiesbaden", "Kassel", "Darmstadt"]
+  },
+  "France": {
+    "Ile-de-France": ["Paris", "Boulogne-Billancourt", "Saint-Denis", "Versailles"],
+    "Provence-Alpes-Cote d'Azur": ["Marseille", "Nice", "Toulon", "Aix-en-Provence"],
+    "Auvergne-Rhone-Alpes": ["Lyon", "Grenoble", "Saint-Etienne", "Clermont-Ferrand"],
+    "Occitanie": ["Toulouse", "Montpellier", "Nimes", "Perpignan"]
+  }
+}

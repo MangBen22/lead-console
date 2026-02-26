@@ -251,6 +251,7 @@ class LC_Frontend
         $run_rows = $wpdb->get_results("SELECT id,query_text,city,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
         $run_locations = $wpdb->get_results("SELECT DISTINCT country, city FROM {$runs_table} WHERE city <> '' ORDER BY country ASC, city ASC LIMIT 800");
         $fallback_city_map = $this->load_city_dataset();
+        $location_hierarchy = $this->load_location_hierarchy();
         $run_city_map = [];
         foreach ($run_locations as $location_row) {
             $country_key = trim((string) ($location_row->country ?? ''));
@@ -265,7 +266,7 @@ class LC_Frontend
                 $run_city_map[$country_key][] = $city_name;
             }
         }
-        $country_names = array_unique(array_filter(array_merge(array_keys($fallback_city_map), array_keys($run_city_map)), static function ($value) {
+        $country_names = array_unique(array_filter(array_merge(array_keys($location_hierarchy), array_keys($fallback_city_map), array_keys($run_city_map)), static function ($value) {
             return trim((string) $value) !== '';
         }));
         natcasesort($country_names);
@@ -318,12 +319,13 @@ class LC_Frontend
         echo '<input type="hidden" name="action" value="lc_frontend_queue_run" />';
         echo '<input type="hidden" name="redirect_to" value="' . esc_url($this->current_url()) . '" />';
         echo '<label class="lc-col-4">Search Query<input type="text" name="query_text" required /></label>';
-        echo '<label class="lc-col-3">City<input type="text" name="city" list="lc-city-suggestions" placeholder="Type city name (optional)" autocomplete="off" /></label>';
+        echo '<label class="lc-col-3">City<div class="lc-city-autocomplete"><input type="text" name="city" placeholder="Type city name (optional)" autocomplete="off" /><div class="lc-city-suggest-box" hidden></div></div></label>';
         echo '<label class="lc-col-3">Country<select name="country"><option value="">Select country</option>';
         foreach ($country_names as $country_name) {
             echo '<option value="' . esc_attr((string) $country_name) . '">' . esc_html((string) $country_name) . '</option>';
         }
         echo '</select></label>';
+        echo '<label class="lc-col-2">State/Province<select name="state"><option value="">Select state/province (optional)</option></select></label>';
         echo '<label class="lc-col-2">Max Places<input type="number" min="1" max="' . esc_attr((string) $settings['max_places_per_run']) . '" name="max_places" /></label>';
         echo '<details class="lc-run-advanced-wrap lc-col-12">';
         echo '<summary><span>Advanced Options</span></summary>';
@@ -338,10 +340,10 @@ class LC_Frontend
         echo '</details>';
         echo '<button type="submit" class="lc-col-12">Queue Run</button>';
         echo '<div class="lc-run-inline-note lc-run-city-country-note" hidden>Selecting a country with the city improves targeting and search quality.</div>';
-        echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage.</div>';
-        echo '<datalist id="lc-city-suggestions"></datalist>';
+        echo '<div class="lc-run-inline-note lc-run-country-scope-note" hidden>Country-only search enabled. The system will run this with broader country coverage. Choose a state/province for better precision.</div>';
         echo '<script type="application/json" class="lc-run-city-map-data">' . wp_json_encode($run_city_map) . '</script>';
         echo '<script type="application/json" class="lc-run-city-fallback-data">' . wp_json_encode($fallback_city_map) . '</script>';
+        echo '<script type="application/json" class="lc-run-location-hierarchy-data">' . wp_json_encode($location_hierarchy) . '</script>';
         echo '</form>';
         echo '</article>';
         echo '</div>';
@@ -1270,14 +1272,19 @@ class LC_Frontend
         $query_text = sanitize_text_field($_POST['query_text'] ?? '');
         $city = sanitize_text_field($_POST['city'] ?? '');
         $country = sanitize_text_field($_POST['country'] ?? '');
+        $state = sanitize_text_field($_POST['state'] ?? '');
         $radius_miles = absint($_POST['radius_miles'] ?? 0);
         $service_focus = sanitize_text_field($_POST['niche'] ?? '');
         $services = sanitize_textarea_field($_POST['services'] ?? '');
         $min_rating = max(0, min(5, (float) ($_POST['min_rating'] ?? 0)));
         $min_reviews = absint($_POST['min_reviews'] ?? 0);
+        $city_for_storage = $city;
+        if ($state !== '') {
+            $city_for_storage = $city !== '' ? ($city . ', ' . $state) : $state;
+        }
         $requested_max = absint($_POST['max_places'] ?? 0);
         $max_places = min(max(1, $requested_max ?: (int) $settings['max_places_per_run']), (int) $settings['max_places_per_run']);
-        $country_scope = ($country !== '' && $city === '');
+        $country_scope = ($country !== '' && $city === '' && $state === '');
         if ($country_scope) {
             $max_places = max(1, (int) $settings['max_places_per_run']);
         }
@@ -1290,6 +1297,7 @@ class LC_Frontend
             'query_text' => $query_text,
             'city' => $city,
             'country' => $country,
+            'state' => $state,
             'website_focus' => $website_focus,
             'min_rating' => $min_rating,
             'min_reviews' => $min_reviews,
@@ -1307,7 +1315,7 @@ class LC_Frontend
 
         $wpdb->insert($this->table('lc_runs'), [
             'query_text' => $query_text,
-            'city' => $city,
+            'city' => $city_for_storage,
             'country' => $country,
             'radius_miles' => $radius_miles,
             'niche' => $service_focus,
@@ -1323,6 +1331,7 @@ class LC_Frontend
             'query' => $query_text,
             'city' => $city,
             'country' => $country,
+            'state' => $state,
             'radius_miles' => $radius_miles,
             'niche' => $service_focus,
             'website_focus' => $website_focus,
@@ -1343,12 +1352,13 @@ class LC_Frontend
         $query = trim((string) ($run['query_text'] ?? ''));
         $city = trim((string) ($run['city'] ?? ''));
         $country = trim((string) ($run['country'] ?? ''));
+        $state = trim((string) ($run['state'] ?? ''));
         if ($query === '') {
             $issues[] = 'missing_query_text';
         } else {
             $checks[] = 'query_text_present';
         }
-        if ($city === '' && $country === '') {
+        if ($city === '' && $state === '' && $country === '') {
             $issues[] = 'missing_location';
         } else {
             $checks[] = 'location_present';
@@ -1356,8 +1366,14 @@ class LC_Frontend
         if ($city !== '' && $country === '') {
             $warnings[] = 'city_without_country';
         }
-        if ($country !== '' && $city === '') {
+        if ($state !== '' && $country === '') {
+            $warnings[] = 'state_without_country';
+        }
+        if ($country !== '' && $city === '' && $state === '') {
             $checks[] = 'country_wide_scope_enabled';
+        }
+        if ($country !== '' && $state !== '' && $city === '') {
+            $checks[] = 'state_wide_scope_enabled';
         }
 
         $min_rating = (float) ($run['min_rating'] ?? 0);
@@ -1491,6 +1507,61 @@ class LC_Frontend
 
             if (!empty($clean_cities)) {
                 $cache[$country_name] = $clean_cities;
+            }
+        }
+
+        return $cache;
+    }
+
+    private function load_location_hierarchy()
+    {
+        static $cache = null;
+        if (is_array($cache)) {
+            return $cache;
+        }
+
+        $cache = [];
+        $path = LC_PLUGIN_PATH . 'assets/location-hierarchy.json';
+        if (!file_exists($path)) {
+            return $cache;
+        }
+
+        $raw = file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            return $cache;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return $cache;
+        }
+
+        foreach ($decoded as $country => $states) {
+            $country_name = sanitize_text_field((string) $country);
+            if ($country_name === '' || !is_array($states)) {
+                continue;
+            }
+
+            $clean_states = [];
+            foreach ($states as $state => $cities) {
+                $state_name = sanitize_text_field((string) $state);
+                if ($state_name === '' || !is_array($cities)) {
+                    continue;
+                }
+                $clean_cities = [];
+                foreach ($cities as $city) {
+                    $city_name = sanitize_text_field((string) $city);
+                    if ($city_name !== '' && !in_array($city_name, $clean_cities, true)) {
+                        $clean_cities[] = $city_name;
+                    }
+                }
+                if (!empty($clean_cities)) {
+                    $clean_states[$state_name] = $clean_cities;
+                }
+            }
+
+            if (!empty($clean_states)) {
+                $cache[$country_name] = $clean_states;
             }
         }
 
