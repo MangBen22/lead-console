@@ -832,6 +832,28 @@
   margin: 0 0 10px !important;
 }
 
+.lc-directory-source-filters {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: end;
+}
+
+.lc-directory-source-filters .lc-col-4 {
+  grid-column: span 4;
+}
+
+.lc-directory-source-filters .lc-check {
+  margin-bottom: 5px;
+}
+
+.lc-directory-selected-count {
+  margin: 0 !important;
+  font-size: 13px;
+  color: #b6c5e8 !important;
+}
+
 .lc-directory-source-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1122,6 +1144,10 @@
     grid-template-columns: 1fr;
   }
 
+  .lc-directory-source-filters .lc-col-4 {
+    grid-column: span 6;
+  }
+
   .lc-run-form .lc-col-6,
   .lc-run-form .lc-col-4,
   .lc-run-form .lc-col-3,
@@ -1156,6 +1182,10 @@
 
   .lc-directory-source-grid {
     grid-template-columns: 1fr;
+  }
+
+  .lc-directory-source-filters .lc-col-4 {
+    grid-column: span 12;
   }
 
   .lc-run-form .lc-col-6,

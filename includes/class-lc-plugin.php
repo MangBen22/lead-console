@@ -478,6 +478,8 @@ class LC_Plugin
                 'search_url' => 'https://www.google.com/maps/search/{query}+{city}',
                 'quality_score' => 90,
                 'compliance' => 'Public search URL only; follow Google terms and approved API policy where applicable.',
+                'country' => 'Global',
+                'source_type' => 'maps',
             ],
             [
                 'id' => 'yelp',
@@ -485,6 +487,8 @@ class LC_Plugin
                 'search_url' => 'https://www.yelp.com/search?find_desc={query}&find_loc={city}',
                 'quality_score' => 88,
                 'compliance' => 'Use listing metadata from public pages and comply with Yelp platform terms.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'yellow_pages',
@@ -492,6 +496,8 @@ class LC_Plugin
                 'search_url' => 'https://www.yellowpages.com/search?search_terms={query}&geo_location_terms={city}',
                 'quality_score' => 82,
                 'compliance' => 'Public listing directory source; respect site terms and robots policies.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'bbb',
@@ -499,6 +505,8 @@ class LC_Plugin
                 'search_url' => 'https://www.bbb.org/search?find_text={query}&find_loc={city}',
                 'quality_score' => 85,
                 'compliance' => 'Public accreditation/listing lookup; respect BBB usage policies.',
+                'country' => 'United States',
+                'source_type' => 'verification',
             ],
             [
                 'id' => 'chamber_of_commerce',
@@ -506,6 +514,8 @@ class LC_Plugin
                 'search_url' => 'https://www.chamberofcommerce.com/search?what={query}&where={city}',
                 'quality_score' => 80,
                 'compliance' => 'Public business listing directory; use only lawful contact data processing.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'manta',
@@ -513,6 +523,8 @@ class LC_Plugin
                 'search_url' => 'https://www.manta.com/search?search={query}+{city}',
                 'quality_score' => 78,
                 'compliance' => 'Public directory search source; follow Manta terms of use.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'hotfrog',
@@ -520,6 +532,8 @@ class LC_Plugin
                 'search_url' => 'https://www.hotfrog.com/search/{query}/{city}',
                 'quality_score' => 74,
                 'compliance' => 'Public listing search endpoint with standard robots/terms checks.',
+                'country' => 'Global',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'cylex',
@@ -527,6 +541,8 @@ class LC_Plugin
                 'search_url' => 'https://www.cylex.us.com/s?q={query}+{city}',
                 'quality_score' => 72,
                 'compliance' => 'Public business listings source; usage must stay within published terms.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'merchantcircle',
@@ -534,6 +550,8 @@ class LC_Plugin
                 'search_url' => 'https://www.merchantcircle.com/search?what={query}&where={city}',
                 'quality_score' => 70,
                 'compliance' => 'Public profile directory source; automated scraping restrictions may apply.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'superpages',
@@ -541,6 +559,8 @@ class LC_Plugin
                 'search_url' => 'https://www.superpages.com/search?C={query}&T={city}',
                 'quality_score' => 76,
                 'compliance' => 'Public directory source with HTTPS and robots checks required.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'dexknows',
@@ -548,6 +568,8 @@ class LC_Plugin
                 'search_url' => 'https://www.dexknows.com/search?query={query}&where={city}',
                 'quality_score' => 73,
                 'compliance' => 'Public local listings source; use only for approved business workflows.',
+                'country' => 'United States',
+                'source_type' => 'directory',
             ],
             [
                 'id' => 'citysearch',
@@ -555,20 +577,180 @@ class LC_Plugin
                 'search_url' => 'https://www.citysearch.com/search?what={query}&where={city}',
                 'quality_score' => 69,
                 'compliance' => 'Public search listings source; always respect robots and provider terms.',
+                'country' => 'United States',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'canada411',
+                'name' => 'Canada411',
+                'search_url' => 'https://www.canada411.ca/search/si/1/{query}/{city}',
+                'quality_score' => 78,
+                'compliance' => 'Canadian public listing source; use only approved business workflow capture.',
+                'country' => 'Canada',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'yellowpages_ca',
+                'name' => 'YellowPages Canada',
+                'search_url' => 'https://www.yellowpages.ca/search/si/1/{query}/{city}',
+                'quality_score' => 80,
+                'compliance' => 'Public Canadian directory source; respect provider terms and robots rules.',
+                'country' => 'Canada',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'yell_uk',
+                'name' => 'Yell UK',
+                'search_url' => 'https://www.yell.com/ucs/UcsSearchAction.do?keywords={query}&location={city}',
+                'quality_score' => 82,
+                'compliance' => 'UK business listing source; only use lawful and approved data collection.',
+                'country' => 'United Kingdom',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'thomsonlocal_uk',
+                'name' => 'Thomson Local UK',
+                'search_url' => 'https://www.thomsonlocal.com/search/{query}/{city}',
+                'quality_score' => 76,
+                'compliance' => 'UK public listings source; follow terms and robots constraints.',
+                'country' => 'United Kingdom',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => '192_uk',
+                'name' => '192.com',
+                'search_url' => 'https://www.192.com/results/?q={query}&location={city}',
+                'quality_score' => 72,
+                'compliance' => 'Public UK listing/search source; verify terms for commercial usage.',
+                'country' => 'United Kingdom',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'truelocal_au',
+                'name' => 'True Local Australia',
+                'search_url' => 'https://www.truelocal.com.au/search/{query}/{city}',
+                'quality_score' => 78,
+                'compliance' => 'Australian public listing source; respect local privacy and usage policies.',
+                'country' => 'Australia',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'yellowpages_au',
+                'name' => 'Yellow Pages Australia',
+                'search_url' => 'https://www.yellowpages.com.au/search/listings?clue={query}&locationClue={city}',
+                'quality_score' => 80,
+                'compliance' => 'Australian directory source with standard compliance checks required.',
+                'country' => 'Australia',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'hotfrog_au',
+                'name' => 'Hotfrog Australia',
+                'search_url' => 'https://www.hotfrog.com.au/search/{query}/{city}',
+                'quality_score' => 74,
+                'compliance' => 'Public AU listing source; usage must remain within provider terms.',
+                'country' => 'Australia',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'justdial_in',
+                'name' => 'Justdial India',
+                'search_url' => 'https://www.justdial.com/{city}/{query}',
+                'quality_score' => 82,
+                'compliance' => 'Indian local listings source; process only business-public data lawfully.',
+                'country' => 'India',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'indiamart_in',
+                'name' => 'IndiaMART',
+                'search_url' => 'https://dir.indiamart.com/search.mp?ss={query}+{city}',
+                'quality_score' => 75,
+                'compliance' => 'B2B supplier directory source; usage subject to IndiaMART terms.',
+                'country' => 'India',
+                'source_type' => 'service_marketplace',
+            ],
+            [
+                'id' => 'sulekha_in',
+                'name' => 'Sulekha',
+                'search_url' => 'https://www.sulekha.com/{query}/{city}',
+                'quality_score' => 73,
+                'compliance' => 'Local service marketplace source; follow platform terms and privacy obligations.',
+                'country' => 'India',
+                'source_type' => 'service_marketplace',
+            ],
+            [
+                'id' => 'yellowpages_ph',
+                'name' => 'Yellow Pages Philippines',
+                'search_url' => 'https://www.yellow-pages.ph/search/{query}/{city}',
+                'quality_score' => 74,
+                'compliance' => 'PH public listings source; only approved and lawful business use.',
+                'country' => 'Philippines',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'infobel_ph',
+                'name' => 'Infobel Philippines',
+                'search_url' => 'https://www.infobel.com/en/philippines/search/{query}/{city}',
+                'quality_score' => 69,
+                'compliance' => 'Public business directory source; must pass compatibility and policy checks.',
+                'country' => 'Philippines',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'streetdirectory_sg',
+                'name' => 'Streetdirectory Singapore',
+                'search_url' => 'https://www.streetdirectory.com/businessfinder/company/{query}/{city}',
+                'quality_score' => 71,
+                'compliance' => 'Singapore public business source; usage must align with site policies.',
+                'country' => 'Singapore',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'yellowpages_sg',
+                'name' => 'Yellow Pages Singapore',
+                'search_url' => 'https://www.yellowpages.com.sg/search?keywords={query}&location={city}',
+                'quality_score' => 76,
+                'compliance' => 'Singapore listing source; comply with published terms and legal obligations.',
+                'country' => 'Singapore',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'yellowpages_ae',
+                'name' => 'Yellow Pages UAE',
+                'search_url' => 'https://www.yellowpages-uae.com/uae/{city}/{query}',
+                'quality_score' => 74,
+                'compliance' => 'UAE directory source; use only public business information lawfully.',
+                'country' => 'United Arab Emirates',
+                'source_type' => 'directory',
+            ],
+            [
+                'id' => 'connect_ae',
+                'name' => 'Connect.ae',
+                'search_url' => 'https://connect.ae/search?keyword={query}&location={city}',
+                'quality_score' => 72,
+                'compliance' => 'UAE local business source; processing must remain policy-compliant.',
+                'country' => 'United Arab Emirates',
+                'source_type' => 'directory',
             ],
         ];
     }
 
     public static function default_directory_source_preset_ids()
     {
-        $ids = [];
-        foreach (self::directory_source_presets() as $preset) {
-            $id = sanitize_key((string) ($preset['id'] ?? ''));
-            if ($id !== '') {
-                $ids[] = $id;
-            }
-        }
-        return $ids;
+        return [
+            'google_maps_public',
+            'hotfrog',
+            'yelp',
+            'yellow_pages',
+            'bbb',
+            'canada411',
+            'yell_uk',
+            'yellowpages_au',
+            'justdial_in',
+            'yellowpages_sg',
+            'yellowpages_ae',
+        ];
     }
 
     private function scan_directory_source_compatibility($search_url)

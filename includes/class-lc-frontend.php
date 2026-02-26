@@ -786,6 +786,20 @@ class LC_Frontend
         echo '</div></section>';
 
         $directory_presets = LC_Plugin::directory_source_presets();
+        $directory_countries = [];
+        foreach ($directory_presets as $preset_row) {
+            $country_name = sanitize_text_field((string) ($preset_row['country'] ?? 'Global'));
+            if ($country_name === '') {
+                $country_name = 'Global';
+            }
+            $directory_countries[$country_name] = true;
+        }
+        $directory_country_options = array_keys($directory_countries);
+        natcasesort($directory_country_options);
+        $directory_country_options = array_values($directory_country_options);
+        if (!in_array('Global', $directory_country_options, true)) {
+            array_unshift($directory_country_options, 'Global');
+        }
         $selected_directory_presets = [];
         if (isset($settings['directory_source_presets']) && is_array($settings['directory_source_presets'])) {
             $selected_directory_presets = array_values(array_map('sanitize_key', $settings['directory_source_presets']));
@@ -834,17 +848,33 @@ class LC_Frontend
         echo '</div>';
         echo '<div class="lc-col-12 lc-directory-source-card">';
         echo '<h4>Directory Sources</h4>';
-        echo '<p>Select approved directory sources below. The system runs a compatibility scan before applying your changes.</p>';
+        echo '<p>Select approved directory and service sources by country. You can pick from multiple countries and save once.</p>';
+        echo '<div class="lc-directory-source-filters">';
+        echo '<label class="lc-col-4">Country filter<select class="lc-directory-country-filter">';
+        echo '<option value="all">All countries</option>';
+        foreach ($directory_country_options as $country_name) {
+            echo '<option value="' . esc_attr($country_name) . '">' . esc_html($country_name) . '</option>';
+        }
+        echo '</select></label>';
+        echo '<label class="lc-check lc-col-4"><input type="checkbox" class="lc-directory-selected-only" value="1" /> Show selected only</label>';
+        echo '<p class="lc-directory-selected-count lc-col-4"><strong>0</strong> sources selected</p>';
+        echo '</div>';
         echo '<div class="lc-directory-source-grid">';
         foreach ($directory_presets as $preset) {
             $preset_id = sanitize_key((string) ($preset['id'] ?? ''));
             if ($preset_id === '') {
                 continue;
             }
+            $preset_country = sanitize_text_field((string) ($preset['country'] ?? 'Global'));
+            if ($preset_country === '') {
+                $preset_country = 'Global';
+            }
+            $preset_type = sanitize_key((string) ($preset['source_type'] ?? 'directory'));
             $preset_host = wp_parse_url((string) ($preset['search_url'] ?? ''), PHP_URL_HOST);
-            echo '<label class="lc-directory-source-item">';
+            echo '<label class="lc-directory-source-item" data-country="' . esc_attr($preset_country) . '" data-source-type="' . esc_attr($preset_type) . '">';
             echo '<input type="checkbox" name="lc_settings[directory_source_presets][]" value="' . esc_attr($preset_id) . '" ' . checked(!empty($selected_directory_map[$preset_id]), true, false) . ' />';
             echo '<span><strong>' . esc_html((string) ($preset['name'] ?? $preset_id)) . '</strong>';
+            echo '<small>' . esc_html($preset_country) . ' | ' . esc_html(ucwords(str_replace('_', ' ', $preset_type))) . '</small>';
             echo '<small>' . esc_html((string) ($preset_host ?: '')) . ' | Quality ' . esc_html((string) absint($preset['quality_score'] ?? 0)) . '</small>';
             if (!empty($preset['compliance'])) {
                 echo '<small>' . esc_html((string) $preset['compliance']) . '</small>';

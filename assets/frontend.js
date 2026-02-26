@@ -611,6 +611,36 @@
     if (openKbGuide) openKbGuide(section, query);
   });
 
+  const directoryCountryFilter = root.querySelector(".lc-directory-country-filter");
+  const directorySelectedOnly = root.querySelector(".lc-directory-selected-only");
+  const directorySelectedCount = root.querySelector(".lc-directory-selected-count strong");
+  const directoryItems = [...root.querySelectorAll(".lc-directory-source-item")];
+  const updateDirectorySourceFilter = () => {
+    if (!directoryItems.length) return;
+    const countryValue = String(directoryCountryFilter?.value || "all");
+    const selectedOnly = !!directorySelectedOnly?.checked;
+    let selectedCount = 0;
+    directoryItems.forEach((item) => {
+      const input = item.querySelector("input[type='checkbox']");
+      const checked = !!input?.checked;
+      if (checked) selectedCount += 1;
+      const itemCountry = String(item.getAttribute("data-country") || "Global");
+      const countryMatch = countryValue === "all" || itemCountry === countryValue;
+      const visible = countryMatch && (!selectedOnly || checked);
+      item.hidden = !visible;
+    });
+    if (directorySelectedCount) {
+      directorySelectedCount.textContent = String(selectedCount);
+    }
+  };
+  directoryCountryFilter?.addEventListener("change", updateDirectorySourceFilter);
+  directorySelectedOnly?.addEventListener("change", updateDirectorySourceFilter);
+  directoryItems.forEach((item) => {
+    const input = item.querySelector("input[type='checkbox']");
+    input?.addEventListener("change", updateDirectorySourceFilter);
+  });
+  updateDirectorySourceFilter();
+
   const modal = root.querySelector(".lc-tutorial");
   if (!modal) return;
 
