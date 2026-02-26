@@ -765,6 +765,8 @@
 
 .lc-api-ref-pop {
   margin-top: 8px;
+  width: 100%;
+  max-width: 680px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   padding: 8px 10px;
@@ -792,6 +794,10 @@
 }
 
 .lc-settings-form label {
+  grid-column: span 12;
+}
+
+.lc-settings-form .lc-col-12 {
   grid-column: span 12;
 }
 
