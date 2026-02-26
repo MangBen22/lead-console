@@ -256,7 +256,21 @@ class LC_Frontend
         $won_leads = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$leads_table} WHERE status='Won'");
         $queued_runs = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$runs_table} WHERE status='queued'");
 
-        $lead_rows = $wpdb->get_results("SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT 20");
+        $leads_per_page = absint($_GET['leads_per_page'] ?? 20);
+        if ($leads_per_page < 10 || $leads_per_page > 100 || ($leads_per_page % 10) !== 0) {
+            $leads_per_page = 20;
+        }
+        $leads_page = max(1, absint($_GET['leads_page'] ?? 1));
+        $lead_total_pages = max(1, (int) ceil($total_leads / max(1, $leads_per_page)));
+        if ($leads_page > $lead_total_pages) {
+            $leads_page = $lead_total_pages;
+        }
+        $lead_offset = ($leads_page - 1) * $leads_per_page;
+        $lead_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id,business_name,city,category,phone,email,score,lead_type,status,notes FROM {$leads_table} ORDER BY id DESC LIMIT %d OFFSET %d",
+            $leads_per_page,
+            $lead_offset
+        ));
         $run_rows = $wpdb->get_results("SELECT id,query_text,city,state,country,radius_miles,niche,services,website_focus,min_rating,min_reviews,max_places,captured_leads,status,created_at FROM {$runs_table} ORDER BY id DESC LIMIT 10");
         $run_locations = $wpdb->get_results("SELECT DISTINCT country, city FROM {$runs_table} WHERE city <> '' ORDER BY country ASC, city ASC LIMIT 800");
         $fallback_city_map = $this->load_city_dataset();
@@ -445,6 +459,35 @@ class LC_Frontend
             echo '<tr><td colspan="6">No leads available yet.</td></tr>';
         }
         echo '</tbody></table>';
+        $base_recent_leads_url = remove_query_arg(['leads_page', 'leads_per_page', 'lc_tab'], $this->current_url());
+        $prev_page = max(1, $leads_page - 1);
+        $next_page = min($lead_total_pages, $leads_page + 1);
+        $range_start = $total_leads > 0 ? ($lead_offset + 1) : 0;
+        $range_end = min($lead_offset + $leads_per_page, $total_leads);
+        echo '<div class="lc-recent-leads-controls">';
+        echo '<form method="get" class="lc-inline-form">';
+        echo '<input type="hidden" name="lc_tab" value="leads" />';
+        echo '<input type="hidden" name="leads_page" value="1" />';
+        echo '<label class="lc-inline-label">Show';
+        echo '<select name="leads_per_page">';
+        for ($n = 10; $n <= 100; $n += 10) {
+            echo '<option value="' . esc_attr((string) $n) . '" ' . selected($leads_per_page, $n, false) . '>' . esc_html((string) $n) . '</option>';
+        }
+        echo '</select>';
+        echo '</label>';
+        echo '<button type="submit">Apply</button>';
+        echo '</form>';
+        echo '<p class="lc-inline-meta">Showing ' . esc_html((string) $range_start) . '-' . esc_html((string) $range_end) . ' of ' . esc_html((string) $total_leads) . '</p>';
+        echo '<div class="lc-inline-pager">';
+        if ($leads_page > 1) {
+            echo '<a class="lc-btn" href="' . esc_url(add_query_arg(['lc_tab' => 'leads', 'leads_page' => $prev_page, 'leads_per_page' => $leads_per_page], $base_recent_leads_url)) . '">Prev</a>';
+        }
+        echo '<span>Page ' . esc_html((string) $leads_page) . ' / ' . esc_html((string) $lead_total_pages) . '</span>';
+        if ($leads_page < $lead_total_pages) {
+            echo '<a class="lc-btn" href="' . esc_url(add_query_arg(['lc_tab' => 'leads', 'leads_page' => $next_page, 'leads_per_page' => $leads_per_page], $base_recent_leads_url)) . '">Next</a>';
+        }
+        echo '</div>';
+        echo '</div>';
         echo '</div>';
         echo '</section>';
         $this->render_admin_console_sections($settings);

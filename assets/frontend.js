@@ -66,6 +66,12 @@
     activateSettingsPanel(initialSettings.dataset.settingsTarget || "");
   }
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const requestedTab = urlParams.get("lc_tab");
+  if (requestedTab && [...tabButtons].some((btn) => btn.dataset.tab === requestedTab)) {
+    activateTab(requestedTab);
+  }
+
   const runForm = root.querySelector(".lc-run-form");
   if (runForm) {
     const countrySelect = runForm.querySelector("select[name='country']");
