@@ -848,7 +848,7 @@ class LC_Frontend
         echo '</div>';
         echo '<div class="lc-col-12 lc-directory-source-card">';
         echo '<h4>Directory Sources</h4>';
-        echo '<p>Select approved directory and service sources by country. Global sources appear in every country view, and sources you already selected stay visible when you switch countries.</p>';
+        echo '<p>Select approved directory and service sources by country. Global sources appear in every country view. While editing, any new sources you select stay visible when you switch countries.</p>';
         echo '<div class="lc-directory-source-filters">';
         echo '<label class="lc-col-4">Country filter<select class="lc-directory-country-filter">';
         echo '<option value="all">All countries</option>';

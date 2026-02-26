@@ -615,6 +615,13 @@
   const directorySelectedOnly = root.querySelector(".lc-directory-selected-only");
   const directorySelectedCount = root.querySelector(".lc-directory-selected-count strong");
   const directoryItems = [...root.querySelectorAll(".lc-directory-source-item")];
+  const directorySessionCarryover = new Set();
+  const directoryInitialChecked = new Map();
+  directoryItems.forEach((item) => {
+    const input = item.querySelector("input[type='checkbox']");
+    if (!input) return;
+    directoryInitialChecked.set(input.value, !!input.checked);
+  });
   const updateDirectorySourceFilter = () => {
     if (!directoryItems.length) return;
     const countryValue = String(directoryCountryFilter?.value || "all");
@@ -627,7 +634,9 @@
       const itemCountry = String(item.getAttribute("data-country") || "Global");
       const isGlobal = itemCountry === "Global";
       const countryMatch = countryValue === "all" || itemCountry === countryValue || isGlobal;
-      const visibleByCountry = countryMatch || checked;
+      const sourceId = String(input?.value || "");
+      const sessionCarry = sourceId !== "" && directorySessionCarryover.has(sourceId);
+      const visibleByCountry = countryMatch || sessionCarry;
       const visible = selectedOnly ? checked : visibleByCountry;
       item.hidden = !visible;
     });
@@ -639,7 +648,16 @@
   directorySelectedOnly?.addEventListener("change", updateDirectorySourceFilter);
   directoryItems.forEach((item) => {
     const input = item.querySelector("input[type='checkbox']");
-    input?.addEventListener("change", updateDirectorySourceFilter);
+    input?.addEventListener("change", () => {
+      const sourceId = String(input.value || "");
+      const wasInitiallyChecked = !!directoryInitialChecked.get(sourceId);
+      if (input.checked && !wasInitiallyChecked) {
+        directorySessionCarryover.add(sourceId);
+      } else if (!input.checked) {
+        directorySessionCarryover.delete(sourceId);
+      }
+      updateDirectorySourceFilter();
+    });
   });
   updateDirectorySourceFilter();
 
