@@ -747,6 +747,30 @@
   display: block;
 }
 
+.lc-api-guide {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lc-api-guide h4 {
+  margin: 0 0 8px;
+}
+
+.lc-api-guide ol {
+  margin: 6px 0 10px 18px;
+}
+
+.lc-api-guide li {
+  margin-bottom: 6px;
+  color: #d7e1fa;
+}
+
+.lc-api-guide a {
+  color: #9fc0ff;
+}
+
 .lc-settings-form label {
   grid-column: span 12;
 }

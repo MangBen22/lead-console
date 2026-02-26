@@ -524,7 +524,7 @@ class LC_Frontend
         echo '<h3>Program Knowledge Base</h3>';
         echo '<div class="lc-kb-shell">';
         echo '<div class="lc-kb-search-wrap">';
-        echo '<input type="text" class="lc-kb-search-input" placeholder="Search Dashboard, Leads, Settings items..." autocomplete="off" />';
+        echo '<input type="text" class="lc-kb-search-input" placeholder="Search Dashboard, Leads, Settings, Glossary..." autocomplete="off" />';
         echo '<div class="lc-kb-search-suggest" hidden></div>';
         echo '</div>';
         echo '<div class="lc-kb-layout">';
@@ -612,15 +612,71 @@ class LC_Frontend
             ],
         ];
 
+        $glossary_items = [];
+        foreach ($sections as $section) {
+            foreach ((array) ($section['items'] ?? []) as $item) {
+                $term = sanitize_text_field((string) ($item['name'] ?? ''));
+                if ($term === '') {
+                    continue;
+                }
+                $glossary_items[] = [
+                    'name' => $term,
+                    'type' => 'glossary',
+                    'what' => sanitize_text_field((string) ($item['what'] ?? '')),
+                    'does' => sanitize_text_field((string) ($item['does'] ?? '')),
+                    'example' => sanitize_text_field((string) ($item['example'] ?? '')),
+                    'outcome' => sanitize_text_field((string) ($item['outcome'] ?? '')),
+                    'keywords' => array_values(array_unique(array_filter(array_merge(
+                        ['glossary', 'term', $term],
+                        (array) ($item['keywords'] ?? [])
+                    )))),
+                ];
+            }
+        }
+
+        $core_terms = [
+            ['name' => 'Lead', 'what' => 'A business record used for outreach.', 'does' => 'Moves through status pipeline and scoring.', 'example' => 'Dental clinic record', 'outcome' => 'Can be contacted and tracked to won/lost.'],
+            ['name' => 'Run', 'what' => 'Discovery job configuration and execution record.', 'does' => 'Captures candidate leads from configured sources.', 'example' => 'Query "Dentist" in California', 'outcome' => 'Returns captured lead candidates for review.'],
+            ['name' => 'Draft Lead', 'what' => 'Temporary captured lead from run review mode.', 'does' => 'Waits for user confirmation before final save.', 'example' => 'Captured in review popup', 'outcome' => 'Saved to leads table or discarded.'],
+            ['name' => 'Captured Leads', 'what' => 'Count of leads gathered by a run.', 'does' => 'Measures run productivity and tuning quality.', 'example' => 'Captured: 47', 'outcome' => 'Displayed in Discovery Health.'],
+            ['name' => 'Review Status', 'what' => 'Run review result state.', 'does' => 'Tracks pending, saved, discarded, or n/a states.', 'example' => 'Pending', 'outcome' => 'Determines whether review popup should appear.'],
+            ['name' => 'Suppression', 'what' => 'Do-not-capture filtering rule.', 'does' => 'Blocks matching emails, phones, domains, or names.', 'example' => 'Suppress domain example.com', 'outcome' => 'Matching captures are skipped.'],
+            ['name' => 'Discovery Mode', 'what' => 'How sources are used during discovery.', 'does' => 'Controls hybrid/API-only/fallback-only execution.', 'example' => 'Hybrid', 'outcome' => 'API first, fallback when needed.'],
+            ['name' => 'Lead Type', 'what' => 'Lead quality classification bucket.', 'does' => 'Marks lead class (A/B/C/E) from scoring logic.', 'example' => 'Type B', 'outcome' => 'Supports prioritization for outreach.'],
+            ['name' => 'Readiness Score', 'what' => 'Calculated score for lead quality and contactability.', 'does' => 'Helps rank leads for immediate action.', 'example' => 'Score 78', 'outcome' => 'Higher score leads prioritized first.'],
+            ['name' => 'Run Logs', 'what' => 'Time-ordered run progress messages.', 'does' => 'Shows what happened during queue processing.', 'example' => 'Run started in live mode', 'outcome' => 'Improves visibility and debugging.'],
+        ];
+        foreach ($core_terms as $term) {
+            $glossary_items[] = array_merge($term, [
+                'type' => 'glossary',
+                'keywords' => ['glossary', 'definition', strtolower((string) $term['name'])],
+            ]);
+        }
+
+        usort($glossary_items, static function ($a, $b) {
+            return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+        });
+
+        $sections[] = [
+            'id' => 'glossary',
+            'title' => 'Glossary',
+            'intro' => 'Reference dictionary for Dashboard, Leads, and Settings terms.',
+            'items' => $glossary_items,
+        ];
+
         foreach ($sections as &$section) {
             if (!isset($section['items']) || !is_array($section['items'])) {
                 continue;
             }
             foreach ($section['items'] as &$item) {
-                $item['image'] = $this->kb_example_image_data_uri(
-                    (string) ($item['name'] ?? 'Example'),
-                    (string) ($item['outcome'] ?? '')
-                );
+                if (($section['id'] ?? '') !== 'glossary') {
+                    $item['image'] = $this->kb_example_image_data_uri(
+                        (string) ($item['name'] ?? 'Example'),
+                        (string) ($item['outcome'] ?? '')
+                    );
+                } else {
+                    $item['image'] = '';
+                }
             }
             unset($item);
         }
@@ -725,6 +781,25 @@ class LC_Frontend
         echo '</select></label>';
         echo '<label class="lc-col-6">Google CSE API key<input type="text" name="lc_settings[google_cse_api_key]" value="' . esc_attr((string) ($settings['google_cse_api_key'] ?? '')) . '" /></label>';
         echo '<label class="lc-col-6">Google CSE cx<input type="text" name="lc_settings[google_cse_cx]" value="' . esc_attr((string) ($settings['google_cse_cx'] ?? '')) . '" /></label>';
+        echo '<div class="lc-col-12 lc-api-guide">';
+        echo '<h4>API Setup References</h4>';
+        echo '<p><strong>Google Places API (for discovery runs):</strong></p>';
+        echo '<ol>';
+        echo '<li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a> and select/create a project.</li>';
+        echo '<li>Enable Places API from <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener noreferrer">API Library</a>.</li>';
+        echo '<li>Create API key in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Credentials</a>.</li>';
+        echo '<li>Restrict key to Places API + allowed referrers/IPs.</li>';
+        echo '<li>Paste key into Google Places API key field and save settings.</li>';
+        echo '</ol>';
+        echo '<p><strong>Google Programmable Search (for social URL discovery):</strong></p>';
+        echo '<ol>';
+        echo '<li>Create/search engine at <a href="https://programmablesearchengine.google.com/" target="_blank" rel="noopener noreferrer">Programmable Search Engine</a>.</li>';
+        echo '<li>Copy your search engine id (cx).</li>';
+        echo '<li>Enable Custom Search API from <a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener noreferrer">API Library</a>.</li>';
+        echo '<li>Create API key in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Credentials</a>.</li>';
+        echo '<li>Paste API key + cx in settings, set Social Discovery Mode, then save.</li>';
+        echo '</ol>';
+        echo '</div>';
         echo '<label>Directory sources<textarea name="lc_settings[directory_sources]" rows="5">' . esc_textarea((string) ($settings['directory_sources'] ?? '')) . '</textarea></label>';
         echo '<label class="lc-check lc-col-3"><input type="checkbox" name="lc_settings[smtp_enabled]" value="1" ' . checked(!empty($settings['smtp_enabled']), true, false) . ' /> Enable SMTP</label>';
         echo '<label class="lc-col-5">SMTP Host<input type="text" name="lc_settings[smtp_host]" value="' . esc_attr((string) ($settings['smtp_host'] ?? '')) . '" /></label>';
