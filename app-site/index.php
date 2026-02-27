@@ -381,6 +381,44 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>WebOps Retry Queue</h3>
                 <pre id="webopsRetryQueue">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>SEO Projects</h2>
+                <pre id="seoProjects">Loading...</pre>
+                <form id="seoProjectForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="seoProjectId">Project ID (optional for update)</label>
+                        <input id="seoProjectId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectName">Project name</label>
+                        <input id="seoProjectName" type="text" placeholder="5N2 Main Website" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectDomain">Domain or URL</label>
+                        <input id="seoProjectDomain" type="text" placeholder="https://5n2digital.com">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectStatus">Status</label>
+                        <select id="seoProjectStatus">
+                            <option value="active">active</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <button id="saveSeoProjectBtn" type="button">Save SEO Project</button>
+                    <button id="deleteSeoProjectBtn" type="button">Delete SEO Project</button>
+                    <button id="runSeoAuditBtn" type="button">Run SEO Audit</button>
+                </form>
+            </section>
+
+            <section class="api-status">
+                <h2>SEO Audit Pipeline</h2>
+                <pre id="seoResult">No SEO action yet.</pre>
+                <h3>SEO Audits</h3>
+                <pre id="seoAudits">Loading...</pre>
+                <h3>Extension Events</h3>
+                <pre id="seoExtensionEvents">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

@@ -13,6 +13,11 @@ function out_json($data, $code = 200)
     exit;
 }
 
+function app_clean_text($value)
+{
+    return trim(strip_tags((string) $value));
+}
+
 function all_sites()
 {
     global $config;
@@ -192,6 +197,105 @@ function webops_log_path()
 function webops_retry_queue_path()
 {
     return app_storage_path('webops_retry_queue.json');
+}
+
+function seo_projects_path()
+{
+    return app_storage_path('seo_projects.json');
+}
+
+function seo_audits_path()
+{
+    return app_storage_path('seo_audits.json');
+}
+
+function seo_extension_events_path()
+{
+    return app_storage_path('seo_extension_events.json');
+}
+
+function seo_project_by_id($projectId)
+{
+    $rows = app_read_json_file(seo_projects_path(), []);
+    foreach ($rows as $row) {
+        if ((string) ($row['project_id'] ?? '') === (string) $projectId) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function run_seo_audit_for_project($project)
+{
+    $domain = trim((string) ($project['domain'] ?? ''));
+    $base = $domain;
+    if ($base !== '' && stripos($base, 'http://') !== 0 && stripos($base, 'https://') !== 0) {
+        $base = 'https://' . $base;
+    }
+    $checks = [];
+    $critical = 0;
+    $warnings = 0;
+    $score = 100;
+
+    if ($base === '') {
+        $checks[] = ['check' => 'target_url', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Project domain is missing.'];
+        $critical++;
+        $score -= 60;
+    } else {
+        $checks[] = ['check' => 'target_url', 'status' => 'pass', 'severity' => 'info', 'message' => 'Target URL prepared.'];
+
+        if (stripos($base, 'https://') === 0) {
+            $checks[] = ['check' => 'https', 'status' => 'pass', 'severity' => 'info', 'message' => 'HTTPS detected.'];
+        } else {
+            $checks[] = ['check' => 'https', 'status' => 'warn', 'severity' => 'warning', 'message' => 'HTTPS not detected.'];
+            $warnings++;
+            $score -= 20;
+        }
+
+        $homeRes = app_http_json_request('GET', $base, [], null, 12);
+        $homeStatus = (int) ($homeRes['status'] ?? 0);
+        if ($homeStatus >= 200 && $homeStatus < 400) {
+            $checks[] = ['check' => 'home_reachable', 'status' => 'pass', 'severity' => 'info', 'message' => 'Homepage reachable (' . $homeStatus . ').'];
+        } else {
+            $checks[] = ['check' => 'home_reachable', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Homepage unreachable (' . $homeStatus . ').'];
+            $critical++;
+            $score -= 40;
+        }
+
+        $robotsRes = app_http_json_request('GET', rtrim($base, '/') . '/robots.txt', [], null, 10);
+        $robotsStatus = (int) ($robotsRes['status'] ?? 0);
+        if ($robotsStatus >= 200 && $robotsStatus < 400) {
+            $checks[] = ['check' => 'robots_txt', 'status' => 'pass', 'severity' => 'info', 'message' => 'robots.txt found.'];
+        } else {
+            $checks[] = ['check' => 'robots_txt', 'status' => 'warn', 'severity' => 'warning', 'message' => 'robots.txt missing or inaccessible (' . $robotsStatus . ').'];
+            $warnings++;
+            $score -= 10;
+        }
+
+        $sitemapRes = app_http_json_request('GET', rtrim($base, '/') . '/sitemap.xml', [], null, 10);
+        $sitemapStatus = (int) ($sitemapRes['status'] ?? 0);
+        if ($sitemapStatus >= 200 && $sitemapStatus < 400) {
+            $checks[] = ['check' => 'sitemap_xml', 'status' => 'pass', 'severity' => 'info', 'message' => 'sitemap.xml found.'];
+        } else {
+            $checks[] = ['check' => 'sitemap_xml', 'status' => 'warn', 'severity' => 'warning', 'message' => 'sitemap.xml missing or inaccessible (' . $sitemapStatus . ').'];
+            $warnings++;
+            $score -= 10;
+        }
+    }
+
+    $score = max(0, min(100, $score));
+    return [
+        'audit_id' => 'seo_audit_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'project_id' => (string) ($project['project_id'] ?? ''),
+        'project_name' => (string) ($project['name'] ?? ''),
+        'domain' => (string) ($project['domain'] ?? ''),
+        'score' => $score,
+        'critical_issues' => $critical,
+        'warnings' => $warnings,
+        'checks' => $checks,
+        'source' => 'internal_runner',
+        'created_at' => gmdate('c'),
+    ];
 }
 
 function webops_monitor_by_id($monitorId)
@@ -565,7 +669,7 @@ function execute_connector_sync($connector, $leads)
     return $result;
 }
 
-$publicActions = ['status'];
+$publicActions = ['status', 'seo.extension.intake'];
 if (!in_array($action, $publicActions, true)) {
     app_require_auth();
 }
@@ -972,15 +1076,180 @@ if ($action === 'webops.summary') {
 }
 
 if ($action === 'seo.summary') {
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $audits = app_read_json_file(seo_audits_path(), []);
+    $lastAudit = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+    $criticalIssues = 0;
+    if (is_array($lastAudit)) {
+        $criticalIssues = (int) ($lastAudit['critical_issues'] ?? 0);
+    }
     out_json([
         'ok' => true,
         'module' => 'seo_suite',
         'status' => 'bootstrap',
         'metrics' => [
-            'audits_completed' => 0,
-            'critical_issues' => 0,
-            'tracked_projects' => 0,
+            'audits_completed' => count($audits),
+            'critical_issues' => $criticalIssues,
+            'tracked_projects' => count($projects),
         ],
+        'last_audit' => $lastAudit,
+    ]);
+}
+
+if ($action === 'seo.projects.list') {
+    $rows = app_read_json_file(seo_projects_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'seo.projects.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $item = [
+        'project_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['project_id'] ?? uniqid('seo_project_', false))),
+        'name' => trim((string) ($data['name'] ?? '')),
+        'domain' => trim((string) ($data['domain'] ?? '')),
+        'status' => strtolower(trim((string) ($data['status'] ?? 'active'))),
+        'updated_at' => gmdate('c'),
+    ];
+    $rows = app_read_json_file(seo_projects_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) use ($item) {
+        return (string) ($row['project_id'] ?? '') !== $item['project_id'];
+    }));
+    $rows[] = $item;
+    app_write_json_file(seo_projects_path(), $rows);
+    out_json(['ok' => true, 'item' => $item]);
+}
+
+if ($action === 'seo.projects.delete') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['project_id'])) {
+        out_json(['ok' => false, 'error' => 'project_id is required.'], 400);
+    }
+    $projectId = (string) $data['project_id'];
+    $rows = app_read_json_file(seo_projects_path(), []);
+    $before = count($rows);
+    $rows = array_values(array_filter($rows, static function ($row) use ($projectId) {
+        return (string) ($row['project_id'] ?? '') !== $projectId;
+    }));
+    app_write_json_file(seo_projects_path(), $rows);
+    out_json([
+        'ok' => true,
+        'deleted' => $before - count($rows),
+        'project_id' => $projectId,
+    ]);
+}
+
+if ($action === 'seo.audits.list') {
+    $rows = app_read_json_file(seo_audits_path(), []);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    if ($projectId !== '') {
+        $rows = array_values(array_filter($rows, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'seo.audit.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['project_id'])) {
+        out_json(['ok' => false, 'error' => 'project_id is required.'], 400);
+    }
+    $project = seo_project_by_id((string) $data['project_id']);
+    if (!is_array($project)) {
+        out_json(['ok' => false, 'error' => 'Project not found.'], 404);
+    }
+    $audit = run_seo_audit_for_project($project);
+    $rows = app_read_json_file(seo_audits_path(), []);
+    array_unshift($rows, $audit);
+    $rows = array_slice($rows, 0, 500);
+    app_write_json_file(seo_audits_path(), $rows);
+    out_json([
+        'ok' => true,
+        'audit' => $audit,
+    ]);
+}
+
+if ($action === 'seo.extension.intake') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    $expected = (string) ($config['seo_extension_ingest_key'] ?? '');
+    $incoming = isset($_SERVER['HTTP_X_SEO_EXTENSION_KEY']) ? (string) $_SERVER['HTTP_X_SEO_EXTENSION_KEY'] : '';
+    if ($expected === '' || $incoming === '' || !hash_equals($expected, $incoming)) {
+        out_json(['ok' => false, 'error' => 'Invalid extension key.'], 403);
+    }
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $event = [
+        'event_id' => 'seo_ext_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'project_id' => app_clean_text((string) ($data['project_id'] ?? '')),
+        'url' => app_clean_text((string) ($data['url'] ?? '')),
+        'title' => app_clean_text((string) ($data['title'] ?? '')),
+        'issues' => isset($data['issues']) && is_array($data['issues']) ? $data['issues'] : [],
+        'score' => isset($data['score']) ? max(0, min(100, (int) $data['score'])) : 0,
+        'source' => 'browser_extension',
+        'created_at' => gmdate('c'),
+    ];
+    $events = app_read_json_file(seo_extension_events_path(), []);
+    array_unshift($events, $event);
+    $events = array_slice($events, 0, 500);
+    app_write_json_file(seo_extension_events_path(), $events);
+
+    if ($event['project_id'] !== '') {
+        $audits = app_read_json_file(seo_audits_path(), []);
+        array_unshift($audits, [
+            'audit_id' => 'seo_audit_ext_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+            'project_id' => $event['project_id'],
+            'project_name' => '',
+            'domain' => $event['url'],
+            'score' => (int) $event['score'],
+            'critical_issues' => 0,
+            'warnings' => is_array($event['issues']) ? count($event['issues']) : 0,
+            'checks' => is_array($event['issues']) ? $event['issues'] : [],
+            'source' => 'browser_extension',
+            'created_at' => gmdate('c'),
+        ]);
+        $audits = array_slice($audits, 0, 500);
+        app_write_json_file(seo_audits_path(), $audits);
+    }
+
+    out_json(['ok' => true, 'event_id' => $event['event_id']]);
+}
+
+if ($action === 'seo.extension.events.list') {
+    $events = app_read_json_file(seo_extension_events_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($events),
+        'items' => $events,
     ]);
 }
 

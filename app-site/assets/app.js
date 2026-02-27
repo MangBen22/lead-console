@@ -32,6 +32,11 @@
   const webopsResult = document.getElementById("webopsResult");
   const webopsLog = document.getElementById("webopsLog");
   const webopsRetryQueue = document.getElementById("webopsRetryQueue");
+  const seoProjects = document.getElementById("seoProjects");
+  const seoProjectForm = document.getElementById("seoProjectForm");
+  const seoResult = document.getElementById("seoResult");
+  const seoAudits = document.getElementById("seoAudits");
+  const seoExtensionEvents = document.getElementById("seoExtensionEvents");
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -190,6 +195,36 @@
     }
   }
 
+  async function loadSeoProjects() {
+    if (!seoProjects) return;
+    try {
+      const data = await apiGet("seo.projects.list");
+      seoProjects.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoProjects.textContent = "Failed to load SEO projects.";
+    }
+  }
+
+  async function loadSeoAudits() {
+    if (!seoAudits) return;
+    try {
+      const data = await apiGet("seo.audits.list");
+      seoAudits.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoAudits.textContent = "Failed to load SEO audits.";
+    }
+  }
+
+  async function loadSeoExtensionEvents() {
+    if (!seoExtensionEvents) return;
+    try {
+      const data = await apiGet("seo.extension.events.list");
+      seoExtensionEvents.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoExtensionEvents.textContent = "Failed to load extension events.";
+    }
+  }
+
   (async function initCrm() {
     await loadCrmConnectors();
     await loadCrmSyncLog();
@@ -200,6 +235,9 @@
     await loadWebopsMonitors();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
+    await loadSeoProjects();
+    await loadSeoAudits();
+    await loadSeoExtensionEvents();
   })();
 
   if (crmConnectorForm) {
@@ -522,5 +560,70 @@
         panel.textContent = JSON.stringify(data, null, 2);
       }
     });
+  }
+
+  if (seoProjectForm) {
+    seoProjectForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const saveSeoBtn = document.getElementById("saveSeoProjectBtn");
+    if (saveSeoBtn) {
+      saveSeoBtn.addEventListener("click", async function () {
+        const projectId = document.getElementById("seoProjectId");
+        const name = document.getElementById("seoProjectName");
+        const domain = document.getElementById("seoProjectDomain");
+        const status = document.getElementById("seoProjectStatus");
+        const payload = {
+          project_id: projectId && projectId.value ? projectId.value.trim() : "",
+          name: name ? name.value.trim() : "",
+          domain: domain ? domain.value.trim() : "",
+          status: status ? status.value : "active",
+        };
+        const result = await apiPost("seo.projects.save", payload);
+        if (seoResult) {
+          seoResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSeoProjects();
+      });
+    }
+
+    const deleteSeoBtn = document.getElementById("deleteSeoProjectBtn");
+    if (deleteSeoBtn) {
+      deleteSeoBtn.addEventListener("click", async function () {
+        const projectId = document.getElementById("seoProjectId");
+        const id = projectId && projectId.value ? projectId.value.trim() : "";
+        if (!id) {
+          if (seoResult) seoResult.textContent = "Enter SEO Project ID to delete.";
+          return;
+        }
+        const result = await apiPost("seo.projects.delete", { project_id: id });
+        if (seoResult) {
+          seoResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSeoProjects();
+      });
+    }
+
+    const runSeoBtn = document.getElementById("runSeoAuditBtn");
+    if (runSeoBtn) {
+      runSeoBtn.addEventListener("click", async function () {
+        const projectId = document.getElementById("seoProjectId");
+        const id = projectId && projectId.value ? projectId.value.trim() : "";
+        if (!id) {
+          if (seoResult) seoResult.textContent = "Enter SEO Project ID to run audit.";
+          return;
+        }
+        const result = await apiPost("seo.audit.run", { project_id: id });
+        if (seoResult) {
+          seoResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSeoAudits();
+        const data = await apiGet("seo.summary");
+        const panel = document.getElementById("modSeo");
+        if (panel) {
+          panel.textContent = JSON.stringify(data, null, 2);
+        }
+      });
+    }
   }
 })();
