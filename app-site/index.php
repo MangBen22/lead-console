@@ -316,6 +316,71 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Social Retry Queue</h3>
                 <pre id="socialRetryQueue">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>WebOps Monitors</h2>
+                <pre id="webopsMonitors">Loading...</pre>
+                <form id="webopsMonitorForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="webopsMonitorId">Monitor ID (optional for update)</label>
+                        <input id="webopsMonitorId" type="text" placeholder="monitor_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsMonitorName">Name</label>
+                        <input id="webopsMonitorName" type="text" placeholder="Main Site Uptime" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsMonitorType">Type</label>
+                        <select id="webopsMonitorType">
+                            <option value="uptime_http">uptime_http</option>
+                            <option value="bridge_site_health">bridge_site_health</option>
+                            <option value="webhook_check">webhook_check</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsMonitorStatus">Status</label>
+                        <select id="webopsMonitorStatus">
+                            <option value="active">active</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsMonitorTarget">Target URL</label>
+                        <input id="webopsMonitorTarget" type="text" placeholder="https://example.com">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsBridgeSiteId">Bridge Site ID (for bridge_site_health)</label>
+                        <input id="webopsBridgeSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsRunMode">Run mode</label>
+                        <select id="webopsRunMode">
+                            <option value="live">live</option>
+                            <option value="dry_run">dry_run</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsWebhookUrl">Webhook URL (for webhook_check)</label>
+                        <input id="webopsWebhookUrl" type="text" placeholder="https://example.com/ping">
+                    </div>
+                    <button id="saveWebopsMonitorBtn" type="button">Save Monitor</button>
+                    <button id="deleteWebopsMonitorBtn" type="button">Delete Monitor</button>
+                    <button id="testWebopsMonitorBtn" type="button">Test Monitor</button>
+                </form>
+            </section>
+
+            <section class="api-status">
+                <h2>WebOps Run Pipeline</h2>
+                <div class="actions">
+                    <button id="runWebopsBtn" type="button">Run WebOps Checks</button>
+                    <button id="runWebopsRetryQueueBtn" type="button">Run WebOps Retry Queue</button>
+                </div>
+                <pre id="webopsResult">No WebOps run yet.</pre>
+                <h3>WebOps Log</h3>
+                <pre id="webopsLog">Loading...</pre>
+                <h3>WebOps Retry Queue</h3>
+                <pre id="webopsRetryQueue">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

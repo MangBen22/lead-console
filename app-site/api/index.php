@@ -179,6 +179,142 @@ function social_retry_queue_path()
     return app_storage_path('social_retry_queue.json');
 }
 
+function webops_monitors_path()
+{
+    return app_storage_path('webops_monitors.json');
+}
+
+function webops_log_path()
+{
+    return app_storage_path('webops_log.json');
+}
+
+function webops_retry_queue_path()
+{
+    return app_storage_path('webops_retry_queue.json');
+}
+
+function webops_monitor_by_id($monitorId)
+{
+    $rows = app_read_json_file(webops_monitors_path(), []);
+    foreach ($rows as $row) {
+        if ((string) ($row['monitor_id'] ?? '') === (string) $monitorId) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function enqueue_webops_retry_item($item)
+{
+    $queue = app_read_json_file(webops_retry_queue_path(), []);
+    array_unshift($queue, $item);
+    $queue = array_slice($queue, 0, 500);
+    app_write_json_file(webops_retry_queue_path(), $queue);
+}
+
+function execute_webops_monitor($monitor)
+{
+    $type = strtolower((string) ($monitor['type'] ?? 'uptime_http'));
+    $target = trim((string) ($monitor['target'] ?? ''));
+    $config = isset($monitor['config']) && is_array($monitor['config']) ? $monitor['config'] : [];
+    $runMode = strtolower((string) ($config['run_mode'] ?? 'live'));
+    $result = [
+        'monitor_id' => (string) ($monitor['monitor_id'] ?? ''),
+        'type' => $type,
+        'target' => $target,
+        'run_mode' => $runMode,
+        'ok' => false,
+        'severity' => 'warning',
+        'message' => '',
+        'error_code' => '',
+        'details' => [],
+    ];
+
+    if ($type === 'uptime_http') {
+        if ($target === '') {
+            $result['message'] = 'Missing target URL.';
+            $result['error_code'] = 'missing_target_url';
+            return $result;
+        }
+        $res = app_http_json_request('GET', $target, [], null, 10);
+        $status = (int) ($res['status'] ?? 0);
+        $result['details'] = ['http_status' => $status, 'url' => $target];
+        if ($status >= 200 && $status < 400) {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Site is reachable.';
+        } else {
+            $result['ok'] = false;
+            $result['severity'] = 'critical';
+            $result['message'] = 'Site check failed with HTTP ' . $status . '.';
+            $result['error_code'] = normalize_error_code('HTTP ' . $status);
+        }
+        return $result;
+    }
+
+    if ($type === 'bridge_site_health') {
+        $siteId = (string) ($config['bridge_site_id'] ?? '');
+        $site = $siteId !== '' ? site_by_id($siteId) : null;
+        if ($site === null) {
+            $result['message'] = 'Missing valid bridge_site_id.';
+            $result['error_code'] = 'missing_bridge_site';
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Dry run ok.';
+            return $result;
+        }
+        $res = app_bridge_request($site, 'GET', 'bridge/site-health');
+        if (!empty($res['ok']) && is_array($res['data'])) {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Bridge site health retrieved.';
+            $result['details'] = $res['data'];
+        } else {
+            $result['ok'] = false;
+            $result['severity'] = 'critical';
+            $result['message'] = 'Bridge site health request failed.';
+            $result['error_code'] = 'bridge_health_failed';
+            $result['details'] = ['status' => (int) ($res['status'] ?? 0)];
+        }
+        return $result;
+    }
+
+    if ($type === 'webhook_check') {
+        $webhook = trim((string) ($config['webhook_url'] ?? ''));
+        if ($webhook === '') {
+            $result['message'] = 'Missing webhook_url.';
+            $result['error_code'] = 'missing_webhook_url';
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Dry run ok.';
+            return $result;
+        }
+        $res = app_http_json_request('POST', $webhook, [], ['event' => 'webops_check_ping'], 10);
+        if (!empty($res['ok'])) {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Webhook check succeeded.';
+        } else {
+            $result['ok'] = false;
+            $result['severity'] = 'critical';
+            $result['message'] = 'Webhook check failed with HTTP ' . (int) ($res['status'] ?? 0);
+            $result['error_code'] = normalize_error_code($result['message']);
+        }
+        return $result;
+    }
+
+    $result['message'] = 'Unknown monitor type.';
+    $result['error_code'] = 'unknown_monitor_type';
+    return $result;
+}
+
 function social_connector_by_id($connectorId)
 {
     $rows = app_read_json_file(social_connectors_path(), []);
@@ -438,7 +574,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.4-connector-test-retry',
+        'phase' => '1.5-webops-monitoring-foundation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -806,15 +942,32 @@ if ($action === 'social.summary') {
 }
 
 if ($action === 'webops.summary') {
+    $monitors = app_read_json_file(webops_monitors_path(), []);
+    $active = array_values(array_filter($monitors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $logs = app_read_json_file(webops_log_path(), []);
+    $lastRun = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
+    $retryCount = count(app_read_json_file(webops_retry_queue_path(), []));
+    $critical = 0;
+    if (is_array($lastRun) && isset($lastRun['results']) && is_array($lastRun['results'])) {
+        foreach ($lastRun['results'] as $row) {
+            if (is_array($row) && (($row['severity'] ?? '') === 'critical')) {
+                $critical++;
+            }
+        }
+    }
     out_json([
         'ok' => true,
         'module' => 'webops_security',
         'status' => 'bootstrap',
         'metrics' => [
-            'sites_monitored' => count(all_sites()),
-            'active_incidents' => 0,
+            'sites_monitored' => count($active),
+            'active_incidents' => $critical + $retryCount,
             'uptime_percent' => 100,
         ],
+        'last_run' => $lastRun,
     ]);
 }
 
@@ -1041,6 +1194,188 @@ if ($action === 'social.retry.run') {
         $remaining[] = $item;
     }
     app_write_json_file(social_retry_queue_path(), $remaining);
+    out_json([
+        'ok' => true,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'remaining' => count($remaining),
+    ]);
+}
+
+if ($action === 'webops.monitors.list') {
+    $rows = app_read_json_file(webops_monitors_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'webops.monitors.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $item = [
+        'monitor_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['monitor_id'] ?? uniqid('monitor_', false))),
+        'name' => trim((string) ($data['name'] ?? '')),
+        'type' => strtolower(trim((string) ($data['type'] ?? 'uptime_http'))),
+        'status' => strtolower(trim((string) ($data['status'] ?? 'active'))),
+        'target' => trim((string) ($data['target'] ?? '')),
+        'config' => sanitize_connector_config($data['config'] ?? []),
+        'updated_at' => gmdate('c'),
+    ];
+    $rows = app_read_json_file(webops_monitors_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) use ($item) {
+        return (string) ($row['monitor_id'] ?? '') !== $item['monitor_id'];
+    }));
+    $rows[] = $item;
+    app_write_json_file(webops_monitors_path(), $rows);
+    out_json(['ok' => true, 'item' => $item]);
+}
+
+if ($action === 'webops.monitors.delete') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['monitor_id'])) {
+        out_json(['ok' => false, 'error' => 'monitor_id is required.'], 400);
+    }
+    $monitorId = (string) $data['monitor_id'];
+    $rows = app_read_json_file(webops_monitors_path(), []);
+    $before = count($rows);
+    $rows = array_values(array_filter($rows, static function ($row) use ($monitorId) {
+        return (string) ($row['monitor_id'] ?? '') !== $monitorId;
+    }));
+    app_write_json_file(webops_monitors_path(), $rows);
+    out_json([
+        'ok' => true,
+        'deleted' => $before - count($rows),
+        'monitor_id' => $monitorId,
+    ]);
+}
+
+if ($action === 'webops.monitors.test') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['monitor_id'])) {
+        out_json(['ok' => false, 'error' => 'monitor_id is required.'], 400);
+    }
+    $monitor = webops_monitor_by_id((string) $data['monitor_id']);
+    if (!is_array($monitor)) {
+        out_json(['ok' => false, 'error' => 'Monitor not found.'], 404);
+    }
+    $result = execute_webops_monitor($monitor);
+    out_json([
+        'ok' => true,
+        'monitor_id' => (string) ($monitor['monitor_id'] ?? ''),
+        'result' => $result,
+    ]);
+}
+
+if ($action === 'webops.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $monitors = app_read_json_file(webops_monitors_path(), []);
+    $active = array_values(array_filter($monitors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    if (empty($active)) {
+        out_json(['ok' => false, 'error' => 'No active WebOps monitors.'], 400);
+    }
+    $results = [];
+    $critical = 0;
+    foreach ($active as $monitor) {
+        $res = execute_webops_monitor($monitor);
+        $results[] = $res;
+        if (($res['severity'] ?? '') === 'critical') {
+            $critical++;
+            enqueue_webops_retry_item([
+                'retry_id' => 'webops_retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'monitor_id' => (string) ($monitor['monitor_id'] ?? ''),
+                'type' => (string) ($monitor['type'] ?? ''),
+                'error_code' => (string) ($res['error_code'] ?? ''),
+                'message' => (string) ($res['message'] ?? ''),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
+    }
+    $runItem = [
+        'run_id' => 'webops_run_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'monitor_count' => count($active),
+        'critical_count' => $critical,
+        'results' => $results,
+    ];
+    $logs = app_read_json_file(webops_log_path(), []);
+    array_unshift($logs, $runItem);
+    $logs = array_slice($logs, 0, 200);
+    app_write_json_file(webops_log_path(), $logs);
+    out_json(['ok' => true, 'run' => $runItem]);
+}
+
+if ($action === 'webops.log') {
+    $logs = app_read_json_file(webops_log_path(), []);
+    out_json(['ok' => true, 'count' => count($logs), 'items' => $logs]);
+}
+
+if ($action === 'webops.retry.list') {
+    $queue = app_read_json_file(webops_retry_queue_path(), []);
+    out_json(['ok' => true, 'count' => count($queue), 'items' => $queue]);
+}
+
+if ($action === 'webops.retry.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $queue = app_read_json_file(webops_retry_queue_path(), []);
+    if (empty($queue)) {
+        out_json(['ok' => true, 'message' => 'WebOps retry queue is empty.', 'processed' => 0]);
+    }
+    $processed = 0;
+    $succeeded = 0;
+    $remaining = [];
+    foreach ($queue as $item) {
+        $processed++;
+        $monitor = webops_monitor_by_id((string) ($item['monitor_id'] ?? ''));
+        if (!is_array($monitor)) {
+            $item['status'] = 'failed_missing_monitor';
+            $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+            $remaining[] = $item;
+            continue;
+        }
+        $res = execute_webops_monitor($monitor);
+        if (!empty($res['ok'])) {
+            $succeeded++;
+            continue;
+        }
+        $item['status'] = 'queued';
+        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+        $item['error_code'] = (string) ($res['error_code'] ?? '');
+        $item['message'] = (string) ($res['message'] ?? '');
+        $remaining[] = $item;
+    }
+    app_write_json_file(webops_retry_queue_path(), $remaining);
     out_json([
         'ok' => true,
         'processed' => $processed,

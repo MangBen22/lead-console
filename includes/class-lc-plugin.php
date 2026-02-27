@@ -1224,6 +1224,12 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_social_intake'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/site-health', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_site_health'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1367,6 +1373,42 @@ class LC_Plugin
             'connector_id' => $connector_id,
             'received' => count($drafts),
             'accepted' => $accepted,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_site_health($request)
+    {
+        global $wpdb;
+        $leads_table = $this->db_table('lc_leads');
+        $runs_table = $this->db_table('lc_runs');
+        $logs_table = $this->db_table('lc_system_logs');
+        $total_leads = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$leads_table}");
+        $ready_leads = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$leads_table} WHERE status IN ('Ready','Verified')");
+        $queued_runs = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$runs_table} WHERE status = 'queued'");
+        $recent_errors = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$logs_table} WHERE level = 'error' AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+        $smtp = $this->get_smtp_health_status();
+        $overall = $recent_errors > 0 ? 'warning' : 'ok';
+        if (empty($smtp['connected'])) {
+            $overall = 'warning';
+        }
+
+        $this->log_system_event('bridge', 'info', 'Bridge site health requested.', [
+            'overall' => $overall,
+            'queued_runs' => $queued_runs,
+            'recent_errors' => $recent_errors,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'overall' => $overall,
+            'metrics' => [
+                'total_leads' => $total_leads,
+                'ready_leads' => $ready_leads,
+                'queued_runs' => $queued_runs,
+                'recent_errors_24h' => $recent_errors,
+                'smtp_connected' => !empty($smtp['connected']),
+            ],
             'time' => current_time('mysql'),
         ]);
     }
