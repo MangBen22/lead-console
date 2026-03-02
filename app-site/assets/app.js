@@ -311,11 +311,17 @@
       const guard = data && data.guard ? data.guard : {};
       const checklist = guard && guard.checklist ? guard.checklist : {};
       const enforced = document.getElementById("guardEnforced");
+      const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
+      const launchWindowStart = document.getElementById("guardLaunchWindowStart");
+      const launchWindowEnd = document.getElementById("guardLaunchWindowEnd");
       const backup = document.getElementById("guardBackupVerified");
       const cron = document.getElementById("guardCronConfigured");
       const rollback = document.getElementById("guardRollbackReady");
       const dns = document.getElementById("guardDnsReady");
       if (enforced) enforced.checked = Number(guard.enforced) === 1;
+      if (launchWindowEnabled) launchWindowEnabled.checked = Number(guard.launch_window_enabled) === 1;
+      if (launchWindowStart) launchWindowStart.value = guard.launch_window_start ? String(guard.launch_window_start).slice(0, 16) : "";
+      if (launchWindowEnd) launchWindowEnd.value = guard.launch_window_end ? String(guard.launch_window_end).slice(0, 16) : "";
       if (backup) backup.checked = Number(checklist.backup_verified) === 1;
       if (cron) cron.checked = Number(checklist.cron_configured) === 1;
       if (rollback) rollback.checked = Number(checklist.rollback_plan_ready) === 1;
@@ -1129,12 +1135,18 @@
   if (saveDeploymentGuardBtn) {
     saveDeploymentGuardBtn.addEventListener("click", async function () {
       const enforced = document.getElementById("guardEnforced");
+      const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
+      const launchWindowStart = document.getElementById("guardLaunchWindowStart");
+      const launchWindowEnd = document.getElementById("guardLaunchWindowEnd");
       const backup = document.getElementById("guardBackupVerified");
       const cron = document.getElementById("guardCronConfigured");
       const rollback = document.getElementById("guardRollbackReady");
       const dns = document.getElementById("guardDnsReady");
       const payload = {
         enforced: enforced && enforced.checked ? 1 : 0,
+        launch_window_enabled: launchWindowEnabled && launchWindowEnabled.checked ? 1 : 0,
+        launch_window_start: launchWindowStart && launchWindowStart.value ? launchWindowStart.value.trim() : "",
+        launch_window_end: launchWindowEnd && launchWindowEnd.value ? launchWindowEnd.value.trim() : "",
         checklist: {
           backup_verified: backup && backup.checked ? 1 : 0,
           cron_configured: cron && cron.checked ? 1 : 0,

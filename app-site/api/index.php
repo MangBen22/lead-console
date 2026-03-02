@@ -372,6 +372,9 @@ function default_deployment_guard()
     return [
         'enforced' => 1,
         'unlocked' => 0,
+        'launch_window_enabled' => 0,
+        'launch_window_start' => '',
+        'launch_window_end' => '',
         'checklist' => [
             'backup_verified' => 0,
             'cron_configured' => 0,
@@ -428,6 +431,21 @@ function deployment_guard_evaluate($requireUnlocked = true)
 
     if ($requireUnlocked && empty($guard['unlocked'])) {
         $reasons[] = 'Deployment guard is locked.';
+    }
+
+    if (!empty($guard['launch_window_enabled'])) {
+        $startRaw = trim((string) ($guard['launch_window_start'] ?? ''));
+        $endRaw = trim((string) ($guard['launch_window_end'] ?? ''));
+        $startTs = $startRaw !== '' ? strtotime($startRaw) : false;
+        $endTs = $endRaw !== '' ? strtotime($endRaw) : false;
+        if ($startTs === false || $endTs === false || $endTs <= $startTs) {
+            $reasons[] = 'Launch window is enabled but start/end is invalid.';
+        } else {
+            $now = time();
+            if ($now < $startTs || $now > $endTs) {
+                $reasons[] = 'Current time is outside launch window.';
+            }
+        }
     }
 
     $installStatus = (string) ($guard['last_install_check']['status'] ?? '');
@@ -1843,7 +1861,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.16-cutover-pipeline-runner',
+        'phase' => '1.17-launch-window-guard',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2134,6 +2152,9 @@ if ($action === 'deployment.guard.save') {
     $incomingChecklist = isset($data['checklist']) && is_array($data['checklist']) ? $data['checklist'] : [];
     $saved = save_deployment_guard([
         'enforced' => !empty($data['enforced']) ? 1 : 0,
+        'launch_window_enabled' => !empty($data['launch_window_enabled']) ? 1 : 0,
+        'launch_window_start' => trim((string) ($data['launch_window_start'] ?? '')),
+        'launch_window_end' => trim((string) ($data['launch_window_end'] ?? '')),
         'checklist' => [
             'backup_verified' => !empty($incomingChecklist['backup_verified']) ? 1 : 0,
             'cron_configured' => !empty($incomingChecklist['cron_configured']) ? 1 : 0,
@@ -2142,7 +2163,13 @@ if ($action === 'deployment.guard.save') {
         ],
     ]);
     $eval = deployment_guard_evaluate();
-    audit_event('deployment', 'guard.save', ['enforced' => (int) $saved['enforced'], 'checklist' => $saved['checklist']]);
+    audit_event('deployment', 'guard.save', [
+        'enforced' => (int) $saved['enforced'],
+        'launch_window_enabled' => (int) $saved['launch_window_enabled'],
+        'launch_window_start' => (string) $saved['launch_window_start'],
+        'launch_window_end' => (string) $saved['launch_window_end'],
+        'checklist' => $saved['checklist'],
+    ]);
     out_json([
         'ok' => true,
         'allowed' => !empty($eval['allowed']),
