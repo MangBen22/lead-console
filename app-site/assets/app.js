@@ -14,6 +14,12 @@
   const cronHelpView = document.getElementById("cronHelpView");
   const notificationSettingsForm = document.getElementById("notificationSettingsForm");
   const notificationSettingsView = document.getElementById("notificationSettingsView");
+  const exportBackupBtn = document.getElementById("exportBackupBtn");
+  const importBackupBtn = document.getElementById("importBackupBtn");
+  const refreshAuditBtn = document.getElementById("refreshAuditBtn");
+  const backupPayload = document.getElementById("backupPayload");
+  const backupResult = document.getElementById("backupResult");
+  const auditLogView = document.getElementById("auditLogView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -209,6 +215,16 @@
     }
   }
 
+  async function loadAuditLog() {
+    if (!auditLogView) return;
+    try {
+      const data = await apiGet("audit.log");
+      auditLogView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      auditLogView.textContent = "Failed to load audit log.";
+    }
+  }
+
   loadStatus();
 
   modules.forEach(async function (entry) {
@@ -371,6 +387,7 @@
     await loadSchedulerStatus();
     await loadCronHelp();
     await loadNotificationSettings();
+    await loadAuditLog();
   })();
 
   if (crmConnectorForm) {
@@ -796,6 +813,47 @@
         await loadNotifications();
       });
     }
+  }
+
+  if (exportBackupBtn) {
+    exportBackupBtn.addEventListener("click", async function () {
+      const result = await apiGet("backup.export");
+      if (backupPayload) {
+        backupPayload.value = JSON.stringify(result, null, 2);
+      }
+      if (backupResult) {
+        backupResult.textContent = "Backup exported.";
+      }
+      await loadAuditLog();
+    });
+  }
+
+  if (importBackupBtn) {
+    importBackupBtn.addEventListener("click", async function () {
+      if (!backupPayload || !backupPayload.value.trim()) {
+        if (backupResult) backupResult.textContent = "Paste backup payload JSON first.";
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(backupPayload.value);
+      } catch (err) {
+        if (backupResult) backupResult.textContent = "Invalid JSON payload.";
+        return;
+      }
+      const result = await apiPost("backup.import", payload);
+      if (backupResult) {
+        backupResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAuditLog();
+      await loadStatus();
+    });
+  }
+
+  if (refreshAuditBtn) {
+    refreshAuditBtn.addEventListener("click", async function () {
+      await loadAuditLog();
+    });
   }
 
   if (seoProjectForm) {

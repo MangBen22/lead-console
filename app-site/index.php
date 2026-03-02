@@ -505,6 +505,19 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Extension Events</h3>
                 <pre id="seoExtensionEvents">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>Backup + Audit</h2>
+                <div class="actions">
+                    <button id="exportBackupBtn" type="button">Export Backup</button>
+                    <button id="importBackupBtn" type="button">Import Backup</button>
+                    <button id="refreshAuditBtn" type="button">Refresh Audit Log</button>
+                </div>
+                <textarea id="backupPayload" class="large-text code" rows="8" placeholder="Backup payload JSON appears here for export/import..."></textarea>
+                <pre id="backupResult">No backup action yet.</pre>
+                <h3>Audit Log</h3>
+                <pre id="auditLogView">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

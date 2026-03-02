@@ -234,6 +234,99 @@ function automation_settings_path()
     return app_storage_path('automation_settings.json');
 }
 
+function rate_limit_path()
+{
+    return app_storage_path('rate_limits.json');
+}
+
+function audit_log_path()
+{
+    return app_storage_path('audit_log.json');
+}
+
+function module_storage_map()
+{
+    return [
+        'crm_connectors' => app_storage_path('crm_connectors.json'),
+        'crm_sync_log' => app_storage_path('crm_sync_log.json'),
+        'crm_retry_queue' => app_storage_path('crm_retry_queue.json'),
+        'social_connectors' => social_connectors_path(),
+        'social_sync_log' => social_sync_log_path(),
+        'social_retry_queue' => social_retry_queue_path(),
+        'webops_monitors' => webops_monitors_path(),
+        'webops_log' => webops_log_path(),
+        'webops_retry_queue' => webops_retry_queue_path(),
+        'seo_projects' => seo_projects_path(),
+        'seo_audits' => seo_audits_path(),
+        'seo_extension_events' => seo_extension_events_path(),
+        'notifications' => notifications_path(),
+        'notification_settings' => notification_settings_path(),
+        'automation_runs' => automation_runs_path(),
+        'automation_settings' => automation_settings_path(),
+    ];
+}
+
+function current_actor()
+{
+    $user = app_current_user();
+    if (is_array($user) && !empty($user['email'])) {
+        return 'user:' . (string) $user['email'];
+    }
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown';
+    return 'ip:' . $ip;
+}
+
+function enforce_rate_limit($actionKey, $maxRequests, $windowSeconds)
+{
+    $path = rate_limit_path();
+    $rows = app_read_json_file($path, []);
+    $now = time();
+    $actor = current_actor();
+    $key = $actor . '|' . (string) $actionKey;
+    $entry = isset($rows[$key]) && is_array($rows[$key]) ? $rows[$key] : ['count' => 0, 'window_start' => $now];
+    $start = (int) ($entry['window_start'] ?? $now);
+    $count = (int) ($entry['count'] ?? 0);
+    if (($now - $start) >= $windowSeconds) {
+        $start = $now;
+        $count = 0;
+    }
+    $count++;
+    $rows[$key] = [
+        'count' => $count,
+        'window_start' => $start,
+        'updated_at' => gmdate('c'),
+    ];
+    foreach ($rows as $k => $v) {
+        $s = is_array($v) ? (int) ($v['window_start'] ?? 0) : 0;
+        if ($s > 0 && ($now - $s) > 86400) {
+            unset($rows[$k]);
+        }
+    }
+    app_write_json_file($path, $rows);
+    if ($count > $maxRequests) {
+        out_json([
+            'ok' => false,
+            'error' => 'Rate limit exceeded. Please retry later.',
+            'action' => $actionKey,
+        ], 429);
+    }
+}
+
+function audit_event($category, $actionName, $details = [])
+{
+    $rows = app_read_json_file(audit_log_path(), []);
+    array_unshift($rows, [
+        'id' => 'audit_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'category' => (string) $category,
+        'action' => (string) $actionName,
+        'actor' => current_actor(),
+        'details' => is_array($details) ? $details : [],
+        'created_at' => gmdate('c'),
+    ]);
+    $rows = array_slice($rows, 0, 1000);
+    app_write_json_file(audit_log_path(), $rows);
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -931,12 +1024,27 @@ if (!in_array($action, $publicActions, true)) {
     app_require_auth();
 }
 
+$rateLimitedWriteActions = [
+    'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
+    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
+    'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake',
+    'notifications.read_all', 'notifications.settings.save',
+    'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
+    'backup.import',
+];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $rateLimitedWriteActions, true)) {
+    $max = ($action === 'automation.scheduler.tick') ? 240 : 60;
+    $window = ($action === 'automation.scheduler.tick') ? 3600 : 60;
+    enforce_rate_limit($action, $max, $window);
+}
+
 if ($action === 'status') {
     $automationSettings = get_automation_settings();
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.6-scheduler-and-module-toggles',
+        'phase' => '1.7-hardening-rate-limit-audit-backup',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1000,6 +1108,7 @@ if ($action === 'notifications.settings.save') {
         'sound_enabled' => !empty($data['sound_enabled']) ? 1 : 0,
         'sound_mode' => (string) ($data['sound_mode'] ?? 'critical_only'),
     ]);
+    audit_event('notifications', 'settings.save', ['sound_enabled' => (int) $saved['sound_enabled'], 'sound_mode' => (string) $saved['sound_mode']]);
     out_json([
         'ok' => true,
         'settings' => $saved,
@@ -1085,6 +1194,7 @@ if ($action === 'crm.connectors.save') {
     }));
     $rows[] = $item;
     app_write_json_file($path, $rows);
+    audit_event('crm', 'connectors.save', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider']]);
     out_json(['ok' => true, 'item' => $item]);
 }
 
@@ -1106,6 +1216,7 @@ if ($action === 'crm.connectors.delete') {
         return (string) ($row['connector_id'] ?? '') !== $connectorId;
     }));
     app_write_json_file($path, $rows);
+    audit_event('crm', 'connectors.delete', ['connector_id' => $connectorId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -1218,6 +1329,7 @@ if ($action === 'crm.push.sync') {
     array_unshift($logs, $logItem);
     $logs = array_slice($logs, 0, 100);
     app_write_json_file($logPath, $logs);
+    audit_event('crm', 'push.sync', ['sync_id' => $syncId, 'connector_count' => count($activeConnectors), 'approved_total' => $totalApproved]);
 
     out_json([
         'ok' => true,
@@ -1432,6 +1544,7 @@ if ($action === 'seo.projects.save') {
     }));
     $rows[] = $item;
     app_write_json_file(seo_projects_path(), $rows);
+    audit_event('seo', 'projects.save', ['project_id' => (string) $item['project_id'], 'domain' => (string) $item['domain']]);
     out_json(['ok' => true, 'item' => $item]);
 }
 
@@ -1452,6 +1565,7 @@ if ($action === 'seo.projects.delete') {
         return (string) ($row['project_id'] ?? '') !== $projectId;
     }));
     app_write_json_file(seo_projects_path(), $rows);
+    audit_event('seo', 'projects.delete', ['project_id' => $projectId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -1493,6 +1607,7 @@ if ($action === 'seo.audit.run') {
     array_unshift($rows, $audit);
     $rows = array_slice($rows, 0, 500);
     app_write_json_file(seo_audits_path(), $rows);
+    audit_event('seo', 'audit.run', ['project_id' => (string) $project['project_id'], 'audit_id' => (string) $audit['audit_id']]);
     out_json([
         'ok' => true,
         'audit' => $audit,
@@ -1594,6 +1709,7 @@ if ($action === 'social.connectors.save') {
     }));
     $rows[] = $item;
     app_write_json_file(social_connectors_path(), $rows);
+    audit_event('social', 'connectors.save', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider']]);
     out_json(['ok' => true, 'item' => $item]);
 }
 
@@ -1614,6 +1730,7 @@ if ($action === 'social.connectors.delete') {
         return (string) ($row['connector_id'] ?? '') !== $connectorId;
     }));
     app_write_json_file(social_connectors_path(), $rows);
+    audit_event('social', 'connectors.delete', ['connector_id' => $connectorId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -1707,6 +1824,7 @@ if ($action === 'social.push.sync') {
     array_unshift($logs, $logItem);
     $logs = array_slice($logs, 0, 100);
     app_write_json_file(social_sync_log_path(), $logs);
+    audit_event('social', 'push.sync', ['sync_id' => $syncId, 'connector_count' => count($activeConnectors), 'draft_total' => count($drafts)]);
     out_json([
         'ok' => true,
         'sync' => $logItem,
@@ -1809,6 +1927,7 @@ if ($action === 'webops.monitors.save') {
     }));
     $rows[] = $item;
     app_write_json_file(webops_monitors_path(), $rows);
+    audit_event('webops', 'monitors.save', ['monitor_id' => (string) $item['monitor_id'], 'type' => (string) $item['type']]);
     out_json(['ok' => true, 'item' => $item]);
 }
 
@@ -1829,6 +1948,7 @@ if ($action === 'webops.monitors.delete') {
         return (string) ($row['monitor_id'] ?? '') !== $monitorId;
     }));
     app_write_json_file(webops_monitors_path(), $rows);
+    audit_event('webops', 'monitors.delete', ['monitor_id' => $monitorId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -1902,6 +2022,7 @@ if ($action === 'webops.run') {
     array_unshift($logs, $runItem);
     $logs = array_slice($logs, 0, 200);
     app_write_json_file(webops_log_path(), $logs);
+    audit_event('webops', 'run', ['run_id' => (string) $runItem['run_id'], 'monitor_count' => count($active), 'critical_count' => $critical]);
     out_json(['ok' => true, 'run' => $runItem]);
 }
 
@@ -1973,6 +2094,7 @@ if ($action === 'notifications.read_all') {
     }
     unset($row);
     app_write_json_file(notifications_path(), $rows);
+    audit_event('notifications', 'read_all', ['updated' => $count]);
     out_json(['ok' => true, 'updated' => $count]);
 }
 
@@ -2015,6 +2137,7 @@ if ($action === 'automation.settings.save') {
         ],
     ];
     $saved = save_automation_settings($settings);
+    audit_event('automation', 'settings.save', ['enabled' => (int) $saved['enabled'], 'interval_minutes' => (int) $saved['interval_minutes'], 'modules' => $saved['modules']]);
     out_json([
         'ok' => true,
         'settings' => $saved,
@@ -2068,6 +2191,7 @@ if ($action === 'automation.run_all') {
     $summary = execute_automation_run($settings, 'manual');
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
+    audit_event('automation', 'run_all', ['automation_id' => (string) $summary['automation_id'], 'source' => 'manual']);
     out_json([
         'ok' => true,
         'run' => $summary,
@@ -2109,9 +2233,62 @@ if ($action === 'automation.scheduler.tick') {
     $summary = execute_automation_run($settings, 'scheduler');
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
+    audit_event('automation', 'scheduler.tick', ['automation_id' => (string) $summary['automation_id'], 'source' => 'scheduler']);
     out_json([
         'ok' => true,
         'run' => $summary,
+    ]);
+}
+
+if ($action === 'audit.log') {
+    $rows = app_read_json_file(audit_log_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'backup.export') {
+    app_require_owner();
+    $map = module_storage_map();
+    $payload = [];
+    foreach ($map as $name => $path) {
+        $payload[$name] = app_read_json_file($path, []);
+    }
+    audit_event('backup', 'export', ['keys' => array_keys($payload)]);
+    out_json([
+        'ok' => true,
+        'version' => 1,
+        'exported_at' => gmdate('c'),
+        'data' => $payload,
+    ]);
+}
+
+if ($action === 'backup.import') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || !isset($data['data']) || !is_array($data['data'])) {
+        out_json(['ok' => false, 'error' => 'Invalid backup payload.'], 400);
+    }
+    $incoming = $data['data'];
+    $map = module_storage_map();
+    $written = [];
+    foreach ($map as $name => $path) {
+        if (array_key_exists($name, $incoming)) {
+            $value = is_array($incoming[$name]) ? $incoming[$name] : [];
+            app_write_json_file($path, $value);
+            $written[] = $name;
+        }
+    }
+    audit_event('backup', 'import', ['keys' => $written]);
+    out_json([
+        'ok' => true,
+        'imported_keys' => $written,
     ]);
 }
 
