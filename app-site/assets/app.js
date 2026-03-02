@@ -24,9 +24,14 @@
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
+  const deploymentGuardForm = document.getElementById("deploymentGuardForm");
+  const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
+  const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
+  const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
   const installCheckView = document.getElementById("installCheckView");
   const deploymentVerifyView = document.getElementById("deploymentVerifyView");
+  const deploymentGuardView = document.getElementById("deploymentGuardView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -252,6 +257,28 @@
     }
   }
 
+  async function loadDeploymentGuard() {
+    if (!deploymentGuardView) return;
+    try {
+      const data = await apiGet("deployment.guard.status");
+      deploymentGuardView.textContent = JSON.stringify(data, null, 2);
+      const guard = data && data.guard ? data.guard : {};
+      const checklist = guard && guard.checklist ? guard.checklist : {};
+      const enforced = document.getElementById("guardEnforced");
+      const backup = document.getElementById("guardBackupVerified");
+      const cron = document.getElementById("guardCronConfigured");
+      const rollback = document.getElementById("guardRollbackReady");
+      const dns = document.getElementById("guardDnsReady");
+      if (enforced) enforced.checked = Number(guard.enforced) === 1;
+      if (backup) backup.checked = Number(checklist.backup_verified) === 1;
+      if (cron) cron.checked = Number(checklist.cron_configured) === 1;
+      if (rollback) rollback.checked = Number(checklist.rollback_plan_ready) === 1;
+      if (dns) dns.checked = Number(checklist.dns_domain_ready) === 1;
+    } catch (err) {
+      deploymentGuardView.textContent = "Failed to load deployment guard.";
+    }
+  }
+
   function downloadJsonFile(filename, payload) {
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -431,6 +458,7 @@
     await loadAuditLog();
     await loadPreflight();
     await loadInstallCheck();
+    await loadDeploymentGuard();
   })();
 
   if (crmConnectorForm) {
@@ -931,6 +959,63 @@
       }
       await loadAuditLog();
       await loadStatus();
+      await loadDeploymentGuard();
+    });
+  }
+
+  if (deploymentGuardForm) {
+    deploymentGuardForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+  }
+
+  if (saveDeploymentGuardBtn) {
+    saveDeploymentGuardBtn.addEventListener("click", async function () {
+      const enforced = document.getElementById("guardEnforced");
+      const backup = document.getElementById("guardBackupVerified");
+      const cron = document.getElementById("guardCronConfigured");
+      const rollback = document.getElementById("guardRollbackReady");
+      const dns = document.getElementById("guardDnsReady");
+      const payload = {
+        enforced: enforced && enforced.checked ? 1 : 0,
+        checklist: {
+          backup_verified: backup && backup.checked ? 1 : 0,
+          cron_configured: cron && cron.checked ? 1 : 0,
+          rollback_plan_ready: rollback && rollback.checked ? 1 : 0,
+          dns_domain_ready: dns && dns.checked ? 1 : 0,
+        },
+      };
+      const result = await apiPost("deployment.guard.save", payload);
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAuditLog();
+      await loadStatus();
+      await loadDeploymentGuard();
+    });
+  }
+
+  if (unlockDeploymentGuardBtn) {
+    unlockDeploymentGuardBtn.addEventListener("click", async function () {
+      const result = await apiPost("deployment.guard.unlock", {});
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAuditLog();
+      await loadStatus();
+      await loadDeploymentGuard();
+    });
+  }
+
+  if (lockDeploymentGuardBtn) {
+    lockDeploymentGuardBtn.addEventListener("click", async function () {
+      const result = await apiPost("deployment.guard.lock", {});
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAuditLog();
+      await loadStatus();
+      await loadDeploymentGuard();
     });
   }
 

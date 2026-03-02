@@ -269,6 +269,11 @@ function audit_log_path()
     return app_storage_path('audit_log.json');
 }
 
+function deployment_guard_path()
+{
+    return app_storage_path('deployment_guard.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -350,6 +355,97 @@ function audit_event($category, $actionName, $details = [])
     ]);
     $rows = array_slice($rows, 0, 1000);
     app_write_json_file(audit_log_path(), $rows);
+}
+
+function default_deployment_guard()
+{
+    return [
+        'enforced' => 1,
+        'unlocked' => 0,
+        'checklist' => [
+            'backup_verified' => 0,
+            'cron_configured' => 0,
+            'rollback_plan_ready' => 0,
+            'dns_domain_ready' => 0,
+        ],
+        'last_install_check' => ['status' => '', 'time' => ''],
+        'last_preflight' => ['status' => '', 'time' => ''],
+        'last_verify' => ['status' => '', 'time' => ''],
+        'updated_at' => gmdate('c'),
+    ];
+}
+
+function get_deployment_guard()
+{
+    $saved = app_read_json_file(deployment_guard_path(), []);
+    if (!is_array($saved)) {
+        $saved = [];
+    }
+    $defaults = default_deployment_guard();
+    $guard = array_merge($defaults, $saved);
+    $guard['checklist'] = array_merge($defaults['checklist'], is_array($guard['checklist'] ?? null) ? $guard['checklist'] : []);
+    $guard['last_install_check'] = array_merge($defaults['last_install_check'], is_array($guard['last_install_check'] ?? null) ? $guard['last_install_check'] : []);
+    $guard['last_preflight'] = array_merge($defaults['last_preflight'], is_array($guard['last_preflight'] ?? null) ? $guard['last_preflight'] : []);
+    $guard['last_verify'] = array_merge($defaults['last_verify'], is_array($guard['last_verify'] ?? null) ? $guard['last_verify'] : []);
+    return $guard;
+}
+
+function save_deployment_guard($guard)
+{
+    $current = get_deployment_guard();
+    $merged = array_merge($current, is_array($guard) ? $guard : []);
+    $merged['checklist'] = array_merge($current['checklist'], is_array($merged['checklist'] ?? null) ? $merged['checklist'] : []);
+    $merged['last_install_check'] = array_merge($current['last_install_check'], is_array($merged['last_install_check'] ?? null) ? $merged['last_install_check'] : []);
+    $merged['last_preflight'] = array_merge($current['last_preflight'], is_array($merged['last_preflight'] ?? null) ? $merged['last_preflight'] : []);
+    $merged['last_verify'] = array_merge($current['last_verify'], is_array($merged['last_verify'] ?? null) ? $merged['last_verify'] : []);
+    $merged['updated_at'] = gmdate('c');
+    app_write_json_file(deployment_guard_path(), $merged);
+    return $merged;
+}
+
+function deployment_guard_evaluate($requireUnlocked = true)
+{
+    $guard = get_deployment_guard();
+    $reasons = [];
+
+    if (empty($guard['enforced'])) {
+        return [
+            'allowed' => true,
+            'guard' => $guard,
+            'reasons' => [],
+        ];
+    }
+
+    if ($requireUnlocked && empty($guard['unlocked'])) {
+        $reasons[] = 'Deployment guard is locked.';
+    }
+
+    $installStatus = (string) ($guard['last_install_check']['status'] ?? '');
+    if ($installStatus === '' || $installStatus === 'critical') {
+        $reasons[] = 'Install check is missing or critical.';
+    }
+
+    $preflightStatus = (string) ($guard['last_preflight']['status'] ?? '');
+    if ($preflightStatus === '' || $preflightStatus === 'critical') {
+        $reasons[] = 'Deployment preflight is missing or critical.';
+    }
+
+    $verifyStatus = (string) ($guard['last_verify']['status'] ?? '');
+    if ($verifyStatus === '' || $verifyStatus === 'critical') {
+        $reasons[] = 'Post-deploy verify is missing or critical.';
+    }
+
+    foreach (($guard['checklist'] ?? []) as $key => $value) {
+        if (empty($value)) {
+            $reasons[] = 'Checklist item incomplete: ' . (string) $key;
+        }
+    }
+
+    return [
+        'allowed' => empty($reasons),
+        'guard' => $guard,
+        'reasons' => $reasons,
+    ];
 }
 
 function healthcheck_snapshot()
@@ -1402,13 +1498,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $rateLimitedWrite
     enforce_rate_limit($action, $max, $window);
 }
 
+$deploymentGuardedActions = [
+    'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
+    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
+    'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run',
+    'automation.settings.save', 'automation.run_all',
+    'backup.import',
+];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $deploymentGuardedActions, true)) {
+    $gate = deployment_guard_evaluate();
+    if (empty($gate['allowed'])) {
+        out_json([
+            'ok' => false,
+            'error' => 'Deployment guard blocked this action.',
+            'action' => $action,
+            'reasons' => $gate['reasons'],
+            'guard' => $gate['guard'],
+        ], 423);
+    }
+}
+
 if ($action === 'status') {
     $automationSettings = get_automation_settings();
     $health = healthcheck_snapshot();
+    $guard = deployment_guard_evaluate();
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.11-hosting-cutover-toolkit',
+        'phase' => '1.12-deployment-guard-enforcement',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1420,6 +1538,12 @@ if ($action === 'status') {
         'health' => [
             'status' => (string) ($health['status'] ?? 'warning'),
         ],
+        'deployment_guard' => [
+            'allowed' => !empty($guard['allowed']),
+            'reasons' => $guard['reasons'],
+            'enforced' => !empty($guard['guard']['enforced']) ? 1 : 0,
+            'unlocked' => !empty($guard['guard']['unlocked']) ? 1 : 0,
+        ],
         'sites_configured' => count(all_sites()),
         'time' => gmdate('c'),
     ]);
@@ -1427,6 +1551,12 @@ if ($action === 'status') {
 
 if ($action === 'install.check') {
     $snap = install_check_snapshot();
+    save_deployment_guard([
+        'last_install_check' => [
+            'status' => (string) ($snap['status'] ?? 'warning'),
+            'time' => (string) ($snap['time'] ?? gmdate('c')),
+        ],
+    ]);
     $http = ($snap['status'] === 'critical') ? 503 : 200;
     out_json([
         'ok' => $snap['status'] !== 'critical',
@@ -1450,6 +1580,12 @@ if ($action === 'healthcheck') {
 
 if ($action === 'deployment.preflight') {
     $snap = deployment_preflight_snapshot();
+    save_deployment_guard([
+        'last_preflight' => [
+            'status' => (string) ($snap['status'] ?? 'warning'),
+            'time' => (string) ($snap['time'] ?? gmdate('c')),
+        ],
+    ]);
     $http = ($snap['status'] === 'critical') ? 503 : 200;
     out_json([
         'ok' => $snap['status'] !== 'critical',
@@ -1476,6 +1612,12 @@ if ($action === 'deployment.verify') {
     }
     app_require_csrf();
     $snap = deployment_verify_snapshot();
+    save_deployment_guard([
+        'last_verify' => [
+            'status' => (string) ($snap['status'] ?? 'warning'),
+            'time' => (string) ($snap['time'] ?? gmdate('c')),
+        ],
+    ]);
     audit_event('deployment', 'verify.run', ['status' => (string) $snap['status'], 'summary' => $snap['summary']]);
     out_json([
         'ok' => $snap['status'] !== 'critical',
@@ -1485,6 +1627,86 @@ if ($action === 'deployment.verify') {
         'preflight' => $snap['preflight'],
         'time' => $snap['time'],
     ], ($snap['status'] === 'critical') ? 503 : 200);
+}
+
+if ($action === 'deployment.guard.status') {
+    $eval = deployment_guard_evaluate();
+    out_json([
+        'ok' => true,
+        'allowed' => !empty($eval['allowed']),
+        'reasons' => $eval['reasons'],
+        'guard' => $eval['guard'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.guard.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $incomingChecklist = isset($data['checklist']) && is_array($data['checklist']) ? $data['checklist'] : [];
+    $saved = save_deployment_guard([
+        'enforced' => !empty($data['enforced']) ? 1 : 0,
+        'checklist' => [
+            'backup_verified' => !empty($incomingChecklist['backup_verified']) ? 1 : 0,
+            'cron_configured' => !empty($incomingChecklist['cron_configured']) ? 1 : 0,
+            'rollback_plan_ready' => !empty($incomingChecklist['rollback_plan_ready']) ? 1 : 0,
+            'dns_domain_ready' => !empty($incomingChecklist['dns_domain_ready']) ? 1 : 0,
+        ],
+    ]);
+    $eval = deployment_guard_evaluate();
+    audit_event('deployment', 'guard.save', ['enforced' => (int) $saved['enforced'], 'checklist' => $saved['checklist']]);
+    out_json([
+        'ok' => true,
+        'allowed' => !empty($eval['allowed']),
+        'reasons' => $eval['reasons'],
+        'guard' => $saved,
+    ]);
+}
+
+if ($action === 'deployment.guard.unlock') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $evalBefore = deployment_guard_evaluate(false);
+    if (!empty($evalBefore['reasons'])) {
+        out_json([
+            'ok' => false,
+            'error' => 'Cannot unlock deployment guard yet.',
+            'reasons' => $evalBefore['reasons'],
+            'guard' => $evalBefore['guard'],
+        ], 400);
+    }
+    $saved = save_deployment_guard(['unlocked' => 1]);
+    audit_event('deployment', 'guard.unlock', ['enforced' => (int) $saved['enforced']]);
+    out_json([
+        'ok' => true,
+        'message' => 'Deployment guard unlocked.',
+        'guard' => $saved,
+    ]);
+}
+
+if ($action === 'deployment.guard.lock') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $saved = save_deployment_guard(['unlocked' => 0]);
+    audit_event('deployment', 'guard.lock', ['enforced' => (int) $saved['enforced']]);
+    out_json([
+        'ok' => true,
+        'message' => 'Deployment guard locked.',
+        'guard' => $saved,
+    ]);
 }
 
 if ($action === 'notifications') {

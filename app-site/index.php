@@ -538,6 +538,20 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>
                 <pre id="deploymentVerifyView">No verification run yet.</pre>
+                <h3>Deployment Guard</h3>
+                <form id="deploymentGuardForm">
+                    <label><input id="guardEnforced" type="checkbox" value="1" checked /> Enforce deployment guard on risky writes</label>
+                    <label><input id="guardBackupVerified" type="checkbox" value="1" /> Backup verified</label>
+                    <label><input id="guardCronConfigured" type="checkbox" value="1" /> Cron configured</label>
+                    <label><input id="guardRollbackReady" type="checkbox" value="1" /> Rollback plan ready</label>
+                    <label><input id="guardDnsReady" type="checkbox" value="1" /> DNS/domain ready</label>
+                    <div class="actions">
+                        <button id="saveDeploymentGuardBtn" type="button">Save Guard Checklist</button>
+                        <button id="unlockDeploymentGuardBtn" type="button">Unlock Guard</button>
+                        <button id="lockDeploymentGuardBtn" type="button">Lock Guard</button>
+                    </div>
+                </form>
+                <pre id="deploymentGuardView">Loading...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
