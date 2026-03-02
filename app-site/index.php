@@ -132,6 +132,17 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Automation Runner</h2>
+                <div class="actions">
+                    <button id="runAutomationBtn" type="button">Run All Automation</button>
+                    <button id="markNotificationsReadBtn" type="button">Mark Notifications Read</button>
+                </div>
+                <pre id="automationResult">No automation run yet.</pre>
+                <h3>Automation Runs</h3>
+                <pre id="automationRuns">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Module Bootstrap</h2>
                 <div class="module-grid">
                     <article>

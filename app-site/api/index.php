@@ -214,6 +214,31 @@ function seo_extension_events_path()
     return app_storage_path('seo_extension_events.json');
 }
 
+function notifications_path()
+{
+    return app_storage_path('notifications.json');
+}
+
+function automation_runs_path()
+{
+    return app_storage_path('automation_runs.json');
+}
+
+function push_notification($type, $message, $meta = [])
+{
+    $rows = app_read_json_file(notifications_path(), []);
+    array_unshift($rows, [
+        'id' => 'notif_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'type' => (string) $type,
+        'message' => (string) $message,
+        'meta' => is_array($meta) ? $meta : [],
+        'read' => 0,
+        'created_at' => gmdate('c'),
+    ]);
+    $rows = array_slice($rows, 0, 500);
+    app_write_json_file(notifications_path(), $rows);
+}
+
 function seo_project_by_id($projectId)
 {
     $rows = app_read_json_file(seo_projects_path(), []);
@@ -692,12 +717,24 @@ if ($action === 'status') {
 }
 
 if ($action === 'notifications') {
+    $rows = app_read_json_file(notifications_path(), []);
+    $unread = 0;
+    foreach ($rows as $row) {
+        if (is_array($row) && empty($row['read'])) {
+            $unread++;
+        }
+    }
+    if (empty($rows)) {
+        $rows = [
+            ['id' => 'bootstrap_1', 'type' => 'info', 'message' => 'Main platform API is reachable.', 'read' => 0, 'created_at' => gmdate('c')],
+            ['id' => 'bootstrap_2', 'type' => 'info', 'message' => 'Bridge-aware mode enabled.', 'read' => 0, 'created_at' => gmdate('c')],
+        ];
+        $unread = 2;
+    }
     out_json([
         'ok' => true,
-        'items' => [
-            ['type' => 'info', 'message' => 'Main platform API is reachable.'],
-            ['type' => 'info', 'message' => 'Bridge-aware mode enabled.'],
-        ],
+        'unread' => $unread,
+        'items' => $rows,
         'time' => gmdate('c'),
     ]);
 }
@@ -1650,6 +1687,173 @@ if ($action === 'webops.retry.run') {
         'processed' => $processed,
         'succeeded' => $succeeded,
         'remaining' => count($remaining),
+    ]);
+}
+
+if ($action === 'notifications.read_all') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $rows = app_read_json_file(notifications_path(), []);
+    $count = 0;
+    foreach ($rows as &$row) {
+        if (is_array($row) && empty($row['read'])) {
+            $row['read'] = 1;
+            $count++;
+        }
+    }
+    unset($row);
+    app_write_json_file(notifications_path(), $rows);
+    out_json(['ok' => true, 'updated' => $count]);
+}
+
+if ($action === 'automation.runs') {
+    $rows = app_read_json_file(automation_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'automation.run_all') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+
+    $automationId = 'auto_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
+    $summary = [
+        'automation_id' => $automationId,
+        'created_at' => gmdate('c'),
+        'crm' => ['processed' => 0, 'failed' => 0],
+        'social' => ['processed' => 0, 'failed' => 0],
+        'webops' => ['processed' => 0, 'failed' => 0],
+        'seo' => ['processed' => 0, 'failed' => 0],
+    ];
+
+    // CRM run
+    $crmConnectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $crmActive = array_values(array_filter($crmConnectors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $leadPayload = collect_approved_leads();
+    $leads = $leadPayload['leads'];
+    foreach ($crmActive as $connector) {
+        $summary['crm']['processed']++;
+        $res = execute_connector_sync($connector, $leads);
+        if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
+            $summary['crm']['failed']++;
+            enqueue_retry_item([
+                'retry_id' => 'retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'connector_id' => (string) ($res['connector_id'] ?? ''),
+                'provider' => (string) ($res['provider'] ?? ''),
+                'type' => (string) ($res['type'] ?? ''),
+                'error_codes' => isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [],
+                'errors' => isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [],
+                'lead_count' => count($leads),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
+    }
+
+    // Social run
+    $socialConnectors = app_read_json_file(social_connectors_path(), []);
+    $socialActive = array_values(array_filter($socialConnectors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $drafts = collect_social_drafts();
+    foreach ($socialActive as $connector) {
+        $summary['social']['processed']++;
+        $res = execute_social_connector_sync($connector, $drafts);
+        if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
+            $summary['social']['failed']++;
+            enqueue_social_retry_item([
+                'retry_id' => 'social_retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'connector_id' => (string) ($res['connector_id'] ?? ''),
+                'provider' => (string) ($res['provider'] ?? ''),
+                'type' => (string) ($res['type'] ?? ''),
+                'error_codes' => isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [],
+                'errors' => isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [],
+                'draft_count' => count($drafts),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
+    }
+
+    // WebOps run
+    $webopsMonitors = app_read_json_file(webops_monitors_path(), []);
+    $webopsActive = array_values(array_filter($webopsMonitors, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    foreach ($webopsActive as $monitor) {
+        $summary['webops']['processed']++;
+        $res = execute_webops_monitor($monitor);
+        if (empty($res['ok'])) {
+            $summary['webops']['failed']++;
+            enqueue_webops_retry_item([
+                'retry_id' => 'webops_retry_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'monitor_id' => (string) ($monitor['monitor_id'] ?? ''),
+                'type' => (string) ($monitor['type'] ?? ''),
+                'error_code' => (string) ($res['error_code'] ?? ''),
+                'message' => (string) ($res['message'] ?? ''),
+                'attempts' => 0,
+                'status' => 'queued',
+            ]);
+        }
+    }
+
+    // SEO run
+    $seoProjects = app_read_json_file(seo_projects_path(), []);
+    $seoActive = array_values(array_filter($seoProjects, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $seoAudits = app_read_json_file(seo_audits_path(), []);
+    foreach ($seoActive as $project) {
+        $summary['seo']['processed']++;
+        $audit = run_seo_audit_for_project($project);
+        if ((int) ($audit['critical_issues'] ?? 0) > 0) {
+            $summary['seo']['failed']++;
+        }
+        array_unshift($seoAudits, $audit);
+    }
+    $seoAudits = array_slice($seoAudits, 0, 500);
+    app_write_json_file(seo_audits_path(), $seoAudits);
+
+    $runs = app_read_json_file(automation_runs_path(), []);
+    array_unshift($runs, $summary);
+    $runs = array_slice($runs, 0, 200);
+    app_write_json_file(automation_runs_path(), $runs);
+
+    $failTotal = $summary['crm']['failed'] + $summary['social']['failed'] + $summary['webops']['failed'] + $summary['seo']['failed'];
+    if ($failTotal > 0) {
+        push_notification('warning', 'Automation run completed with issues.', [
+            'automation_id' => $automationId,
+            'failed_total' => $failTotal,
+            'summary' => $summary,
+        ]);
+    } else {
+        push_notification('success', 'Automation run completed successfully.', [
+            'automation_id' => $automationId,
+            'summary' => $summary,
+        ]);
+    }
+
+    out_json([
+        'ok' => true,
+        'run' => $summary,
     ]);
 }
 

@@ -3,6 +3,10 @@
   const notifyPanel = document.getElementById("notifyPanel");
   const notifyList = document.getElementById("notifyList");
   const apiStatus = document.getElementById("apiStatus");
+  const runAutomationBtn = document.getElementById("runAutomationBtn");
+  const markNotificationsReadBtn = document.getElementById("markNotificationsReadBtn");
+  const automationResult = document.getElementById("automationResult");
+  const automationRuns = document.getElementById("automationRuns");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -72,13 +76,40 @@
       });
       const data = await res.json();
       apiStatus.textContent = JSON.stringify(data, null, 2);
-      if (notifyList) {
-        const li = document.createElement("li");
-        li.textContent = "API status loaded at " + new Date().toLocaleTimeString();
-        notifyList.prepend(li);
-      }
     } catch (err) {
       apiStatus.textContent = "Status fetch failed: " + (err && err.message ? err.message : "Unknown error");
+    }
+  }
+
+  async function loadNotifications() {
+    if (!notifyList) return;
+    try {
+      const data = await apiGet("notifications");
+      notifyList.innerHTML = "";
+      const items = data && Array.isArray(data.items) ? data.items : [];
+      items.slice(0, 20).forEach(function (item) {
+        const li = document.createElement("li");
+        const state = item && Number(item.read) === 1 ? "read" : "unread";
+        li.textContent = "[" + state + "] " + (item.message || "Notification");
+        notifyList.appendChild(li);
+      });
+      if (items.length === 0) {
+        const li = document.createElement("li");
+        li.textContent = "No notifications.";
+        notifyList.appendChild(li);
+      }
+    } catch (err) {
+      notifyList.innerHTML = "<li>Failed to load notifications.</li>";
+    }
+  }
+
+  async function loadAutomationRuns() {
+    if (!automationRuns) return;
+    try {
+      const data = await apiGet("automation.runs");
+      automationRuns.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      automationRuns.textContent = "Failed to load automation runs.";
     }
   }
 
@@ -238,6 +269,8 @@
     await loadSeoProjects();
     await loadSeoAudits();
     await loadSeoExtensionEvents();
+    await loadNotifications();
+    await loadAutomationRuns();
   })();
 
   if (crmConnectorForm) {
@@ -559,6 +592,36 @@
       if (panel) {
         panel.textContent = JSON.stringify(data, null, 2);
       }
+    });
+  }
+
+  if (runAutomationBtn) {
+    runAutomationBtn.addEventListener("click", async function () {
+      const result = await apiPost("automation.run_all", {});
+      if (automationResult) {
+        automationResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAutomationRuns();
+      await loadNotifications();
+      const refreshActions = ["crm.summary", "social.summary", "webops.summary", "seo.summary", "leads.summary"];
+      for (let i = 0; i < modules.length; i += 1) {
+        const entry = modules[i];
+        if (refreshActions.indexOf(entry[1]) === -1) continue;
+        const el = document.getElementById(entry[0]);
+        if (!el) continue;
+        const data = await apiGet(entry[1]);
+        el.textContent = JSON.stringify(data, null, 2);
+      }
+    });
+  }
+
+  if (markNotificationsReadBtn) {
+    markNotificationsReadBtn.addEventListener("click", async function () {
+      const result = await apiPost("notifications.read_all", {});
+      if (automationResult) {
+        automationResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadNotifications();
     });
   }
 
