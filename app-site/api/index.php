@@ -484,6 +484,65 @@ function deployment_preflight_snapshot()
     ];
 }
 
+function deployment_report_snapshot()
+{
+    global $config;
+
+    $preflight = deployment_preflight_snapshot();
+    $healthChecks = isset($preflight['health']['checks']) && is_array($preflight['health']['checks']) ? $preflight['health']['checks'] : [];
+    $preflightChecks = isset($preflight['checks']) && is_array($preflight['checks']) ? $preflight['checks'] : [];
+
+    $blockers = [];
+    $warnings = [];
+    foreach ($healthChecks as $check) {
+        if (!is_array($check)) {
+            continue;
+        }
+        $ok = !empty($check['ok']);
+        if ($ok) {
+            continue;
+        }
+        $msg = (string) ($check['message'] ?? 'Health check failed.');
+        if ((string) ($preflight['status'] ?? 'warning') === 'critical') {
+            $blockers[] = $msg;
+        } else {
+            $warnings[] = $msg;
+        }
+    }
+    foreach ($preflightChecks as $check) {
+        if (!is_array($check) || !array_key_exists('ok', $check) || !empty($check['ok'])) {
+            continue;
+        }
+        $warnings[] = (string) ($check['message'] ?? 'Preflight warning.');
+    }
+
+    $sites = [];
+    foreach (all_sites() as $site) {
+        $sites[] = [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'base_url' => (string) ($site['base_url'] ?? ''),
+        ];
+    }
+
+    return [
+        'report_id' => 'deploy_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'environment' => (string) ($config['environment'] ?? 'development'),
+        'phase' => '1.10-deployment-report-export',
+        'status' => (string) ($preflight['status'] ?? 'warning'),
+        'summary' => [
+            'blocker_count' => count($blockers),
+            'warning_count' => count($warnings),
+            'site_count' => count($sites),
+        ],
+        'blockers' => $blockers,
+        'warnings' => $warnings,
+        'plugin_sites' => $sites,
+        'preflight' => $preflight,
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1202,7 +1261,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.9-production-secret-hardening',
+        'phase' => '1.10-deployment-report-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1240,6 +1299,15 @@ if ($action === 'deployment.preflight') {
         'checks' => $snap['checks'],
         'time' => $snap['time'],
     ], $http);
+}
+
+if ($action === 'deployment.report') {
+    $report = deployment_report_snapshot();
+    audit_event('deployment', 'report.export', ['report_id' => (string) $report['report_id'], 'status' => (string) $report['status']]);
+    out_json([
+        'ok' => true,
+        'report' => $report,
+    ]);
 }
 
 if ($action === 'notifications') {

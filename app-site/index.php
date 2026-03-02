@@ -523,6 +523,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h2>Deployment Preflight</h2>
                 <div class="actions">
                     <button id="runPreflightBtn" type="button">Run Deployment Preflight</button>
+                    <button id="downloadDeployReportBtn" type="button">Download Deployment Report</button>
                 </div>
                 <pre id="preflightView">Loading...</pre>
             </section>

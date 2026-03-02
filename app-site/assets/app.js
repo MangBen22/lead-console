@@ -21,6 +21,7 @@
   const backupResult = document.getElementById("backupResult");
   const auditLogView = document.getElementById("auditLogView");
   const runPreflightBtn = document.getElementById("runPreflightBtn");
+  const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const preflightView = document.getElementById("preflightView");
   const modules = [
     ["modLeads", "leads.summary"],
@@ -235,6 +236,20 @@
     } catch (err) {
       preflightView.textContent = "Failed to load deployment preflight.";
     }
+  }
+
+  function downloadJsonFile(filename, payload) {
+    try {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {}
   }
 
   loadStatus();
@@ -872,6 +887,18 @@
   if (runPreflightBtn) {
     runPreflightBtn.addEventListener("click", async function () {
       await loadPreflight();
+    });
+  }
+
+  if (downloadDeployReportBtn) {
+    downloadDeployReportBtn.addEventListener("click", async function () {
+      const data = await apiGet("deployment.report");
+      if (preflightView) {
+        preflightView.textContent = JSON.stringify(data, null, 2);
+      }
+      const report = data && data.report ? data.report : data;
+      const reportId = report && report.report_id ? report.report_id : "deployment_report";
+      downloadJsonFile(reportId + ".json", data);
     });
   }
 
