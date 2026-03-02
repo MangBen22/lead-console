@@ -527,6 +527,18 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="preflightView">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>Hosting Cutover Toolkit</h2>
+                <div class="actions">
+                    <button id="runInstallCheckBtn" type="button">Run Install Check</button>
+                    <button id="runDeploymentVerifyBtn" type="button">Run Post-Deploy Verify</button>
+                </div>
+                <h3>Install Check</h3>
+                <pre id="installCheckView">Loading...</pre>
+                <h3>Post-Deploy Verify</h3>
+                <pre id="deploymentVerifyView">No verification run yet.</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

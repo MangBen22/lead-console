@@ -543,6 +543,152 @@ function deployment_report_snapshot()
     ];
 }
 
+function install_check_snapshot()
+{
+    global $config;
+
+    $status = 'ok';
+    $checks = [];
+
+    $minPhp = '7.4.0';
+    $phpOk = version_compare(PHP_VERSION, $minPhp, '>=');
+    $checks[] = [
+        'check' => 'php_version',
+        'ok' => $phpOk,
+        'message' => $phpOk ? ('PHP version is supported (' . PHP_VERSION . ').') : ('PHP ' . PHP_VERSION . ' is below required ' . $minPhp . '.'),
+    ];
+    if (!$phpOk) {
+        $status = 'critical';
+    }
+
+    $requiredExtensions = ['curl', 'json', 'mbstring', 'openssl'];
+    foreach ($requiredExtensions as $ext) {
+        $ok = extension_loaded($ext);
+        $checks[] = [
+            'check' => 'ext_' . $ext,
+            'ok' => $ok,
+            'message' => $ok ? ($ext . ' extension loaded.') : ($ext . ' extension missing.'),
+        ];
+        if (!$ok && $status !== 'critical') {
+            $status = 'warning';
+        }
+    }
+
+    $storageDir = dirname(__DIR__) . '/storage';
+    $storageWritable = is_dir($storageDir) ? is_writable($storageDir) : @mkdir($storageDir, 0775, true);
+    $checks[] = [
+        'check' => 'storage_writable',
+        'ok' => !empty($storageWritable),
+        'message' => !empty($storageWritable) ? 'Storage directory is writable.' : 'Storage directory is not writable.',
+    ];
+    if (empty($storageWritable)) {
+        $status = 'critical';
+    }
+
+    $configPath = dirname(__DIR__) . '/config.php';
+    $configExists = is_file($configPath);
+    $checks[] = [
+        'check' => 'config_file',
+        'ok' => $configExists,
+        'message' => $configExists ? 'app-site/config.php exists.' : 'app-site/config.php is missing.',
+    ];
+    if (!$configExists) {
+        $status = 'critical';
+    }
+
+    $requiredSecrets = ['session_key', 'automation_scheduler_key', 'seo_extension_ingest_key'];
+    foreach ($requiredSecrets as $key) {
+        $ok = !app_value_is_placeholder((string) ($config[$key] ?? ''));
+        $checks[] = [
+            'check' => 'config_' . $key,
+            'ok' => $ok,
+            'message' => $ok ? ($key . ' is configured.') : ($key . ' is missing or placeholder.'),
+        ];
+        if (!$ok) {
+            $status = 'critical';
+        }
+    }
+
+    $summary = [
+        'plugin_site_count' => count(all_sites()),
+        'environment' => (string) ($config['environment'] ?? 'development'),
+        'php_version' => PHP_VERSION,
+    ];
+
+    return [
+        'status' => $status,
+        'checks' => $checks,
+        'summary' => $summary,
+        'time' => gmdate('c'),
+    ];
+}
+
+function deployment_verify_snapshot()
+{
+    $status = 'ok';
+    $checks = [];
+
+    $preflight = deployment_preflight_snapshot();
+    $checks[] = [
+        'check' => 'preflight_status',
+        'ok' => (string) ($preflight['status'] ?? 'warning') !== 'critical',
+        'message' => 'Preflight status: ' . (string) ($preflight['status'] ?? 'warning'),
+    ];
+    if ((string) ($preflight['status'] ?? 'warning') === 'critical') {
+        $status = 'critical';
+    } elseif ((string) ($preflight['status'] ?? 'warning') === 'warning' && $status !== 'critical') {
+        $status = 'warning';
+    }
+
+    $storageDir = dirname(__DIR__) . '/storage';
+    $probeFile = $storageDir . '/verify_probe_' . gmdate('Ymd_His') . '.tmp';
+    $probeData = 'verify:' . gmdate('c');
+    $writeOk = @file_put_contents($probeFile, $probeData) !== false;
+    $readOk = $writeOk ? (@file_get_contents($probeFile) === $probeData) : false;
+    if ($writeOk && is_file($probeFile)) {
+        @unlink($probeFile);
+    }
+    $checks[] = [
+        'check' => 'storage_read_write_probe',
+        'ok' => ($writeOk && $readOk),
+        'message' => ($writeOk && $readOk) ? 'Storage write/read probe passed.' : 'Storage write/read probe failed.',
+    ];
+    if ((!$writeOk || !$readOk) && $status !== 'critical') {
+        $status = 'critical';
+    }
+
+    $automation = get_automation_settings();
+    $autoEnabled = !empty($automation['enabled']);
+    $checks[] = [
+        'check' => 'automation_enabled',
+        'ok' => $autoEnabled,
+        'message' => $autoEnabled ? 'Automation is enabled.' : 'Automation is disabled.',
+    ];
+    if (!$autoEnabled && $status === 'ok') {
+        $status = 'warning';
+    }
+
+    $notifications = app_read_json_file(notifications_path(), []);
+    $unread = 0;
+    foreach ($notifications as $row) {
+        if (is_array($row) && empty($row['read'])) {
+            $unread++;
+        }
+    }
+
+    return [
+        'status' => $status,
+        'checks' => $checks,
+        'summary' => [
+            'unread_notifications' => $unread,
+            'automation_enabled' => $autoEnabled ? 1 : 0,
+            'plugin_site_count' => count(all_sites()),
+        ],
+        'preflight' => $preflight,
+        'time' => gmdate('c'),
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1235,7 +1381,7 @@ function execute_automation_run($settings, $source = 'manual')
     return $summary;
 }
 
-$publicActions = ['status', 'healthcheck', 'deployment.preflight', 'seo.extension.intake', 'automation.scheduler.tick'];
+$publicActions = ['status', 'healthcheck', 'install.check', 'deployment.preflight', 'seo.extension.intake', 'automation.scheduler.tick'];
 if (!in_array($action, $publicActions, true)) {
     app_require_auth();
 }
@@ -1247,6 +1393,7 @@ $rateLimitedWriteActions = [
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
+    'deployment.verify',
     'backup.import',
 ];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $rateLimitedWriteActions, true)) {
@@ -1261,7 +1408,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.10-deployment-report-export',
+        'phase' => '1.11-hosting-cutover-toolkit',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1276,6 +1423,18 @@ if ($action === 'status') {
         'sites_configured' => count(all_sites()),
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'install.check') {
+    $snap = install_check_snapshot();
+    $http = ($snap['status'] === 'critical') ? 503 : 200;
+    out_json([
+        'ok' => $snap['status'] !== 'critical',
+        'status' => $snap['status'],
+        'checks' => $snap['checks'],
+        'summary' => $snap['summary'],
+        'time' => $snap['time'],
+    ], $http);
 }
 
 if ($action === 'healthcheck') {
@@ -1308,6 +1467,24 @@ if ($action === 'deployment.report') {
         'ok' => true,
         'report' => $report,
     ]);
+}
+
+if ($action === 'deployment.verify') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $snap = deployment_verify_snapshot();
+    audit_event('deployment', 'verify.run', ['status' => (string) $snap['status'], 'summary' => $snap['summary']]);
+    out_json([
+        'ok' => $snap['status'] !== 'critical',
+        'status' => $snap['status'],
+        'checks' => $snap['checks'],
+        'summary' => $snap['summary'],
+        'preflight' => $snap['preflight'],
+        'time' => $snap['time'],
+    ], ($snap['status'] === 'critical') ? 503 : 200);
 }
 
 if ($action === 'notifications') {

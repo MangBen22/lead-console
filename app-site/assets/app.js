@@ -22,7 +22,11 @@
   const auditLogView = document.getElementById("auditLogView");
   const runPreflightBtn = document.getElementById("runPreflightBtn");
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
+  const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
+  const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const preflightView = document.getElementById("preflightView");
+  const installCheckView = document.getElementById("installCheckView");
+  const deploymentVerifyView = document.getElementById("deploymentVerifyView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -238,6 +242,16 @@
     }
   }
 
+  async function loadInstallCheck() {
+    if (!installCheckView) return;
+    try {
+      const data = await apiGet("install.check");
+      installCheckView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      installCheckView.textContent = "Failed to load install check.";
+    }
+  }
+
   function downloadJsonFile(filename, payload) {
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -416,6 +430,7 @@
     await loadNotificationSettings();
     await loadAuditLog();
     await loadPreflight();
+    await loadInstallCheck();
   })();
 
   if (crmConnectorForm) {
@@ -899,6 +914,23 @@
       const report = data && data.report ? data.report : data;
       const reportId = report && report.report_id ? report.report_id : "deployment_report";
       downloadJsonFile(reportId + ".json", data);
+    });
+  }
+
+  if (runInstallCheckBtn) {
+    runInstallCheckBtn.addEventListener("click", async function () {
+      await loadInstallCheck();
+    });
+  }
+
+  if (runDeploymentVerifyBtn) {
+    runDeploymentVerifyBtn.addEventListener("click", async function () {
+      const result = await apiPost("deployment.verify", {});
+      if (deploymentVerifyView) {
+        deploymentVerifyView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAuditLog();
+      await loadStatus();
     });
   }
 
