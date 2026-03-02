@@ -24,6 +24,7 @@
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
+  const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
   const deploymentGuardForm = document.getElementById("deploymentGuardForm");
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
@@ -957,6 +958,21 @@
       if (deploymentVerifyView) {
         deploymentVerifyView.textContent = JSON.stringify(result, null, 2);
       }
+      await loadAuditLog();
+      await loadStatus();
+      await loadDeploymentGuard();
+    });
+  }
+
+  if (downloadHandoffBundleBtn) {
+    downloadHandoffBundleBtn.addEventListener("click", async function () {
+      const data = await apiGet("deployment.handoff.bundle");
+      if (deploymentVerifyView) {
+        deploymentVerifyView.textContent = JSON.stringify(data, null, 2);
+      }
+      const bundle = data && data.bundle ? data.bundle : data;
+      const bundleId = bundle && bundle.bundle_id ? bundle.bundle_id : "handoff_bundle";
+      downloadJsonFile(bundleId + ".json", data);
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();

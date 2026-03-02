@@ -785,6 +785,87 @@ function deployment_verify_snapshot()
     ];
 }
 
+function deployment_handoff_bundle_snapshot()
+{
+    global $config;
+
+    $install = install_check_snapshot();
+    $preflight = deployment_preflight_snapshot();
+    $verify = deployment_verify_snapshot();
+    $report = deployment_report_snapshot();
+    $guardEval = deployment_guard_evaluate();
+
+    $checklistItems = [
+        [
+            'item' => 'config_file_present',
+            'ok' => is_file(dirname(__DIR__) . '/config.php'),
+            'message' => 'app-site/config.php exists on server.',
+        ],
+        [
+            'item' => 'environment_production',
+            'ok' => strtolower((string) ($config['environment'] ?? 'development')) === 'production',
+            'message' => 'Environment is set to production.',
+        ],
+        [
+            'item' => 'scheduler_key_configured',
+            'ok' => !app_value_is_placeholder((string) ($config['automation_scheduler_key'] ?? '')),
+            'message' => 'Automation scheduler key configured.',
+        ],
+        [
+            'item' => 'seo_ingest_key_configured',
+            'ok' => !app_value_is_placeholder((string) ($config['seo_extension_ingest_key'] ?? '')),
+            'message' => 'SEO extension ingest key configured.',
+        ],
+        [
+            'item' => 'plugin_sites_configured',
+            'ok' => count(all_sites()) > 0,
+            'message' => 'At least one plugin site is configured.',
+        ],
+    ];
+    $failedChecklist = [];
+    foreach ($checklistItems as $item) {
+        if (empty($item['ok'])) {
+            $failedChecklist[] = (string) ($item['item'] ?? 'unknown');
+        }
+    }
+
+    $auditRows = app_read_json_file(audit_log_path(), []);
+    $auditTail = array_slice($auditRows, 0, 50);
+
+    return [
+        'bundle_id' => 'handoff_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'phase' => '1.13-hostinger-handoff-bundle',
+        'environment' => (string) ($config['environment'] ?? 'development'),
+        'status' => (!empty($guardEval['allowed']) && empty($failedChecklist)) ? 'ready' : 'review_required',
+        'summary' => [
+            'install_status' => (string) ($install['status'] ?? 'warning'),
+            'preflight_status' => (string) ($preflight['status'] ?? 'warning'),
+            'verify_status' => (string) ($verify['status'] ?? 'warning'),
+            'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
+            'checklist_failed_count' => count($failedChecklist),
+            'plugin_site_count' => count(all_sites()),
+        ],
+        'environment_checklist' => $checklistItems,
+        'failed_environment_checklist' => $failedChecklist,
+        'install_check' => $install,
+        'preflight' => $preflight,
+        'post_deploy_verify' => $verify,
+        'deployment_report' => $report,
+        'deployment_guard' => [
+            'allowed' => !empty($guardEval['allowed']),
+            'reasons' => $guardEval['reasons'],
+            'state' => $guardEval['guard'],
+        ],
+        'audit_tail' => $auditTail,
+        'references' => [
+            'runbook' => 'docs/DEPLOY_HOSTINGER_RUNBOOK.md',
+            'phase_19' => 'docs/PHASE19_HOSTING_CUTOVER_TOOLKIT.md',
+            'phase_20' => 'docs/PHASE20_DEPLOYMENT_GUARD_ENFORCEMENT.md',
+        ],
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1526,7 +1607,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.12-deployment-guard-enforcement',
+        'phase' => '1.13-hostinger-handoff-bundle',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1602,6 +1683,15 @@ if ($action === 'deployment.report') {
     out_json([
         'ok' => true,
         'report' => $report,
+    ]);
+}
+
+if ($action === 'deployment.handoff.bundle') {
+    $bundle = deployment_handoff_bundle_snapshot();
+    audit_event('deployment', 'handoff.bundle.export', ['bundle_id' => (string) $bundle['bundle_id'], 'status' => (string) $bundle['status']]);
+    out_json([
+        'ok' => true,
+        'bundle' => $bundle,
     ]);
 }
 

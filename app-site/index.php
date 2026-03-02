@@ -533,6 +533,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="runInstallCheckBtn" type="button">Run Install Check</button>
                     <button id="runDeploymentVerifyBtn" type="button">Run Post-Deploy Verify</button>
+                    <button id="downloadHandoffBundleBtn" type="button">Download Handoff Bundle</button>
                 </div>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
