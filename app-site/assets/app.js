@@ -33,6 +33,8 @@
   const deploymentGuardForm = document.getElementById("deploymentGuardForm");
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
   const previewDeploymentGuardBtn = document.getElementById("previewDeploymentGuardBtn");
+  const enableGuardBypassBtn = document.getElementById("enableGuardBypassBtn");
+  const disableGuardBypassBtn = document.getElementById("disableGuardBypassBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -50,6 +52,8 @@
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
+  const guardBypassReason = document.getElementById("guardBypassReason");
+  const guardBypassDuration = document.getElementById("guardBypassDuration");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -324,6 +328,7 @@
       if (launchWindowEnabled) launchWindowEnabled.checked = Number(guard.launch_window_enabled) === 1;
       if (launchWindowStart) launchWindowStart.value = guard.launch_window_start ? String(guard.launch_window_start).slice(0, 16) : "";
       if (launchWindowEnd) launchWindowEnd.value = guard.launch_window_end ? String(guard.launch_window_end).slice(0, 16) : "";
+      if (guardBypassReason) guardBypassReason.value = guard.emergency_bypass_reason ? String(guard.emergency_bypass_reason) : "";
       if (backup) backup.checked = Number(checklist.backup_verified) === 1;
       if (cron) cron.checked = Number(checklist.cron_configured) === 1;
       if (rollback) rollback.checked = Number(checklist.rollback_plan_ready) === 1;
@@ -1178,6 +1183,39 @@
       if (deploymentGuardPreviewView) {
         deploymentGuardPreviewView.textContent = JSON.stringify(result, null, 2);
       }
+    });
+  }
+
+  if (enableGuardBypassBtn) {
+    enableGuardBypassBtn.addEventListener("click", async function () {
+      const reason = guardBypassReason && guardBypassReason.value ? guardBypassReason.value.trim() : "";
+      const durationMinutes = guardBypassDuration && guardBypassDuration.value ? Number(guardBypassDuration.value) : 30;
+      const result = await apiPost("deployment.guard.bypass.enable", {
+        reason: reason,
+        duration_minutes: durationMinutes,
+      });
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadDeploymentGuard();
+      await loadGoLiveStatus();
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
+    });
+  }
+
+  if (disableGuardBypassBtn) {
+    disableGuardBypassBtn.addEventListener("click", async function () {
+      const result = await apiPost("deployment.guard.bypass.disable", {});
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadDeploymentGuard();
+      await loadGoLiveStatus();
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
     });
   }
 
