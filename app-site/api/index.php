@@ -274,6 +274,11 @@ function deployment_guard_path()
     return app_storage_path('deployment_guard.json');
 }
 
+function deployment_release_log_path()
+{
+    return app_storage_path('deployment_releases.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -863,6 +868,35 @@ function deployment_handoff_bundle_snapshot()
             'phase_19' => 'docs/PHASE19_HOSTING_CUTOVER_TOOLKIT.md',
             'phase_20' => 'docs/PHASE20_DEPLOYMENT_GUARD_ENFORCEMENT.md',
         ],
+    ];
+}
+
+function deployment_release_candidate_snapshot($note = '')
+{
+    $bundle = deployment_handoff_bundle_snapshot();
+    $guardEval = deployment_guard_evaluate();
+
+    $ready = ((string) ($bundle['status'] ?? 'review_required') === 'ready') && !empty($guardEval['allowed']);
+    $candidate = [
+        'candidate_id' => 'release_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'note' => trim((string) $note),
+        'status' => $ready ? 'ready' : 'blocked',
+        'summary' => isset($bundle['summary']) && is_array($bundle['summary']) ? $bundle['summary'] : [],
+        'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
+        'guard_reasons' => $guardEval['reasons'],
+        'failed_environment_checklist' => isset($bundle['failed_environment_checklist']) && is_array($bundle['failed_environment_checklist']) ? $bundle['failed_environment_checklist'] : [],
+        'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
+    ];
+
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    array_unshift($rows, $candidate);
+    $rows = array_slice($rows, 0, 200);
+    app_write_json_file(deployment_release_log_path(), $rows);
+
+    return [
+        'candidate' => $candidate,
+        'bundle' => $bundle,
     ];
 }
 
@@ -1570,6 +1604,7 @@ $rateLimitedWriteActions = [
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
+    'deployment.release.candidate',
     'deployment.verify',
     'backup.import',
 ];
@@ -1616,7 +1651,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.13-hostinger-handoff-bundle',
+        'phase' => '1.14-release-candidate-center',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1721,6 +1756,52 @@ if ($action === 'deployment.go_live_status') {
         'failed_environment_checklist' => $bundle['failed_environment_checklist'],
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'deployment.release.log') {
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.candidate') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $note = trim((string) ($data['note'] ?? ''));
+    $snap = deployment_release_candidate_snapshot($note);
+    $candidate = $snap['candidate'];
+    $bundle = $snap['bundle'];
+
+    if ((string) ($candidate['status'] ?? 'blocked') === 'ready') {
+        push_notification('success', 'Release candidate ready: ' . (string) ($candidate['candidate_id'] ?? ''), [
+            'candidate' => $candidate,
+        ]);
+    } else {
+        push_notification('critical', 'Release candidate blocked: ' . (string) ($candidate['candidate_id'] ?? ''), [
+            'candidate' => $candidate,
+        ]);
+    }
+    audit_event('deployment', 'release.candidate', [
+        'candidate_id' => (string) ($candidate['candidate_id'] ?? ''),
+        'status' => (string) ($candidate['status'] ?? 'blocked'),
+        'bundle_id' => (string) ($candidate['bundle_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'candidate' => $candidate,
+        'bundle' => $bundle,
+    ], ((string) ($candidate['status'] ?? 'blocked') === 'ready') ? 200 : 409);
 }
 
 if ($action === 'deployment.verify') {

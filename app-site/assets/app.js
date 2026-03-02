@@ -23,6 +23,7 @@
   const runPreflightBtn = document.getElementById("runPreflightBtn");
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
+  const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
@@ -32,6 +33,9 @@
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
   const goLiveStatusView = document.getElementById("goLiveStatusView");
+  const releaseCandidateView = document.getElementById("releaseCandidateView");
+  const releaseLogView = document.getElementById("releaseLogView");
+  const releaseCandidateNote = document.getElementById("releaseCandidateNote");
   const installCheckView = document.getElementById("installCheckView");
   const deploymentVerifyView = document.getElementById("deploymentVerifyView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
@@ -260,6 +264,16 @@
     }
   }
 
+  async function loadReleaseLog() {
+    if (!releaseLogView) return;
+    try {
+      const data = await apiGet("deployment.release.log");
+      releaseLogView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseLogView.textContent = "Failed to load release log.";
+    }
+  }
+
   async function loadInstallCheck() {
     if (!installCheckView) return;
     try {
@@ -470,6 +484,7 @@
     await loadNotificationSettings();
     await loadAuditLog();
     await loadGoLiveStatus();
+    await loadReleaseLog();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -951,6 +966,22 @@
   if (refreshGoLiveStatusBtn) {
     refreshGoLiveStatusBtn.addEventListener("click", async function () {
       await loadGoLiveStatus();
+    });
+  }
+
+  if (generateReleaseCandidateBtn) {
+    generateReleaseCandidateBtn.addEventListener("click", async function () {
+      const note = releaseCandidateNote && releaseCandidateNote.value ? releaseCandidateNote.value.trim() : "";
+      const result = await apiPost("deployment.release.candidate", { note: note });
+      if (releaseCandidateView) {
+        releaseCandidateView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadReleaseLog();
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
+      await loadGoLiveStatus();
+      await loadDeploymentGuard();
     });
   }
 
