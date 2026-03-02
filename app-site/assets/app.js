@@ -36,6 +36,7 @@
   const enableGuardBypassBtn = document.getElementById("enableGuardBypassBtn");
   const extendGuardBypassBtn = document.getElementById("extendGuardBypassBtn");
   const disableGuardBypassBtn = document.getElementById("disableGuardBypassBtn");
+  const refreshBypassLogBtn = document.getElementById("refreshBypassLogBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -53,6 +54,7 @@
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
+  const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
   const guardBypassReason = document.getElementById("guardBypassReason");
   const guardBypassDuration = document.getElementById("guardBypassDuration");
   const modules = [
@@ -349,6 +351,16 @@
     }
   }
 
+  async function loadBypassLog() {
+    if (!deploymentBypassLogView) return;
+    try {
+      const data = await apiGet("deployment.guard.bypass.log");
+      deploymentBypassLogView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      deploymentBypassLogView.textContent = "Failed to load bypass log.";
+    }
+  }
+
   function collectDeploymentGuardPayload() {
     const enforced = document.getElementById("guardEnforced");
     const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
@@ -553,6 +565,7 @@
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverPipelineRuns();
+    await loadBypassLog();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1203,6 +1216,7 @@
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
+      await loadBypassLog();
     });
   }
 
@@ -1222,6 +1236,7 @@
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
+      await loadBypassLog();
     });
   }
 
@@ -1236,6 +1251,13 @@
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
+      await loadBypassLog();
+    });
+  }
+
+  if (refreshBypassLogBtn) {
+    refreshBypassLogBtn.addEventListener("click", async function () {
+      await loadBypassLog();
     });
   }
 

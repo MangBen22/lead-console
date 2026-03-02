@@ -284,6 +284,11 @@ function deployment_pipeline_runs_path()
     return app_storage_path('deployment_pipeline_runs.json');
 }
 
+function deployment_bypass_log_path()
+{
+    return app_storage_path('deployment_bypass_log.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -530,6 +535,11 @@ function deployment_guard_watchdog($guard, $emit = true)
             'emergency_bypass_set_by' => '',
             'emergency_bypass_last_alert_at' => '',
         ]);
+        append_bypass_log_event('auto_disable_expired', [
+            'expired_at' => $expiresAt,
+            'reason' => (string) ($guard['emergency_bypass_reason'] ?? ''),
+            'set_by' => (string) ($guard['emergency_bypass_set_by'] ?? ''),
+        ]);
         if ($emit) {
             audit_event('deployment', 'guard.bypass.auto_disable_expired', ['expired_at' => $expiresAt]);
             push_notification('critical', 'Emergency bypass expired and was auto-disabled.', ['expired_at' => $expiresAt]);
@@ -555,6 +565,20 @@ function deployment_guard_watchdog($guard, $emit = true)
     }
 
     return $guard;
+}
+
+function append_bypass_log_event($eventType, $details = [])
+{
+    $rows = app_read_json_file(deployment_bypass_log_path(), []);
+    array_unshift($rows, [
+        'event_id' => 'bypass_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'event_type' => (string) $eventType,
+        'actor' => current_actor(),
+        'details' => is_array($details) ? $details : [],
+        'created_at' => gmdate('c'),
+    ]);
+    $rows = array_slice($rows, 0, 500);
+    app_write_json_file(deployment_bypass_log_path(), $rows);
 }
 
 function deployment_guard_evaluate($requireUnlocked = true, $guardOverride = null)
@@ -2025,7 +2049,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.19-bypass-watchdog-and-extend',
+        'phase' => '1.20-bypass-session-log',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2382,6 +2406,12 @@ if ($action === 'deployment.guard.bypass.enable') {
         'emergency_bypass_set_by' => current_actor(),
         'emergency_bypass_last_alert_at' => '',
     ]);
+    append_bypass_log_event('enable', [
+        'duration_minutes' => $duration,
+        'expires_at' => $expiresAt,
+        'reason' => $reason,
+        'set_by' => current_actor(),
+    ]);
     audit_event('deployment', 'guard.bypass.enable', [
         'duration_minutes' => $duration,
         'expires_at' => $expiresAt,
@@ -2429,6 +2459,12 @@ if ($action === 'deployment.guard.bypass.extend') {
         'emergency_bypass_set_by' => current_actor(),
         'emergency_bypass_last_alert_at' => '',
     ]);
+    append_bypass_log_event('extend', [
+        'duration_minutes' => $duration,
+        'expires_at' => $expiresAt,
+        'reason' => $reason,
+        'set_by' => current_actor(),
+    ]);
     audit_event('deployment', 'guard.bypass.extend', [
         'duration_minutes' => $duration,
         'expires_at' => $expiresAt,
@@ -2459,12 +2495,23 @@ if ($action === 'deployment.guard.bypass.disable') {
         'emergency_bypass_set_by' => '',
         'emergency_bypass_last_alert_at' => '',
     ]);
+    append_bypass_log_event('disable', []);
     audit_event('deployment', 'guard.bypass.disable', []);
     push_notification('info', 'Emergency bypass disabled.', []);
     out_json([
         'ok' => true,
         'message' => 'Emergency bypass disabled.',
         'guard' => $saved,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.guard.bypass.log') {
+    $rows = app_read_json_file(deployment_bypass_log_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
         'time' => gmdate('c'),
     ]);
 }
