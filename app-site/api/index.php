@@ -1590,6 +1590,15 @@ $deploymentGuardedActions = [
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $deploymentGuardedActions, true)) {
     $gate = deployment_guard_evaluate();
     if (empty($gate['allowed'])) {
+        push_notification('critical', 'Deployment guard blocked action: ' . $action, [
+            'action' => $action,
+            'reasons' => $gate['reasons'],
+        ]);
+        audit_event('deployment', 'guard.blocked', [
+            'action' => $action,
+            'reasons' => $gate['reasons'],
+            'guard' => $gate['guard'],
+        ]);
         out_json([
             'ok' => false,
             'error' => 'Deployment guard blocked this action.',
@@ -1692,6 +1701,25 @@ if ($action === 'deployment.handoff.bundle') {
     out_json([
         'ok' => true,
         'bundle' => $bundle,
+    ]);
+}
+
+if ($action === 'deployment.go_live_status') {
+    $bundle = deployment_handoff_bundle_snapshot();
+    $guardEval = deployment_guard_evaluate();
+    $status = (string) ($bundle['status'] ?? 'review_required');
+    $headline = $status === 'ready'
+        ? 'Go-live checks passed. System is ready for controlled launch.'
+        : 'Go-live checks need attention before launch.';
+    out_json([
+        'ok' => true,
+        'status' => $status,
+        'headline' => $headline,
+        'guard_allowed' => !empty($guardEval['allowed']),
+        'guard_reasons' => $guardEval['reasons'],
+        'summary' => $bundle['summary'],
+        'failed_environment_checklist' => $bundle['failed_environment_checklist'],
+        'time' => gmdate('c'),
     ]);
 }
 

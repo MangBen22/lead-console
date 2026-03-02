@@ -520,6 +520,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Go-Live Status</h2>
+                <div class="actions">
+                    <button id="refreshGoLiveStatusBtn" type="button">Refresh Go-Live Status</button>
+                </div>
+                <pre id="goLiveStatusView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Deployment Preflight</h2>
                 <div class="actions">
                     <button id="runPreflightBtn" type="button">Run Deployment Preflight</button>

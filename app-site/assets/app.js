@@ -22,6 +22,7 @@
   const auditLogView = document.getElementById("auditLogView");
   const runPreflightBtn = document.getElementById("runPreflightBtn");
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
+  const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
@@ -30,6 +31,7 @@
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
+  const goLiveStatusView = document.getElementById("goLiveStatusView");
   const installCheckView = document.getElementById("installCheckView");
   const deploymentVerifyView = document.getElementById("deploymentVerifyView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
@@ -248,6 +250,16 @@
     }
   }
 
+  async function loadGoLiveStatus() {
+    if (!goLiveStatusView) return;
+    try {
+      const data = await apiGet("deployment.go_live_status");
+      goLiveStatusView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      goLiveStatusView.textContent = "Failed to load go-live status.";
+    }
+  }
+
   async function loadInstallCheck() {
     if (!installCheckView) return;
     try {
@@ -457,6 +469,7 @@
     await loadCronHelp();
     await loadNotificationSettings();
     await loadAuditLog();
+    await loadGoLiveStatus();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -931,6 +944,13 @@
   if (runPreflightBtn) {
     runPreflightBtn.addEventListener("click", async function () {
       await loadPreflight();
+      await loadGoLiveStatus();
+    });
+  }
+
+  if (refreshGoLiveStatusBtn) {
+    refreshGoLiveStatusBtn.addEventListener("click", async function () {
+      await loadGoLiveStatus();
     });
   }
 
@@ -961,6 +981,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();
+      await loadGoLiveStatus();
     });
   }
 
@@ -976,6 +997,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();
+      await loadGoLiveStatus();
     });
   }
 
@@ -1008,6 +1030,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();
+      await loadGoLiveStatus();
     });
   }
 
@@ -1020,6 +1043,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();
+      await loadGoLiveStatus();
     });
   }
 
