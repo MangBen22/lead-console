@@ -25,6 +25,7 @@
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
+  const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
@@ -36,6 +37,8 @@
   const goLiveStatusView = document.getElementById("goLiveStatusView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
+  const artifactBaselineInput = document.getElementById("artifactBaselineInput");
+  const artifactVerifyView = document.getElementById("artifactVerifyView");
   const releaseLogView = document.getElementById("releaseLogView");
   const releaseCandidateNote = document.getElementById("releaseCandidateNote");
   const installCheckView = document.getElementById("installCheckView");
@@ -1010,6 +1013,30 @@
       downloadJsonFile(manifestId + ".json", data);
       await loadAuditLog();
       await loadStatus();
+    });
+  }
+
+  if (verifyArtifactManifestBtn) {
+    verifyArtifactManifestBtn.addEventListener("click", async function () {
+      if (!artifactBaselineInput || !artifactBaselineInput.value.trim()) {
+        if (artifactVerifyView) artifactVerifyView.textContent = "Paste baseline manifest JSON first.";
+        return;
+      }
+      let baseline;
+      try {
+        baseline = JSON.parse(artifactBaselineInput.value);
+      } catch (err) {
+        if (artifactVerifyView) artifactVerifyView.textContent = "Invalid baseline JSON.";
+        return;
+      }
+      const result = await apiPost("deployment.artifact.verify", { baseline: baseline });
+      if (artifactVerifyView) {
+        artifactVerifyView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
+      await loadGoLiveStatus();
     });
   }
 

@@ -941,6 +941,95 @@ function deployment_artifact_manifest_snapshot()
     ];
 }
 
+function deployment_artifact_verify_snapshot($baseline)
+{
+    $current = deployment_artifact_manifest_snapshot();
+    $currentItems = isset($current['items']) && is_array($current['items']) ? $current['items'] : [];
+    $baselineItems = [];
+    if (is_array($baseline) && isset($baseline['items']) && is_array($baseline['items'])) {
+        $baselineItems = $baseline['items'];
+    } elseif (is_array($baseline)) {
+        $baselineItems = $baseline;
+    }
+
+    $currentMap = [];
+    foreach ($currentItems as $row) {
+        $path = (string) ($row['path'] ?? '');
+        if ($path !== '') {
+            $currentMap[$path] = $row;
+        }
+    }
+    $baselineMap = [];
+    foreach ($baselineItems as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $path = (string) ($row['path'] ?? '');
+        if ($path !== '') {
+            $baselineMap[$path] = $row;
+        }
+    }
+
+    $mismatches = [];
+    $missingOnServer = [];
+    $newOnServer = [];
+
+    foreach ($baselineMap as $path => $baseRow) {
+        if (!isset($currentMap[$path])) {
+            $missingOnServer[] = $path;
+            continue;
+        }
+        $curRow = $currentMap[$path];
+        $baseExists = !empty($baseRow['exists']);
+        $curExists = !empty($curRow['exists']);
+        $baseHash = (string) ($baseRow['sha256'] ?? '');
+        $curHash = (string) ($curRow['sha256'] ?? '');
+        $baseSize = (int) ($baseRow['size_bytes'] ?? 0);
+        $curSize = (int) ($curRow['size_bytes'] ?? 0);
+
+        if ($baseExists !== $curExists || $baseHash !== $curHash || $baseSize !== $curSize) {
+            $mismatches[] = [
+                'path' => $path,
+                'baseline' => [
+                    'exists' => $baseExists ? 1 : 0,
+                    'size_bytes' => $baseSize,
+                    'sha256' => $baseHash,
+                ],
+                'current' => [
+                    'exists' => $curExists ? 1 : 0,
+                    'size_bytes' => $curSize,
+                    'sha256' => $curHash,
+                ],
+            ];
+        }
+    }
+
+    foreach ($currentMap as $path => $curRow) {
+        if (!isset($baselineMap[$path])) {
+            $newOnServer[] = $path;
+        }
+    }
+
+    $ok = empty($mismatches) && empty($missingOnServer);
+    return [
+        'verify_id' => 'verify_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'ok' => $ok,
+        'status' => $ok ? 'match' : 'mismatch',
+        'summary' => [
+            'baseline_count' => count($baselineMap),
+            'current_count' => count($currentMap),
+            'mismatch_count' => count($mismatches),
+            'missing_on_server_count' => count($missingOnServer),
+            'new_on_server_count' => count($newOnServer),
+        ],
+        'missing_on_server' => $missingOnServer,
+        'new_on_server' => $newOnServer,
+        'mismatches' => $mismatches,
+        'current_manifest' => $current,
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1646,6 +1735,7 @@ $rateLimitedWriteActions = [
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
+    'deployment.artifact.verify',
     'deployment.verify',
     'backup.import',
 ];
@@ -1852,6 +1942,34 @@ if ($action === 'deployment.artifact.manifest') {
         'ok' => true,
         'manifest' => $manifest,
     ]);
+}
+
+if ($action === 'deployment.artifact.verify') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || !isset($data['baseline'])) {
+        out_json(['ok' => false, 'error' => 'baseline manifest is required.'], 400);
+    }
+    $result = deployment_artifact_verify_snapshot($data['baseline']);
+    audit_event('deployment', 'artifact.verify', [
+        'verify_id' => (string) ($result['verify_id'] ?? ''),
+        'status' => (string) ($result['status'] ?? 'mismatch'),
+        'mismatch_count' => (int) ($result['summary']['mismatch_count'] ?? 0),
+        'missing_on_server_count' => (int) ($result['summary']['missing_on_server_count'] ?? 0),
+    ]);
+    if (!empty($result['ok'])) {
+        push_notification('success', 'Artifact verification matched baseline.', ['verify_id' => (string) ($result['verify_id'] ?? '')]);
+    } else {
+        push_notification('critical', 'Artifact verification mismatch detected.', ['verify_id' => (string) ($result['verify_id'] ?? '')]);
+    }
+    out_json([
+        'ok' => !empty($result['ok']),
+        'verify' => $result,
+    ], !empty($result['ok']) ? 200 : 409);
 }
 
 if ($action === 'deployment.verify') {

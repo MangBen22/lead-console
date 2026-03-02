@@ -537,6 +537,12 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="releaseCandidateView">No release candidate yet.</pre>
                 <h3>Artifact Manifest</h3>
                 <pre id="artifactManifestView">No artifact manifest yet.</pre>
+                <h3>Verify Uploaded Artifacts</h3>
+                <textarea id="artifactBaselineInput" class="large-text code" rows="6" placeholder="Paste baseline manifest JSON here (from your source build) then click Verify Uploaded Artifacts..."></textarea>
+                <div class="actions">
+                    <button id="verifyArtifactManifestBtn" type="button">Verify Uploaded Artifacts</button>
+                </div>
+                <pre id="artifactVerifyView">No artifact verification yet.</pre>
                 <h3>Release Log</h3>
                 <pre id="releaseLogView">Loading...</pre>
             </section>
