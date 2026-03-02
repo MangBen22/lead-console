@@ -34,6 +34,7 @@
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
   const previewDeploymentGuardBtn = document.getElementById("previewDeploymentGuardBtn");
   const enableGuardBypassBtn = document.getElementById("enableGuardBypassBtn");
+  const extendGuardBypassBtn = document.getElementById("extendGuardBypassBtn");
   const disableGuardBypassBtn = document.getElementById("disableGuardBypassBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
@@ -1191,6 +1192,25 @@
       const reason = guardBypassReason && guardBypassReason.value ? guardBypassReason.value.trim() : "";
       const durationMinutes = guardBypassDuration && guardBypassDuration.value ? Number(guardBypassDuration.value) : 30;
       const result = await apiPost("deployment.guard.bypass.enable", {
+        reason: reason,
+        duration_minutes: durationMinutes,
+      });
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadDeploymentGuard();
+      await loadGoLiveStatus();
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
+    });
+  }
+
+  if (extendGuardBypassBtn) {
+    extendGuardBypassBtn.addEventListener("click", async function () {
+      const reason = guardBypassReason && guardBypassReason.value ? guardBypassReason.value.trim() : "";
+      const durationMinutes = guardBypassDuration && guardBypassDuration.value ? Number(guardBypassDuration.value) : 30;
+      const result = await apiPost("deployment.guard.bypass.extend", {
         reason: reason,
         duration_minutes: durationMinutes,
       });

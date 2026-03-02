@@ -595,6 +595,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <label>Duration minutes (5-240)<input id="guardBypassDuration" type="number" min="5" max="240" value="30" /></label>
                 <div class="actions">
                     <button id="enableGuardBypassBtn" type="button">Enable Emergency Bypass</button>
+                    <button id="extendGuardBypassBtn" type="button">Extend Emergency Bypass</button>
                     <button id="disableGuardBypassBtn" type="button">Disable Emergency Bypass</button>
                 </div>
                 <pre id="deploymentGuardView">Loading...</pre>

@@ -408,6 +408,7 @@ function default_deployment_guard()
         'emergency_bypass_expires_at' => '',
         'emergency_bypass_reason' => '',
         'emergency_bypass_set_by' => '',
+        'emergency_bypass_last_alert_at' => '',
         'checklist' => [
             'backup_verified' => 0,
             'cron_configured' => 0,
@@ -503,9 +504,63 @@ function deployment_guard_bypass_status($guard)
     ];
 }
 
+function deployment_guard_watchdog($guard, $emit = true)
+{
+    if (!is_array($guard)) {
+        $guard = get_deployment_guard();
+    }
+    if (empty($guard['emergency_bypass_enabled'])) {
+        return $guard;
+    }
+
+    $status = deployment_guard_bypass_status($guard);
+    $expiresAt = (string) ($status['expires_at'] ?? '');
+    $expiresTs = app_parse_utc_datetime($expiresAt);
+    $now = time();
+
+    if (empty($status['valid']) || $expiresTs === false) {
+        return $guard;
+    }
+
+    if ($now > $expiresTs) {
+        $updated = save_deployment_guard([
+            'emergency_bypass_enabled' => 0,
+            'emergency_bypass_expires_at' => '',
+            'emergency_bypass_reason' => '',
+            'emergency_bypass_set_by' => '',
+            'emergency_bypass_last_alert_at' => '',
+        ]);
+        if ($emit) {
+            audit_event('deployment', 'guard.bypass.auto_disable_expired', ['expired_at' => $expiresAt]);
+            push_notification('critical', 'Emergency bypass expired and was auto-disabled.', ['expired_at' => $expiresAt]);
+        }
+        return $updated;
+    }
+
+    $remaining = $expiresTs - $now;
+    $lastAlertTs = app_parse_utc_datetime((string) ($guard['emergency_bypass_last_alert_at'] ?? ''));
+    if ($remaining <= 900 && ($lastAlertTs === false || ($now - $lastAlertTs) >= 600)) {
+        $updated = save_deployment_guard(['emergency_bypass_last_alert_at' => gmdate('Y-m-d\TH:i', $now)]);
+        if ($emit) {
+            audit_event('deployment', 'guard.bypass.expiring_soon', [
+                'expires_at' => $expiresAt,
+                'remaining_seconds' => $remaining,
+            ]);
+            push_notification('critical', 'Emergency bypass expires soon at ' . $expiresAt . ' UTC.', [
+                'remaining_seconds' => $remaining,
+                'expires_at' => $expiresAt,
+            ]);
+        }
+        return $updated;
+    }
+
+    return $guard;
+}
+
 function deployment_guard_evaluate($requireUnlocked = true, $guardOverride = null)
 {
     $guard = is_array($guardOverride) ? $guardOverride : get_deployment_guard();
+    $guard = deployment_guard_watchdog($guard, !is_array($guardOverride));
     $reasons = [];
 
     if (empty($guard['enforced'])) {
@@ -1922,6 +1977,7 @@ $rateLimitedWriteActions = [
     'deployment.artifact.verify',
     'deployment.guard.preview',
     'deployment.guard.bypass.enable',
+    'deployment.guard.bypass.extend',
     'deployment.guard.bypass.disable',
     'deployment.verify',
     'backup.import',
@@ -1969,7 +2025,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.18-emergency-bypass-guard',
+        'phase' => '1.19-bypass-watchdog-and-extend',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2324,6 +2380,7 @@ if ($action === 'deployment.guard.bypass.enable') {
         'emergency_bypass_expires_at' => $expiresAt,
         'emergency_bypass_reason' => $reason,
         'emergency_bypass_set_by' => current_actor(),
+        'emergency_bypass_last_alert_at' => '',
     ]);
     audit_event('deployment', 'guard.bypass.enable', [
         'duration_minutes' => $duration,
@@ -2342,6 +2399,53 @@ if ($action === 'deployment.guard.bypass.enable') {
     ]);
 }
 
+if ($action === 'deployment.guard.bypass.extend') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $guard = get_deployment_guard();
+    $status = deployment_guard_bypass_status($guard);
+    if (empty($guard['emergency_bypass_enabled']) || empty($status['active'])) {
+        out_json(['ok' => false, 'error' => 'Active emergency bypass is required to extend.'], 400);
+    }
+    $duration = (int) ($data['duration_minutes'] ?? 30);
+    $duration = max(5, min(240, $duration));
+    $reasonRaw = trim((string) ($data['reason'] ?? ''));
+    $reason = $reasonRaw !== '' ? $reasonRaw : (string) ($guard['emergency_bypass_reason'] ?? '');
+    if (strlen($reason) < 8) {
+        out_json(['ok' => false, 'error' => 'Bypass reason must be at least 8 characters.'], 400);
+    }
+    $expiresAt = gmdate('Y-m-d\TH:i', time() + ($duration * 60));
+    $saved = save_deployment_guard([
+        'emergency_bypass_enabled' => 1,
+        'emergency_bypass_expires_at' => $expiresAt,
+        'emergency_bypass_reason' => $reason,
+        'emergency_bypass_set_by' => current_actor(),
+        'emergency_bypass_last_alert_at' => '',
+    ]);
+    audit_event('deployment', 'guard.bypass.extend', [
+        'duration_minutes' => $duration,
+        'expires_at' => $expiresAt,
+        'reason' => $reason,
+    ]);
+    push_notification('critical', 'Emergency bypass extended until ' . $expiresAt . ' UTC.', [
+        'duration_minutes' => $duration,
+        'reason' => $reason,
+    ]);
+    out_json([
+        'ok' => true,
+        'message' => 'Emergency bypass extended.',
+        'guard' => $saved,
+        'time' => gmdate('c'),
+    ]);
+}
+
 if ($action === 'deployment.guard.bypass.disable') {
     app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -2353,6 +2457,7 @@ if ($action === 'deployment.guard.bypass.disable') {
         'emergency_bypass_expires_at' => '',
         'emergency_bypass_reason' => '',
         'emergency_bypass_set_by' => '',
+        'emergency_bypass_last_alert_at' => '',
     ]);
     audit_event('deployment', 'guard.bypass.disable', []);
     push_notification('info', 'Emergency bypass disabled.', []);
