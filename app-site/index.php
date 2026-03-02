@@ -598,7 +598,9 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="extendGuardBypassBtn" type="button">Extend Emergency Bypass</button>
                     <button id="disableGuardBypassBtn" type="button">Disable Emergency Bypass</button>
                     <button id="refreshBypassLogBtn" type="button">Refresh Bypass Log</button>
+                    <button id="downloadIncidentReportBtn" type="button">Download Incident Report</button>
                 </div>
+                <textarea id="incidentReportNote" class="large-text" rows="2" placeholder="Optional incident report note..."></textarea>
                 <pre id="deploymentGuardView">Loading...</pre>
                 <pre id="deploymentGuardPreviewView">No preview yet.</pre>
                 <pre id="deploymentBypassLogView">Loading bypass log...</pre>

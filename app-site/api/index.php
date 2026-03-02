@@ -1237,6 +1237,71 @@ function deployment_artifact_verify_snapshot($baseline)
     ];
 }
 
+function deployment_incident_report_snapshot($note = '')
+{
+    $guardEval = deployment_guard_evaluate();
+    $goLive = deployment_handoff_bundle_snapshot();
+    $bypassLog = app_read_json_file(deployment_bypass_log_path(), []);
+    $auditLog = app_read_json_file(audit_log_path(), []);
+    $notifications = app_read_json_file(notifications_path(), []);
+
+    $criticalNotifications = [];
+    foreach ($notifications as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $type = (string) ($row['type'] ?? '');
+        if (in_array($type, ['critical', 'warning'], true)) {
+            $criticalNotifications[] = $row;
+        }
+        if (count($criticalNotifications) >= 100) {
+            break;
+        }
+    }
+
+    $recentDeploymentAudit = [];
+    foreach ($auditLog as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['category'] ?? '') === 'deployment') {
+            $recentDeploymentAudit[] = $row;
+        }
+        if (count($recentDeploymentAudit) >= 200) {
+            break;
+        }
+    }
+
+    return [
+        'report_id' => 'incident_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'phase' => '1.21-incident-report-export',
+        'note' => trim((string) $note),
+        'summary' => [
+            'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
+            'go_live_status' => (string) ($goLive['status'] ?? 'review_required'),
+            'bypass_log_events' => count($bypassLog),
+            'deployment_audit_events' => count($recentDeploymentAudit),
+            'critical_notifications' => count($criticalNotifications),
+        ],
+        'deployment_guard' => [
+            'allowed' => !empty($guardEval['allowed']),
+            'reasons' => $guardEval['reasons'],
+            'state' => $guardEval['guard'],
+            'bypass' => $guardEval['bypass'] ?? [],
+            'bypass_active' => !empty($guardEval['bypass_active']) ? 1 : 0,
+        ],
+        'go_live' => [
+            'status' => (string) ($goLive['status'] ?? 'review_required'),
+            'summary' => isset($goLive['summary']) && is_array($goLive['summary']) ? $goLive['summary'] : [],
+            'failed_environment_checklist' => isset($goLive['failed_environment_checklist']) && is_array($goLive['failed_environment_checklist']) ? $goLive['failed_environment_checklist'] : [],
+        ],
+        'bypass_log_tail' => array_slice($bypassLog, 0, 200),
+        'deployment_audit_tail' => $recentDeploymentAudit,
+        'critical_notification_tail' => $criticalNotifications,
+    ];
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2049,7 +2114,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.20-bypass-session-log',
+        'phase' => '1.21-incident-report-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2513,6 +2578,20 @@ if ($action === 'deployment.guard.bypass.log') {
         'count' => count($rows),
         'items' => $rows,
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.report') {
+    $note = isset($_GET['note']) ? (string) $_GET['note'] : '';
+    $report = deployment_incident_report_snapshot($note);
+    audit_event('deployment', 'incident.report.export', [
+        'report_id' => (string) ($report['report_id'] ?? ''),
+        'guard_allowed' => (int) ($report['summary']['guard_allowed'] ?? 0),
+        'go_live_status' => (string) ($report['summary']['go_live_status'] ?? 'review_required'),
+    ]);
+    out_json([
+        'ok' => true,
+        'report' => $report,
     ]);
 }
 

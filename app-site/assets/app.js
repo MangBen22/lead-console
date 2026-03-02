@@ -37,6 +37,7 @@
   const extendGuardBypassBtn = document.getElementById("extendGuardBypassBtn");
   const disableGuardBypassBtn = document.getElementById("disableGuardBypassBtn");
   const refreshBypassLogBtn = document.getElementById("refreshBypassLogBtn");
+  const downloadIncidentReportBtn = document.getElementById("downloadIncidentReportBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -55,6 +56,7 @@
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
+  const incidentReportNote = document.getElementById("incidentReportNote");
   const guardBypassReason = document.getElementById("guardBypassReason");
   const guardBypassDuration = document.getElementById("guardBypassDuration");
   const modules = [
@@ -1258,6 +1260,24 @@
   if (refreshBypassLogBtn) {
     refreshBypassLogBtn.addEventListener("click", async function () {
       await loadBypassLog();
+    });
+  }
+
+  if (downloadIncidentReportBtn) {
+    downloadIncidentReportBtn.addEventListener("click", async function () {
+      const note = incidentReportNote && incidentReportNote.value ? incidentReportNote.value.trim() : "";
+      const action = "deployment.incident.report" + (note ? ("&note=" + encodeURIComponent(note)) : "");
+      const data = await apiGet(action);
+      if (deploymentGuardView) {
+        deploymentGuardView.textContent = JSON.stringify(data, null, 2);
+      }
+      const report = data && data.report ? data.report : data;
+      const reportId = report && report.report_id ? report.report_id : "incident_report";
+      downloadJsonFile(reportId + ".json", data);
+      await loadBypassLog();
+      await loadAuditLog();
+      await loadNotifications();
+      await loadStatus();
     });
   }
 
