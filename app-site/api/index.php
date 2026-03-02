@@ -900,6 +900,47 @@ function deployment_release_candidate_snapshot($note = '')
     ];
 }
 
+function deployment_artifact_manifest_snapshot()
+{
+    $root = dirname(__DIR__, 2);
+    $files = [
+        'lead-console.php',
+        'app-site/index.php',
+        'app-site/api/index.php',
+        'app-site/api/lib.php',
+        'app-site/assets/app.js',
+        'app-site/config.production.example.php',
+        'docs/DEPLOY_HOSTINGER_RUNBOOK.md',
+    ];
+    $manifest = [];
+    foreach ($files as $rel) {
+        $full = $root . '/' . str_replace('\\', '/', $rel);
+        if (!is_file($full)) {
+            $manifest[] = [
+                'path' => $rel,
+                'exists' => 0,
+                'size_bytes' => 0,
+                'sha256' => '',
+            ];
+            continue;
+        }
+        $manifest[] = [
+            'path' => $rel,
+            'exists' => 1,
+            'size_bytes' => (int) filesize($full),
+            'sha256' => (string) hash_file('sha256', $full),
+        ];
+    }
+
+    return [
+        'manifest_id' => 'artifact_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'phase' => '1.15-deployment-artifact-manifest',
+        'items' => $manifest,
+        'item_count' => count($manifest),
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1651,7 +1692,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.14-release-candidate-center',
+        'phase' => '1.15-deployment-artifact-manifest',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1802,6 +1843,15 @@ if ($action === 'deployment.release.candidate') {
         'candidate' => $candidate,
         'bundle' => $bundle,
     ], ((string) ($candidate['status'] ?? 'blocked') === 'ready') ? 200 : 409);
+}
+
+if ($action === 'deployment.artifact.manifest') {
+    $manifest = deployment_artifact_manifest_snapshot();
+    audit_event('deployment', 'artifact.manifest.export', ['manifest_id' => (string) $manifest['manifest_id']]);
+    out_json([
+        'ok' => true,
+        'manifest' => $manifest,
+    ]);
 }
 
 if ($action === 'deployment.verify') {

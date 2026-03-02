@@ -532,8 +532,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <textarea id="releaseCandidateNote" class="large-text" rows="3" placeholder="Optional release note (what changed for this candidate)..."></textarea>
                 <div class="actions">
                     <button id="generateReleaseCandidateBtn" type="button">Generate Release Candidate</button>
+                    <button id="downloadArtifactManifestBtn" type="button">Download Artifact Manifest</button>
                 </div>
                 <pre id="releaseCandidateView">No release candidate yet.</pre>
+                <h3>Artifact Manifest</h3>
+                <pre id="artifactManifestView">No artifact manifest yet.</pre>
                 <h3>Release Log</h3>
                 <pre id="releaseLogView">Loading...</pre>
             </section>

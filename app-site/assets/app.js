@@ -24,6 +24,7 @@
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
+  const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
@@ -34,6 +35,7 @@
   const preflightView = document.getElementById("preflightView");
   const goLiveStatusView = document.getElementById("goLiveStatusView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
+  const artifactManifestView = document.getElementById("artifactManifestView");
   const releaseLogView = document.getElementById("releaseLogView");
   const releaseCandidateNote = document.getElementById("releaseCandidateNote");
   const installCheckView = document.getElementById("installCheckView");
@@ -274,6 +276,16 @@
     }
   }
 
+  async function loadArtifactManifest() {
+    if (!artifactManifestView) return;
+    try {
+      const data = await apiGet("deployment.artifact.manifest");
+      artifactManifestView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      artifactManifestView.textContent = "Failed to load artifact manifest.";
+    }
+  }
+
   async function loadInstallCheck() {
     if (!installCheckView) return;
     try {
@@ -485,6 +497,7 @@
     await loadAuditLog();
     await loadGoLiveStatus();
     await loadReleaseLog();
+    await loadArtifactManifest();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -982,6 +995,21 @@
       await loadStatus();
       await loadGoLiveStatus();
       await loadDeploymentGuard();
+      await loadArtifactManifest();
+    });
+  }
+
+  if (downloadArtifactManifestBtn) {
+    downloadArtifactManifestBtn.addEventListener("click", async function () {
+      const data = await apiGet("deployment.artifact.manifest");
+      if (artifactManifestView) {
+        artifactManifestView.textContent = JSON.stringify(data, null, 2);
+      }
+      const manifest = data && data.manifest ? data.manifest : data;
+      const manifestId = manifest && manifest.manifest_id ? manifest.manifest_id : "artifact_manifest";
+      downloadJsonFile(manifestId + ".json", data);
+      await loadAuditLog();
+      await loadStatus();
     });
   }
 
