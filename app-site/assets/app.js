@@ -4,9 +4,12 @@
   const notifyList = document.getElementById("notifyList");
   const apiStatus = document.getElementById("apiStatus");
   const runAutomationBtn = document.getElementById("runAutomationBtn");
+  const runSchedulerTickBtn = document.getElementById("runSchedulerTickBtn");
   const markNotificationsReadBtn = document.getElementById("markNotificationsReadBtn");
   const automationResult = document.getElementById("automationResult");
   const automationRuns = document.getElementById("automationRuns");
+  const automationSettingsForm = document.getElementById("automationSettingsForm");
+  const automationSettingsView = document.getElementById("automationSettingsView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -110,6 +113,30 @@
       automationRuns.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       automationRuns.textContent = "Failed to load automation runs.";
+    }
+  }
+
+  async function loadAutomationSettings() {
+    if (!automationSettingsView) return;
+    try {
+      const data = await apiGet("automation.settings.get");
+      automationSettingsView.textContent = JSON.stringify(data, null, 2);
+      const settings = data && data.settings ? data.settings : {};
+      const modulesCfg = settings.modules || {};
+      const enabled = document.getElementById("automationEnabled");
+      const interval = document.getElementById("automationInterval");
+      const crm = document.getElementById("autoModuleCrm");
+      const social = document.getElementById("autoModuleSocial");
+      const webops = document.getElementById("autoModuleWebops");
+      const seo = document.getElementById("autoModuleSeo");
+      if (enabled) enabled.value = Number(settings.enabled) === 1 ? "1" : "0";
+      if (interval) interval.value = String(settings.interval_minutes || 30);
+      if (crm) crm.value = Number(modulesCfg.crm) === 1 ? "1" : "0";
+      if (social) social.value = Number(modulesCfg.social) === 1 ? "1" : "0";
+      if (webops) webops.value = Number(modulesCfg.webops) === 1 ? "1" : "0";
+      if (seo) seo.value = Number(modulesCfg.seo) === 1 ? "1" : "0";
+    } catch (err) {
+      automationSettingsView.textContent = "Failed to load automation settings.";
     }
   }
 
@@ -271,6 +298,7 @@
     await loadSeoExtensionEvents();
     await loadNotifications();
     await loadAutomationRuns();
+    await loadAutomationSettings();
   })();
 
   if (crmConnectorForm) {
@@ -612,6 +640,8 @@
         const data = await apiGet(entry[1]);
         el.textContent = JSON.stringify(data, null, 2);
       }
+      await loadAutomationSettings();
+      await loadStatus();
     });
   }
 
@@ -623,6 +653,52 @@
       }
       await loadNotifications();
     });
+  }
+
+  if (runSchedulerTickBtn) {
+    runSchedulerTickBtn.addEventListener("click", async function () {
+      const result = await apiPost("automation.scheduler.tick", {});
+      if (automationResult) {
+        automationResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadAutomationRuns();
+      await loadNotifications();
+      await loadAutomationSettings();
+      await loadStatus();
+    });
+  }
+
+  if (automationSettingsForm) {
+    automationSettingsForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const saveAutomationBtn = document.getElementById("saveAutomationSettingsBtn");
+    if (saveAutomationBtn) {
+      saveAutomationBtn.addEventListener("click", async function () {
+        const enabled = document.getElementById("automationEnabled");
+        const interval = document.getElementById("automationInterval");
+        const crm = document.getElementById("autoModuleCrm");
+        const social = document.getElementById("autoModuleSocial");
+        const webops = document.getElementById("autoModuleWebops");
+        const seo = document.getElementById("autoModuleSeo");
+        const payload = {
+          enabled: enabled && enabled.value === "1" ? 1 : 0,
+          interval_minutes: interval ? Number(interval.value || 30) : 30,
+          modules: {
+            crm: crm && crm.value === "1" ? 1 : 0,
+            social: social && social.value === "1" ? 1 : 0,
+            webops: webops && webops.value === "1" ? 1 : 0,
+            seo: seo && seo.value === "1" ? 1 : 0,
+          },
+        };
+        const result = await apiPost("automation.settings.save", payload);
+        if (automationResult) {
+          automationResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadAutomationSettings();
+        await loadStatus();
+      });
+    }
   }
 
   if (seoProjectForm) {

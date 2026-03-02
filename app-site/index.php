@@ -136,10 +136,58 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="runAutomationBtn" type="button">Run All Automation</button>
                     <button id="markNotificationsReadBtn" type="button">Mark Notifications Read</button>
+                    <button id="runSchedulerTickBtn" type="button">Run Scheduler Tick (Test)</button>
                 </div>
                 <pre id="automationResult">No automation run yet.</pre>
                 <h3>Automation Runs</h3>
                 <pre id="automationRuns">Loading...</pre>
+            </section>
+
+            <section class="api-status">
+                <h2>Automation Settings</h2>
+                <form id="automationSettingsForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="automationEnabled">Automation enabled</label>
+                        <select id="automationEnabled">
+                            <option value="1">enabled</option>
+                            <option value="0">disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="automationInterval">Interval (minutes)</label>
+                        <input id="automationInterval" type="number" min="5" max="1440" value="30">
+                    </div>
+                    <div class="form-row">
+                        <label for="autoModuleCrm">Run CRM module</label>
+                        <select id="autoModuleCrm">
+                            <option value="1">yes</option>
+                            <option value="0">no</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="autoModuleSocial">Run Social module</label>
+                        <select id="autoModuleSocial">
+                            <option value="1">yes</option>
+                            <option value="0">no</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="autoModuleWebops">Run WebOps module</label>
+                        <select id="autoModuleWebops">
+                            <option value="1">yes</option>
+                            <option value="0">no</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="autoModuleSeo">Run SEO module</label>
+                        <select id="autoModuleSeo">
+                            <option value="1">yes</option>
+                            <option value="0">no</option>
+                        </select>
+                    </div>
+                    <button id="saveAutomationSettingsBtn" type="button">Save Automation Settings</button>
+                </form>
+                <pre id="automationSettingsView">Loading...</pre>
             </section>
 
             <section class="api-status">
