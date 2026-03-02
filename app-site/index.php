@@ -599,11 +599,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="disableGuardBypassBtn" type="button">Disable Emergency Bypass</button>
                     <button id="refreshBypassLogBtn" type="button">Refresh Bypass Log</button>
                     <button id="downloadIncidentReportBtn" type="button">Download Incident Report</button>
+                    <button id="refreshIncidentReportsBtn" type="button">Refresh Incident Reports</button>
                 </div>
                 <textarea id="incidentReportNote" class="large-text" rows="2" placeholder="Optional incident report note..."></textarea>
                 <pre id="deploymentGuardView">Loading...</pre>
                 <pre id="deploymentGuardPreviewView">No preview yet.</pre>
                 <pre id="deploymentBypassLogView">Loading bypass log...</pre>
+                <pre id="incidentReportsView">Loading incident reports...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">

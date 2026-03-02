@@ -289,6 +289,11 @@ function deployment_bypass_log_path()
     return app_storage_path('deployment_bypass_log.json');
 }
 
+function deployment_incident_reports_path()
+{
+    return app_storage_path('deployment_incident_reports.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -1302,6 +1307,15 @@ function deployment_incident_report_snapshot($note = '')
     ];
 }
 
+function save_incident_report($report)
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    array_unshift($rows, $report);
+    $rows = array_slice($rows, 0, 200);
+    app_write_json_file(deployment_incident_reports_path(), $rows);
+    return $rows;
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2114,7 +2128,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.21-incident-report-export',
+        'phase' => '1.22-incident-report-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2584,6 +2598,7 @@ if ($action === 'deployment.guard.bypass.log') {
 if ($action === 'deployment.incident.report') {
     $note = isset($_GET['note']) ? (string) $_GET['note'] : '';
     $report = deployment_incident_report_snapshot($note);
+    save_incident_report($report);
     audit_event('deployment', 'incident.report.export', [
         'report_id' => (string) ($report['report_id'] ?? ''),
         'guard_allowed' => (int) ($report['summary']['guard_allowed'] ?? 0),
@@ -2592,6 +2607,16 @@ if ($action === 'deployment.incident.report') {
     out_json([
         'ok' => true,
         'report' => $report,
+    ]);
+}
+
+if ($action === 'deployment.incident.reports') {
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+        'time' => gmdate('c'),
     ]);
 }
 

@@ -38,6 +38,7 @@
   const disableGuardBypassBtn = document.getElementById("disableGuardBypassBtn");
   const refreshBypassLogBtn = document.getElementById("refreshBypassLogBtn");
   const downloadIncidentReportBtn = document.getElementById("downloadIncidentReportBtn");
+  const refreshIncidentReportsBtn = document.getElementById("refreshIncidentReportsBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -57,6 +58,7 @@
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
   const incidentReportNote = document.getElementById("incidentReportNote");
+  const incidentReportsView = document.getElementById("incidentReportsView");
   const guardBypassReason = document.getElementById("guardBypassReason");
   const guardBypassDuration = document.getElementById("guardBypassDuration");
   const modules = [
@@ -363,6 +365,16 @@
     }
   }
 
+  async function loadIncidentReports() {
+    if (!incidentReportsView) return;
+    try {
+      const data = await apiGet("deployment.incident.reports");
+      incidentReportsView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      incidentReportsView.textContent = "Failed to load incident reports.";
+    }
+  }
+
   function collectDeploymentGuardPayload() {
     const enforced = document.getElementById("guardEnforced");
     const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
@@ -568,6 +580,7 @@
     await loadArtifactManifest();
     await loadCutoverPipelineRuns();
     await loadBypassLog();
+    await loadIncidentReports();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1278,6 +1291,13 @@
       await loadAuditLog();
       await loadNotifications();
       await loadStatus();
+      await loadIncidentReports();
+    });
+  }
+
+  if (refreshIncidentReportsBtn) {
+    refreshIncidentReportsBtn.addEventListener("click", async function () {
+      await loadIncidentReports();
     });
   }
 
