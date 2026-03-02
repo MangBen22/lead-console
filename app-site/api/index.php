@@ -18,6 +18,31 @@ function app_clean_text($value)
     return trim(strip_tags((string) $value));
 }
 
+function app_value_is_placeholder($value)
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === '') {
+        return true;
+    }
+    $markers = [
+        'replace_with',
+        'replace-',
+        'change_me',
+        'changeme',
+        'placeholder',
+        'example.com',
+        'your-',
+        'your_',
+        'demo',
+    ];
+    foreach ($markers as $marker) {
+        if (strpos($v, $marker) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function all_sites()
 {
     global $config;
@@ -351,22 +376,33 @@ function healthcheck_snapshot()
         'ok' => $env !== '',
         'message' => 'Environment: ' . $env,
     ];
+    if (strtolower(trim($env)) !== 'production' && $status !== 'critical') {
+        $status = 'warning';
+    }
 
     $requiredKeys = [
-        'session_key',
-        'automation_scheduler_key',
-        'seo_extension_ingest_key',
+        ['key' => 'session_key', 'severity' => 'critical'],
+        ['key' => 'automation_scheduler_key', 'severity' => 'critical'],
+        ['key' => 'seo_extension_ingest_key', 'severity' => 'critical'],
+        ['key' => 'demo_admin_email', 'severity' => 'critical'],
+        ['key' => 'demo_admin_password', 'severity' => 'critical'],
     ];
-    foreach ($requiredKeys as $key) {
+    foreach ($requiredKeys as $spec) {
+        $key = (string) ($spec['key'] ?? '');
+        $severity = (string) ($spec['severity'] ?? 'warning');
         $value = trim((string) ($config[$key] ?? ''));
-        $ok = $value !== '' && stripos($value, 'REPLACE_') !== 0 && stripos($value, 'replace-') !== 0;
+        $ok = !app_value_is_placeholder($value);
         $checks[] = [
             'check' => 'config_' . $key,
             'ok' => $ok,
             'message' => $ok ? ($key . ' is configured.') : ($key . ' is missing or placeholder.'),
         ];
-        if (!$ok && $status !== 'critical') {
-            $status = 'warning';
+        if (!$ok) {
+            if ($severity === 'critical') {
+                $status = 'critical';
+            } elseif ($status !== 'critical') {
+                $status = 'warning';
+            }
         }
     }
 
@@ -1166,7 +1202,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.8-deployment-readiness-healthcheck',
+        'phase' => '1.9-production-secret-hardening',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
