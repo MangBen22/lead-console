@@ -613,6 +613,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="deploymentBypassLogView">Loading bypass log...</pre>
                 <pre id="incidentStatusActionView">No incident lifecycle action yet.</pre>
                 <pre id="incidentReportsView">Loading incident reports...</pre>
+                <div class="actions">
+                    <button id="refreshIncidentSummaryBtn" type="button">Refresh Incident Summary</button>
+                </div>
+                <pre id="incidentSummaryView">Loading incident summary...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">

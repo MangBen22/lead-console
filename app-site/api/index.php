@@ -1346,6 +1346,67 @@ function update_incident_report_status($reportId, $status, $incidentNote = '')
     return $updated;
 }
 
+function deployment_incident_summary_snapshot()
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    $counts = [
+        'open' => 0,
+        'resolved' => 0,
+        'reopened' => 0,
+        'unknown' => 0,
+    ];
+    $resolutionSamples = [];
+    $latestOpen = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower(trim((string) ($row['incident_status'] ?? 'open')));
+        if (!isset($counts[$status])) {
+            $counts['unknown']++;
+        } else {
+            $counts[$status]++;
+        }
+
+        if ($status === 'open' || $status === 'reopened') {
+            $latestOpen[] = [
+                'report_id' => (string) ($row['report_id'] ?? ''),
+                'generated_at' => (string) ($row['generated_at'] ?? ''),
+                'status' => $status,
+                'note' => (string) ($row['note'] ?? ''),
+            ];
+        }
+
+        if ($status === 'resolved') {
+            $createdTs = strtotime((string) ($row['generated_at'] ?? ''));
+            $resolvedTs = strtotime((string) ($row['incident_updated_at'] ?? ''));
+            if ($createdTs !== false && $resolvedTs !== false && $resolvedTs >= $createdTs) {
+                $resolutionSamples[] = (int) round(($resolvedTs - $createdTs) / 60);
+            }
+        }
+    }
+
+    $avgResolution = 0;
+    $maxResolution = 0;
+    if (!empty($resolutionSamples)) {
+        $avgResolution = (int) round(array_sum($resolutionSamples) / count($resolutionSamples));
+        $maxResolution = (int) max($resolutionSamples);
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'counts' => $counts,
+        'total_reports' => count($rows),
+        'open_total' => (int) ($counts['open'] + $counts['reopened']),
+        'resolution_metrics' => [
+            'sample_count' => count($resolutionSamples),
+            'avg_resolution_minutes' => $avgResolution,
+            'max_resolution_minutes' => $maxResolution,
+        ],
+        'latest_open_items' => array_slice($latestOpen, 0, 20),
+    ];
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2159,7 +2220,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.23-incident-lifecycle-controls',
+        'phase' => '1.24-incident-summary-analytics',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2647,6 +2708,15 @@ if ($action === 'deployment.incident.reports') {
         'ok' => true,
         'count' => count($rows),
         'items' => $rows,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.summary') {
+    $summary = deployment_incident_summary_snapshot();
+    out_json([
+        'ok' => true,
+        'summary' => $summary,
         'time' => gmdate('c'),
     ]);
 }

@@ -39,6 +39,7 @@
   const refreshBypassLogBtn = document.getElementById("refreshBypassLogBtn");
   const downloadIncidentReportBtn = document.getElementById("downloadIncidentReportBtn");
   const refreshIncidentReportsBtn = document.getElementById("refreshIncidentReportsBtn");
+  const refreshIncidentSummaryBtn = document.getElementById("refreshIncidentSummaryBtn");
   const resolveIncidentBtn = document.getElementById("resolveIncidentBtn");
   const reopenIncidentBtn = document.getElementById("reopenIncidentBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
@@ -61,6 +62,7 @@
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
   const incidentReportNote = document.getElementById("incidentReportNote");
   const incidentReportsView = document.getElementById("incidentReportsView");
+  const incidentSummaryView = document.getElementById("incidentSummaryView");
   const incidentReportIdInput = document.getElementById("incidentReportIdInput");
   const incidentStatusNoteInput = document.getElementById("incidentStatusNoteInput");
   const incidentStatusActionView = document.getElementById("incidentStatusActionView");
@@ -380,6 +382,16 @@
     }
   }
 
+  async function loadIncidentSummary() {
+    if (!incidentSummaryView) return;
+    try {
+      const data = await apiGet("deployment.incident.summary");
+      incidentSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      incidentSummaryView.textContent = "Failed to load incident summary.";
+    }
+  }
+
   function collectDeploymentGuardPayload() {
     const enforced = document.getElementById("guardEnforced");
     const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
@@ -586,6 +598,7 @@
     await loadCutoverPipelineRuns();
     await loadBypassLog();
     await loadIncidentReports();
+    await loadIncidentSummary();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1297,12 +1310,19 @@
       await loadNotifications();
       await loadStatus();
       await loadIncidentReports();
+      await loadIncidentSummary();
     });
   }
 
   if (refreshIncidentReportsBtn) {
     refreshIncidentReportsBtn.addEventListener("click", async function () {
       await loadIncidentReports();
+    });
+  }
+
+  if (refreshIncidentSummaryBtn) {
+    refreshIncidentSummaryBtn.addEventListener("click", async function () {
+      await loadIncidentSummary();
     });
   }
 
@@ -1325,6 +1345,7 @@
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
+    await loadIncidentSummary();
   }
 
   if (resolveIncidentBtn) {
