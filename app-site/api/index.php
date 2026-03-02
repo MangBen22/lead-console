@@ -279,6 +279,11 @@ function deployment_release_log_path()
     return app_storage_path('deployment_releases.json');
 }
 
+function deployment_pipeline_runs_path()
+{
+    return app_storage_path('deployment_pipeline_runs.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -1030,6 +1035,61 @@ function deployment_artifact_verify_snapshot($baseline)
     ];
 }
 
+function deployment_pipeline_run_snapshot($note = '')
+{
+    $install = install_check_snapshot();
+    $preflight = deployment_preflight_snapshot();
+    $verify = deployment_verify_snapshot();
+    $goLive = deployment_handoff_bundle_snapshot();
+    $guardEval = deployment_guard_evaluate();
+
+    $status = 'ready';
+    if ((string) ($install['status'] ?? 'warning') === 'critical') {
+        $status = 'blocked';
+    }
+    if ((string) ($preflight['status'] ?? 'warning') === 'critical') {
+        $status = 'blocked';
+    }
+    if ((string) ($verify['status'] ?? 'warning') === 'critical') {
+        $status = 'blocked';
+    }
+    if ((string) ($goLive['status'] ?? 'review_required') !== 'ready') {
+        $status = 'blocked';
+    }
+    if (empty($guardEval['allowed'])) {
+        $status = 'blocked';
+    }
+
+    $run = [
+        'run_id' => 'pipeline_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'note' => trim((string) $note),
+        'status' => $status,
+        'summary' => [
+            'install_status' => (string) ($install['status'] ?? 'warning'),
+            'preflight_status' => (string) ($preflight['status'] ?? 'warning'),
+            'verify_status' => (string) ($verify['status'] ?? 'warning'),
+            'go_live_status' => (string) ($goLive['status'] ?? 'review_required'),
+            'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
+        ],
+        'guard_reasons' => $guardEval['reasons'],
+    ];
+
+    $rows = app_read_json_file(deployment_pipeline_runs_path(), []);
+    array_unshift($rows, $run);
+    $rows = array_slice($rows, 0, 200);
+    app_write_json_file(deployment_pipeline_runs_path(), $rows);
+
+    return [
+        'run' => $run,
+        'install' => $install,
+        'preflight' => $preflight,
+        'verify' => $verify,
+        'go_live' => $goLive,
+        'guard' => $guardEval,
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1735,6 +1795,7 @@ $rateLimitedWriteActions = [
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
+    'deployment.pipeline.run',
     'deployment.artifact.verify',
     'deployment.verify',
     'backup.import',
@@ -1782,7 +1843,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.15-deployment-artifact-manifest',
+        'phase' => '1.16-cutover-pipeline-runner',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1897,6 +1958,59 @@ if ($action === 'deployment.release.log') {
         'items' => $rows,
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'deployment.pipeline.runs') {
+    $rows = app_read_json_file(deployment_pipeline_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.pipeline.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $note = trim((string) ($data['note'] ?? ''));
+    $snap = deployment_pipeline_run_snapshot($note);
+    save_deployment_guard([
+        'last_install_check' => [
+            'status' => (string) ($snap['install']['status'] ?? 'warning'),
+            'time' => (string) ($snap['install']['time'] ?? gmdate('c')),
+        ],
+        'last_preflight' => [
+            'status' => (string) ($snap['preflight']['status'] ?? 'warning'),
+            'time' => (string) ($snap['preflight']['time'] ?? gmdate('c')),
+        ],
+        'last_verify' => [
+            'status' => (string) ($snap['verify']['status'] ?? 'warning'),
+            'time' => (string) ($snap['verify']['time'] ?? gmdate('c')),
+        ],
+    ]);
+    $run = $snap['run'];
+    if ((string) ($run['status'] ?? 'blocked') === 'ready') {
+        push_notification('success', 'Cutover pipeline passed: ' . (string) ($run['run_id'] ?? ''), ['run' => $run]);
+    } else {
+        push_notification('critical', 'Cutover pipeline blocked: ' . (string) ($run['run_id'] ?? ''), ['run' => $run]);
+    }
+    audit_event('deployment', 'pipeline.run', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'status' => (string) ($run['status'] ?? 'blocked'),
+        'summary' => $run['summary'] ?? [],
+    ]);
+    out_json([
+        'ok' => ((string) ($run['status'] ?? 'blocked') === 'ready'),
+        'pipeline' => $snap,
+    ], ((string) ($run['status'] ?? 'blocked') === 'ready') ? 200 : 409);
 }
 
 if ($action === 'deployment.release.candidate') {

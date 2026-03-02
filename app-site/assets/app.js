@@ -29,6 +29,7 @@
   const runInstallCheckBtn = document.getElementById("runInstallCheckBtn");
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
+  const runCutoverPipelineBtn = document.getElementById("runCutoverPipelineBtn");
   const deploymentGuardForm = document.getElementById("deploymentGuardForm");
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
@@ -43,6 +44,9 @@
   const releaseCandidateNote = document.getElementById("releaseCandidateNote");
   const installCheckView = document.getElementById("installCheckView");
   const deploymentVerifyView = document.getElementById("deploymentVerifyView");
+  const cutoverPipelineNote = document.getElementById("cutoverPipelineNote");
+  const cutoverPipelineView = document.getElementById("cutoverPipelineView");
+  const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const modules = [
     ["modLeads", "leads.summary"],
@@ -321,6 +325,16 @@
     }
   }
 
+  async function loadCutoverPipelineRuns() {
+    if (!cutoverPipelineRunsView) return;
+    try {
+      const data = await apiGet("deployment.pipeline.runs");
+      cutoverPipelineRunsView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      cutoverPipelineRunsView.textContent = "Failed to load cutover pipeline history.";
+    }
+  }
+
   function downloadJsonFile(filename, payload) {
     try {
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -501,6 +515,7 @@
     await loadGoLiveStatus();
     await loadReleaseLog();
     await loadArtifactManifest();
+    await loadCutoverPipelineRuns();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1068,6 +1083,24 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+    });
+  }
+
+  if (runCutoverPipelineBtn) {
+    runCutoverPipelineBtn.addEventListener("click", async function () {
+      const note = cutoverPipelineNote && cutoverPipelineNote.value ? cutoverPipelineNote.value.trim() : "";
+      const result = await apiPost("deployment.pipeline.run", { note: note });
+      if (cutoverPipelineView) {
+        cutoverPipelineView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadCutoverPipelineRuns();
+      await loadInstallCheck();
+      await loadPreflight();
+      await loadGoLiveStatus();
+      await loadDeploymentGuard();
+      await loadAuditLog();
+      await loadNotifications();
+      await loadStatus();
     });
   }
 

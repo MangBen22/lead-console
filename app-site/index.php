@@ -562,11 +562,17 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runInstallCheckBtn" type="button">Run Install Check</button>
                     <button id="runDeploymentVerifyBtn" type="button">Run Post-Deploy Verify</button>
                     <button id="downloadHandoffBundleBtn" type="button">Download Handoff Bundle</button>
+                    <button id="runCutoverPipelineBtn" type="button">Run Full Cutover Check</button>
                 </div>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>
                 <pre id="deploymentVerifyView">No verification run yet.</pre>
+                <h3>Cutover Pipeline</h3>
+                <textarea id="cutoverPipelineNote" class="large-text" rows="2" placeholder="Optional note for this full cutover check..."></textarea>
+                <pre id="cutoverPipelineView">No cutover pipeline run yet.</pre>
+                <h3>Cutover Pipeline History</h3>
+                <pre id="cutoverPipelineRunsView">Loading...</pre>
                 <h3>Deployment Guard</h3>
                 <form id="deploymentGuardForm">
                     <label><input id="guardEnforced" type="checkbox" value="1" checked /> Enforce deployment guard on risky writes</label>
