@@ -367,6 +367,35 @@ function audit_event($category, $actionName, $details = [])
     app_write_json_file(audit_log_path(), $rows);
 }
 
+function app_parse_utc_datetime($value)
+{
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return false;
+    }
+    if (preg_match('/^\d{4}\-\d{2}\-\d{2}T\d{2}\:\d{2}$/', $raw)) {
+        $dt = DateTime::createFromFormat('Y-m-d\TH:i', $raw, new DateTimeZone('UTC'));
+        if ($dt instanceof DateTime) {
+            return $dt->getTimestamp();
+        }
+    }
+    try {
+        $dt = new DateTime($raw, new DateTimeZone('UTC'));
+        return $dt->getTimestamp();
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function app_format_utc_datetime($value)
+{
+    $ts = app_parse_utc_datetime($value);
+    if ($ts === false) {
+        return '';
+    }
+    return gmdate('Y-m-d\TH:i', (int) $ts);
+}
+
 function default_deployment_guard()
 {
     return [
@@ -434,16 +463,16 @@ function deployment_guard_evaluate($requireUnlocked = true)
     }
 
     if (!empty($guard['launch_window_enabled'])) {
-        $startRaw = trim((string) ($guard['launch_window_start'] ?? ''));
-        $endRaw = trim((string) ($guard['launch_window_end'] ?? ''));
-        $startTs = $startRaw !== '' ? strtotime($startRaw) : false;
-        $endTs = $endRaw !== '' ? strtotime($endRaw) : false;
+        $startRaw = app_format_utc_datetime((string) ($guard['launch_window_start'] ?? ''));
+        $endRaw = app_format_utc_datetime((string) ($guard['launch_window_end'] ?? ''));
+        $startTs = app_parse_utc_datetime($startRaw);
+        $endTs = app_parse_utc_datetime($endRaw);
         if ($startTs === false || $endTs === false || $endTs <= $startTs) {
             $reasons[] = 'Launch window is enabled but start/end is invalid.';
         } else {
             $now = time();
             if ($now < $startTs || $now > $endTs) {
-                $reasons[] = 'Current time is outside launch window.';
+                $reasons[] = 'Current UTC time is outside launch window (' . $startRaw . ' to ' . $endRaw . ').';
             }
         }
     }
@@ -2153,8 +2182,8 @@ if ($action === 'deployment.guard.save') {
     $saved = save_deployment_guard([
         'enforced' => !empty($data['enforced']) ? 1 : 0,
         'launch_window_enabled' => !empty($data['launch_window_enabled']) ? 1 : 0,
-        'launch_window_start' => trim((string) ($data['launch_window_start'] ?? '')),
-        'launch_window_end' => trim((string) ($data['launch_window_end'] ?? '')),
+        'launch_window_start' => app_format_utc_datetime((string) ($data['launch_window_start'] ?? '')),
+        'launch_window_end' => app_format_utc_datetime((string) ($data['launch_window_end'] ?? '')),
         'checklist' => [
             'backup_verified' => !empty($incomingChecklist['backup_verified']) ? 1 : 0,
             'cron_configured' => !empty($incomingChecklist['cron_configured']) ? 1 : 0,

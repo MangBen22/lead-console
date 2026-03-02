@@ -577,8 +577,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <form id="deploymentGuardForm">
                     <label><input id="guardEnforced" type="checkbox" value="1" checked /> Enforce deployment guard on risky writes</label>
                     <label><input id="guardLaunchWindowEnabled" type="checkbox" value="1" /> Enable launch window (UTC)</label>
-                    <label>Launch window start (UTC)<input id="guardLaunchWindowStart" type="datetime-local" /></label>
-                    <label>Launch window end (UTC)<input id="guardLaunchWindowEnd" type="datetime-local" /></label>
+                    <label>Launch window start (UTC, YYYY-MM-DDTHH:MM)<input id="guardLaunchWindowStart" type="text" placeholder="2026-03-02T18:00" /></label>
+                    <label>Launch window end (UTC, YYYY-MM-DDTHH:MM)<input id="guardLaunchWindowEnd" type="text" placeholder="2026-03-02T20:00" /></label>
                     <label><input id="guardBackupVerified" type="checkbox" value="1" /> Backup verified</label>
                     <label><input id="guardCronConfigured" type="checkbox" value="1" /> Cron configured</label>
                     <label><input id="guardRollbackReady" type="checkbox" value="1" /> Rollback plan ready</label>
