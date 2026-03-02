@@ -602,9 +602,16 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshIncidentReportsBtn" type="button">Refresh Incident Reports</button>
                 </div>
                 <textarea id="incidentReportNote" class="large-text" rows="2" placeholder="Optional incident report note..."></textarea>
+                <label>Incident report ID<input id="incidentReportIdInput" type="text" placeholder="incident_YYYYMMDD_HHMMSS_xxxxxx" /></label>
+                <label>Incident status note<input id="incidentStatusNoteInput" type="text" placeholder="Resolution/reopen note..." /></label>
+                <div class="actions">
+                    <button id="resolveIncidentBtn" type="button">Mark Resolved</button>
+                    <button id="reopenIncidentBtn" type="button">Reopen Incident</button>
+                </div>
                 <pre id="deploymentGuardView">Loading...</pre>
                 <pre id="deploymentGuardPreviewView">No preview yet.</pre>
                 <pre id="deploymentBypassLogView">Loading bypass log...</pre>
+                <pre id="incidentStatusActionView">No incident lifecycle action yet.</pre>
                 <pre id="incidentReportsView">Loading incident reports...</pre>
             </section>
         </main>

@@ -39,6 +39,8 @@
   const refreshBypassLogBtn = document.getElementById("refreshBypassLogBtn");
   const downloadIncidentReportBtn = document.getElementById("downloadIncidentReportBtn");
   const refreshIncidentReportsBtn = document.getElementById("refreshIncidentReportsBtn");
+  const resolveIncidentBtn = document.getElementById("resolveIncidentBtn");
+  const reopenIncidentBtn = document.getElementById("reopenIncidentBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -59,6 +61,9 @@
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
   const incidentReportNote = document.getElementById("incidentReportNote");
   const incidentReportsView = document.getElementById("incidentReportsView");
+  const incidentReportIdInput = document.getElementById("incidentReportIdInput");
+  const incidentStatusNoteInput = document.getElementById("incidentStatusNoteInput");
+  const incidentStatusActionView = document.getElementById("incidentStatusActionView");
   const guardBypassReason = document.getElementById("guardBypassReason");
   const guardBypassDuration = document.getElementById("guardBypassDuration");
   const modules = [
@@ -1298,6 +1303,39 @@
   if (refreshIncidentReportsBtn) {
     refreshIncidentReportsBtn.addEventListener("click", async function () {
       await loadIncidentReports();
+    });
+  }
+
+  async function runIncidentStatusAction(status) {
+    const reportId = incidentReportIdInput && incidentReportIdInput.value ? incidentReportIdInput.value.trim() : "";
+    const note = incidentStatusNoteInput && incidentStatusNoteInput.value ? incidentStatusNoteInput.value.trim() : "";
+    if (!reportId) {
+      if (incidentStatusActionView) incidentStatusActionView.textContent = "Enter incident report ID first.";
+      return;
+    }
+    const result = await apiPost("deployment.incident.resolve", {
+      report_id: reportId,
+      status: status,
+      note: note,
+    });
+    if (incidentStatusActionView) {
+      incidentStatusActionView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadIncidentReports();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  if (resolveIncidentBtn) {
+    resolveIncidentBtn.addEventListener("click", async function () {
+      await runIncidentStatusAction("resolved");
+    });
+  }
+
+  if (reopenIncidentBtn) {
+    reopenIncidentBtn.addEventListener("click", async function () {
+      await runIncidentStatusAction("reopened");
     });
   }
 

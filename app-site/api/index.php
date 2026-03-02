@@ -1282,6 +1282,10 @@ function deployment_incident_report_snapshot($note = '')
         'generated_at' => gmdate('c'),
         'phase' => '1.21-incident-report-export',
         'note' => trim((string) $note),
+        'incident_status' => 'open',
+        'incident_updated_at' => gmdate('c'),
+        'incident_updated_by' => current_actor(),
+        'incident_note' => '',
         'summary' => [
             'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
             'go_live_status' => (string) ($goLive['status'] ?? 'review_required'),
@@ -1314,6 +1318,32 @@ function save_incident_report($report)
     $rows = array_slice($rows, 0, 200);
     app_write_json_file(deployment_incident_reports_path(), $rows);
     return $rows;
+}
+
+function update_incident_report_status($reportId, $status, $incidentNote = '')
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    $updated = null;
+    foreach ($rows as &$row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['report_id'] ?? '') !== (string) $reportId) {
+            continue;
+        }
+        $row['incident_status'] = (string) $status;
+        $row['incident_updated_at'] = gmdate('c');
+        $row['incident_updated_by'] = current_actor();
+        $note = trim((string) $incidentNote);
+        if ($note !== '') {
+            $row['incident_note'] = $note;
+        }
+        $updated = $row;
+        break;
+    }
+    unset($row);
+    app_write_json_file(deployment_incident_reports_path(), $rows);
+    return $updated;
 }
 
 function deployment_pipeline_run_snapshot($note = '')
@@ -2082,6 +2112,7 @@ $rateLimitedWriteActions = [
     'deployment.guard.bypass.enable',
     'deployment.guard.bypass.extend',
     'deployment.guard.bypass.disable',
+    'deployment.incident.resolve',
     'deployment.verify',
     'backup.import',
 ];
@@ -2128,7 +2159,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.22-incident-report-history',
+        'phase' => '1.23-incident-lifecycle-controls',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2617,6 +2648,41 @@ if ($action === 'deployment.incident.reports') {
         'count' => count($rows),
         'items' => $rows,
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.resolve') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['report_id'])) {
+        out_json(['ok' => false, 'error' => 'report_id is required.'], 400);
+    }
+    $reportId = (string) $data['report_id'];
+    $status = strtolower(trim((string) ($data['status'] ?? 'resolved')));
+    if (!in_array($status, ['resolved', 'reopened'], true)) {
+        out_json(['ok' => false, 'error' => 'status must be resolved or reopened.'], 400);
+    }
+    $note = trim((string) ($data['note'] ?? ''));
+    $updated = update_incident_report_status($reportId, $status, $note);
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Incident report not found.'], 404);
+    }
+    audit_event('deployment', 'incident.report.status', [
+        'report_id' => $reportId,
+        'status' => $status,
+        'note' => $note,
+    ]);
+    push_notification($status === 'resolved' ? 'success' : 'warning', 'Incident report ' . $status . ': ' . $reportId, [
+        'report_id' => $reportId,
+        'status' => $status,
+    ]);
+    out_json([
+        'ok' => true,
+        'item' => $updated,
     ]);
 }
 
