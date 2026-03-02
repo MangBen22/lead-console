@@ -188,6 +188,33 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="saveAutomationSettingsBtn" type="button">Save Automation Settings</button>
                 </form>
                 <pre id="automationSettingsView">Loading...</pre>
+                <h3>Scheduler Status</h3>
+                <pre id="schedulerStatusView">Loading...</pre>
+                <h3>Cron Helper</h3>
+                <pre id="cronHelpView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
+                <h2>Notification Settings</h2>
+                <form id="notificationSettingsForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="notifSoundEnabled">Sound enabled</label>
+                        <select id="notifSoundEnabled">
+                            <option value="1">enabled</option>
+                            <option value="0">disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="notifSoundMode">Sound mode</label>
+                        <select id="notifSoundMode">
+                            <option value="critical_only">critical_only</option>
+                            <option value="all">all</option>
+                            <option value="off">off</option>
+                        </select>
+                    </div>
+                    <button id="saveNotificationSettingsBtn" type="button">Save Notification Settings</button>
+                </form>
+                <pre id="notificationSettingsView">Loading...</pre>
             </section>
 
             <section class="api-status">

@@ -10,6 +10,10 @@
   const automationRuns = document.getElementById("automationRuns");
   const automationSettingsForm = document.getElementById("automationSettingsForm");
   const automationSettingsView = document.getElementById("automationSettingsView");
+  const schedulerStatusView = document.getElementById("schedulerStatusView");
+  const cronHelpView = document.getElementById("cronHelpView");
+  const notificationSettingsForm = document.getElementById("notificationSettingsForm");
+  const notificationSettingsView = document.getElementById("notificationSettingsView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -44,6 +48,7 @@
   const seoResult = document.getElementById("seoResult");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
+  let lastNotificationToneKey = "";
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -101,6 +106,35 @@
         li.textContent = "No notifications.";
         notifyList.appendChild(li);
       }
+
+      const settings = data && data.settings ? data.settings : {};
+      const soundEnabled = Number(settings.sound_enabled) === 1;
+      const mode = settings.sound_mode || "critical_only";
+      const unread = Number(data.unread || 0);
+      const criticalUnread = Number(data.critical_unread || 0);
+      const shouldSound = soundEnabled && (
+        (mode === "all" && unread > 0) ||
+        (mode === "critical_only" && criticalUnread > 0)
+      );
+      const toneKey = [mode, unread, criticalUnread, items[0] && items[0].id ? items[0].id : ""].join("|");
+      if (shouldSound && toneKey !== lastNotificationToneKey) {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            const ctx = new AudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = 880;
+            gain.gain.value = 0.04;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.14);
+          }
+        } catch (toneErr) {}
+      }
+      lastNotificationToneKey = toneKey;
     } catch (err) {
       notifyList.innerHTML = "<li>Failed to load notifications.</li>";
     }
@@ -137,6 +171,41 @@
       if (seo) seo.value = Number(modulesCfg.seo) === 1 ? "1" : "0";
     } catch (err) {
       automationSettingsView.textContent = "Failed to load automation settings.";
+    }
+  }
+
+  async function loadSchedulerStatus() {
+    if (!schedulerStatusView) return;
+    try {
+      const data = await apiGet("automation.scheduler.status");
+      schedulerStatusView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      schedulerStatusView.textContent = "Failed to load scheduler status.";
+    }
+  }
+
+  async function loadCronHelp() {
+    if (!cronHelpView) return;
+    try {
+      const data = await apiGet("automation.scheduler.cron_help");
+      cronHelpView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      cronHelpView.textContent = "Failed to load cron helper.";
+    }
+  }
+
+  async function loadNotificationSettings() {
+    if (!notificationSettingsView) return;
+    try {
+      const data = await apiGet("notifications.settings.get");
+      notificationSettingsView.textContent = JSON.stringify(data, null, 2);
+      const settings = data && data.settings ? data.settings : {};
+      const soundEnabled = document.getElementById("notifSoundEnabled");
+      const soundMode = document.getElementById("notifSoundMode");
+      if (soundEnabled) soundEnabled.value = Number(settings.sound_enabled) === 1 ? "1" : "0";
+      if (soundMode) soundMode.value = settings.sound_mode || "critical_only";
+    } catch (err) {
+      notificationSettingsView.textContent = "Failed to load notification settings.";
     }
   }
 
@@ -299,6 +368,9 @@
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
+    await loadSchedulerStatus();
+    await loadCronHelp();
+    await loadNotificationSettings();
   })();
 
   if (crmConnectorForm) {
@@ -664,6 +736,7 @@
       await loadAutomationRuns();
       await loadNotifications();
       await loadAutomationSettings();
+      await loadSchedulerStatus();
       await loadStatus();
     });
   }
@@ -696,7 +769,31 @@
           automationResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadAutomationSettings();
+        await loadSchedulerStatus();
         await loadStatus();
+      });
+    }
+  }
+
+  if (notificationSettingsForm) {
+    notificationSettingsForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const saveNotifBtn = document.getElementById("saveNotificationSettingsBtn");
+    if (saveNotifBtn) {
+      saveNotifBtn.addEventListener("click", async function () {
+        const soundEnabled = document.getElementById("notifSoundEnabled");
+        const soundMode = document.getElementById("notifSoundMode");
+        const payload = {
+          sound_enabled: soundEnabled && soundEnabled.value === "1" ? 1 : 0,
+          sound_mode: soundMode ? soundMode.value : "critical_only",
+        };
+        const result = await apiPost("notifications.settings.save", payload);
+        if (automationResult) {
+          automationResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadNotificationSettings();
+        await loadNotifications();
       });
     }
   }

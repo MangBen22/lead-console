@@ -219,6 +219,11 @@ function notifications_path()
     return app_storage_path('notifications.json');
 }
 
+function notification_settings_path()
+{
+    return app_storage_path('notification_settings.json');
+}
+
 function automation_runs_path()
 {
     return app_storage_path('automation_runs.json');
@@ -242,6 +247,43 @@ function push_notification($type, $message, $meta = [])
     ]);
     $rows = array_slice($rows, 0, 500);
     app_write_json_file(notifications_path(), $rows);
+}
+
+function default_notification_settings()
+{
+    return [
+        'sound_enabled' => !empty($GLOBALS['config']['notification_sound_enabled']) ? 1 : 0,
+        'sound_mode' => in_array((string) ($GLOBALS['config']['notification_sound_mode'] ?? 'critical_only'), ['off', 'critical_only', 'all'], true)
+            ? (string) ($GLOBALS['config']['notification_sound_mode'] ?? 'critical_only')
+            : 'critical_only',
+    ];
+}
+
+function get_notification_settings()
+{
+    $stored = app_read_json_file(notification_settings_path(), []);
+    if (!is_array($stored)) {
+        $stored = [];
+    }
+    $defaults = default_notification_settings();
+    $merged = array_merge($defaults, $stored);
+    $merged['sound_enabled'] = !empty($merged['sound_enabled']) ? 1 : 0;
+    if (!in_array((string) ($merged['sound_mode'] ?? 'critical_only'), ['off', 'critical_only', 'all'], true)) {
+        $merged['sound_mode'] = 'critical_only';
+    }
+    return $merged;
+}
+
+function save_notification_settings($settings)
+{
+    $payload = [
+        'sound_enabled' => !empty($settings['sound_enabled']) ? 1 : 0,
+        'sound_mode' => in_array((string) ($settings['sound_mode'] ?? 'critical_only'), ['off', 'critical_only', 'all'], true)
+            ? (string) ($settings['sound_mode'] ?? 'critical_only')
+            : 'critical_only',
+    ];
+    app_write_json_file(notification_settings_path(), $payload);
+    return $payload;
 }
 
 function seo_project_by_id($projectId)
@@ -869,7 +911,7 @@ function execute_automation_run($settings, $source = 'manual')
 
     $failTotal = $summary['crm']['failed'] + $summary['social']['failed'] + $summary['webops']['failed'] + $summary['seo']['failed'];
     if ($failTotal > 0) {
-        push_notification('warning', 'Automation run completed with issues.', [
+        push_notification('critical', 'Automation run completed with issues.', [
             'automation_id' => $automationId,
             'failed_total' => $failTotal,
             'summary' => $summary,
@@ -911,9 +953,13 @@ if ($action === 'status') {
 if ($action === 'notifications') {
     $rows = app_read_json_file(notifications_path(), []);
     $unread = 0;
+    $criticalUnread = 0;
     foreach ($rows as $row) {
         if (is_array($row) && empty($row['read'])) {
             $unread++;
+            if (in_array((string) ($row['type'] ?? ''), ['critical'], true)) {
+                $criticalUnread++;
+            }
         }
     }
     if (empty($rows)) {
@@ -926,8 +972,37 @@ if ($action === 'notifications') {
     out_json([
         'ok' => true,
         'unread' => $unread,
+        'critical_unread' => $criticalUnread,
+        'settings' => get_notification_settings(),
         'items' => $rows,
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'notifications.settings.get') {
+    out_json([
+        'ok' => true,
+        'settings' => get_notification_settings(),
+    ]);
+}
+
+if ($action === 'notifications.settings.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $saved = save_notification_settings([
+        'sound_enabled' => !empty($data['sound_enabled']) ? 1 : 0,
+        'sound_mode' => (string) ($data['sound_mode'] ?? 'critical_only'),
+    ]);
+    out_json([
+        'ok' => true,
+        'settings' => $saved,
     ]);
 }
 
@@ -1943,6 +2018,43 @@ if ($action === 'automation.settings.save') {
     out_json([
         'ok' => true,
         'settings' => $saved,
+    ]);
+}
+
+if ($action === 'automation.scheduler.status') {
+    $settings = get_automation_settings();
+    $nowTs = time();
+    $lastTs = $settings['last_run_at'] !== '' ? strtotime((string) $settings['last_run_at']) : 0;
+    $intervalSecs = max(5, (int) ($settings['interval_minutes'] ?? 30)) * 60;
+    $elapsed = $lastTs > 0 ? ($nowTs - $lastTs) : null;
+    $due = ($lastTs === 0) ? true : ($elapsed >= $intervalSecs);
+    $nextDueIn = ($lastTs === 0) ? 0 : max(0, $intervalSecs - max(0, (int) $elapsed));
+    out_json([
+        'ok' => true,
+        'enabled' => !empty($settings['enabled']),
+        'last_run_at' => $settings['last_run_at'],
+        'interval_minutes' => (int) $settings['interval_minutes'],
+        'due_now' => $due,
+        'next_due_in_seconds' => $nextDueIn,
+        'modules' => $settings['modules'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'automation.scheduler.cron_help') {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $baseUrl = rtrim($scheme . '://' . $host, '/');
+    $tickUrl = $baseUrl . '/api/index.php?action=automation.scheduler.tick';
+    $schedulerKey = (string) ($config['automation_scheduler_key'] ?? '');
+    $safeKey = $schedulerKey !== '' ? $schedulerKey : 'REPLACE_WITH_AUTOMATION_SCHEDULER_KEY';
+    out_json([
+        'ok' => true,
+        'base_url' => $baseUrl,
+        'tick_url' => $tickUrl,
+        'linux_cron_example' => "*/5 * * * * curl -s -X POST -H \"X-AUTOMATION-KEY: {$safeKey}\" \"{$tickUrl}\" > /dev/null 2>&1",
+        'windows_task_example' => "powershell -Command \"Invoke-RestMethod -Method Post -Headers @{ 'X-AUTOMATION-KEY'='{$safeKey}' } -Uri '{$tickUrl}'\"",
+        'note' => 'Use a secure scheduler key in app-site/config.php and restrict server access where possible.',
     ]);
 }
 
