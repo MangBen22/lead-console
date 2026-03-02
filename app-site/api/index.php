@@ -445,9 +445,33 @@ function save_deployment_guard($guard)
     return $merged;
 }
 
-function deployment_guard_evaluate($requireUnlocked = true)
+function deployment_guard_from_payload($payload, $baseGuard = null)
 {
-    $guard = get_deployment_guard();
+    $base = is_array($baseGuard) ? $baseGuard : get_deployment_guard();
+    $incomingChecklist = isset($payload['checklist']) && is_array($payload['checklist']) ? $payload['checklist'] : [];
+    $merged = array_merge($base, [
+        'enforced' => !empty($payload['enforced']) ? 1 : 0,
+        'launch_window_enabled' => !empty($payload['launch_window_enabled']) ? 1 : 0,
+        'launch_window_start' => app_format_utc_datetime((string) ($payload['launch_window_start'] ?? '')),
+        'launch_window_end' => app_format_utc_datetime((string) ($payload['launch_window_end'] ?? '')),
+        'checklist' => [
+            'backup_verified' => !empty($incomingChecklist['backup_verified']) ? 1 : 0,
+            'cron_configured' => !empty($incomingChecklist['cron_configured']) ? 1 : 0,
+            'rollback_plan_ready' => !empty($incomingChecklist['rollback_plan_ready']) ? 1 : 0,
+            'dns_domain_ready' => !empty($incomingChecklist['dns_domain_ready']) ? 1 : 0,
+        ],
+    ]);
+    $merged['checklist'] = array_merge($base['checklist'], is_array($merged['checklist'] ?? null) ? $merged['checklist'] : []);
+    $merged['last_install_check'] = array_merge($base['last_install_check'], is_array($merged['last_install_check'] ?? null) ? $merged['last_install_check'] : []);
+    $merged['last_preflight'] = array_merge($base['last_preflight'], is_array($merged['last_preflight'] ?? null) ? $merged['last_preflight'] : []);
+    $merged['last_verify'] = array_merge($base['last_verify'], is_array($merged['last_verify'] ?? null) ? $merged['last_verify'] : []);
+    $merged['updated_at'] = gmdate('c');
+    return $merged;
+}
+
+function deployment_guard_evaluate($requireUnlocked = true, $guardOverride = null)
+{
+    $guard = is_array($guardOverride) ? $guardOverride : get_deployment_guard();
     $reasons = [];
 
     if (empty($guard['enforced'])) {
@@ -1844,6 +1868,7 @@ $rateLimitedWriteActions = [
     'deployment.release.candidate',
     'deployment.pipeline.run',
     'deployment.artifact.verify',
+    'deployment.guard.preview',
     'deployment.verify',
     'backup.import',
 ];
@@ -2178,19 +2203,8 @@ if ($action === 'deployment.guard.save') {
     if (!is_array($data)) {
         out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
     }
-    $incomingChecklist = isset($data['checklist']) && is_array($data['checklist']) ? $data['checklist'] : [];
-    $saved = save_deployment_guard([
-        'enforced' => !empty($data['enforced']) ? 1 : 0,
-        'launch_window_enabled' => !empty($data['launch_window_enabled']) ? 1 : 0,
-        'launch_window_start' => app_format_utc_datetime((string) ($data['launch_window_start'] ?? '')),
-        'launch_window_end' => app_format_utc_datetime((string) ($data['launch_window_end'] ?? '')),
-        'checklist' => [
-            'backup_verified' => !empty($incomingChecklist['backup_verified']) ? 1 : 0,
-            'cron_configured' => !empty($incomingChecklist['cron_configured']) ? 1 : 0,
-            'rollback_plan_ready' => !empty($incomingChecklist['rollback_plan_ready']) ? 1 : 0,
-            'dns_domain_ready' => !empty($incomingChecklist['dns_domain_ready']) ? 1 : 0,
-        ],
-    ]);
+    $candidate = deployment_guard_from_payload($data);
+    $saved = save_deployment_guard($candidate);
     $eval = deployment_guard_evaluate();
     audit_event('deployment', 'guard.save', [
         'enforced' => (int) $saved['enforced'],
@@ -2204,6 +2218,27 @@ if ($action === 'deployment.guard.save') {
         'allowed' => !empty($eval['allowed']),
         'reasons' => $eval['reasons'],
         'guard' => $saved,
+    ]);
+}
+
+if ($action === 'deployment.guard.preview') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $candidate = deployment_guard_from_payload($data);
+    $eval = deployment_guard_evaluate(true, $candidate);
+    out_json([
+        'ok' => true,
+        'allowed' => !empty($eval['allowed']),
+        'reasons' => $eval['reasons'],
+        'guard' => $candidate,
+        'time' => gmdate('c'),
     ]);
 }
 

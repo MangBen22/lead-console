@@ -32,6 +32,7 @@
   const runCutoverPipelineBtn = document.getElementById("runCutoverPipelineBtn");
   const deploymentGuardForm = document.getElementById("deploymentGuardForm");
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
+  const previewDeploymentGuardBtn = document.getElementById("previewDeploymentGuardBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
@@ -48,6 +49,7 @@
   const cutoverPipelineView = document.getElementById("cutoverPipelineView");
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
+  const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -339,6 +341,29 @@
     } catch (err) {
       cutoverPipelineRunsView.textContent = "Failed to load cutover pipeline history.";
     }
+  }
+
+  function collectDeploymentGuardPayload() {
+    const enforced = document.getElementById("guardEnforced");
+    const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
+    const launchWindowStart = document.getElementById("guardLaunchWindowStart");
+    const launchWindowEnd = document.getElementById("guardLaunchWindowEnd");
+    const backup = document.getElementById("guardBackupVerified");
+    const cron = document.getElementById("guardCronConfigured");
+    const rollback = document.getElementById("guardRollbackReady");
+    const dns = document.getElementById("guardDnsReady");
+    return {
+      enforced: enforced && enforced.checked ? 1 : 0,
+      launch_window_enabled: launchWindowEnabled && launchWindowEnabled.checked ? 1 : 0,
+      launch_window_start: launchWindowStart && launchWindowStart.value ? launchWindowStart.value.trim() : "",
+      launch_window_end: launchWindowEnd && launchWindowEnd.value ? launchWindowEnd.value.trim() : "",
+      checklist: {
+        backup_verified: backup && backup.checked ? 1 : 0,
+        cron_configured: cron && cron.checked ? 1 : 0,
+        rollback_plan_ready: rollback && rollback.checked ? 1 : 0,
+        dns_domain_ready: dns && dns.checked ? 1 : 0,
+      },
+    };
   }
 
   function downloadJsonFile(filename, payload) {
@@ -1134,26 +1159,7 @@
 
   if (saveDeploymentGuardBtn) {
     saveDeploymentGuardBtn.addEventListener("click", async function () {
-      const enforced = document.getElementById("guardEnforced");
-      const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
-      const launchWindowStart = document.getElementById("guardLaunchWindowStart");
-      const launchWindowEnd = document.getElementById("guardLaunchWindowEnd");
-      const backup = document.getElementById("guardBackupVerified");
-      const cron = document.getElementById("guardCronConfigured");
-      const rollback = document.getElementById("guardRollbackReady");
-      const dns = document.getElementById("guardDnsReady");
-      const payload = {
-        enforced: enforced && enforced.checked ? 1 : 0,
-        launch_window_enabled: launchWindowEnabled && launchWindowEnabled.checked ? 1 : 0,
-        launch_window_start: launchWindowStart && launchWindowStart.value ? launchWindowStart.value.trim() : "",
-        launch_window_end: launchWindowEnd && launchWindowEnd.value ? launchWindowEnd.value.trim() : "",
-        checklist: {
-          backup_verified: backup && backup.checked ? 1 : 0,
-          cron_configured: cron && cron.checked ? 1 : 0,
-          rollback_plan_ready: rollback && rollback.checked ? 1 : 0,
-          dns_domain_ready: dns && dns.checked ? 1 : 0,
-        },
-      };
+      const payload = collectDeploymentGuardPayload();
       const result = await apiPost("deployment.guard.save", payload);
       if (deploymentGuardView) {
         deploymentGuardView.textContent = JSON.stringify(result, null, 2);
@@ -1162,6 +1168,16 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+    });
+  }
+
+  if (previewDeploymentGuardBtn) {
+    previewDeploymentGuardBtn.addEventListener("click", async function () {
+      const payload = collectDeploymentGuardPayload();
+      const result = await apiPost("deployment.guard.preview", payload);
+      if (deploymentGuardPreviewView) {
+        deploymentGuardPreviewView.textContent = JSON.stringify(result, null, 2);
+      }
     });
   }
 

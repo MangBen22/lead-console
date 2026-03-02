@@ -585,11 +585,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <label><input id="guardDnsReady" type="checkbox" value="1" /> DNS/domain ready</label>
                     <div class="actions">
                         <button id="saveDeploymentGuardBtn" type="button">Save Guard Checklist</button>
+                        <button id="previewDeploymentGuardBtn" type="button">Preview Guard Result</button>
                         <button id="unlockDeploymentGuardBtn" type="button">Unlock Guard</button>
                         <button id="lockDeploymentGuardBtn" type="button">Lock Guard</button>
                     </div>
                 </form>
                 <pre id="deploymentGuardView">Loading...</pre>
+                <pre id="deploymentGuardPreviewView">No preview yet.</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
