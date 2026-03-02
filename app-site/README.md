@@ -19,6 +19,7 @@ Open: `http://127.0.0.1:8080`
 ## Defaults
 - Uses lightweight session auth demo flow.
 - Uses `config.example.php` values until replaced with secure environment configuration.
+- For production hosting, copy `config.production.example.php` to `config.php` and replace all placeholders.
 
 ## Next
 - Replace demo auth with production auth provider.

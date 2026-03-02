@@ -327,6 +327,63 @@ function audit_event($category, $actionName, $details = [])
     app_write_json_file(audit_log_path(), $rows);
 }
 
+function healthcheck_snapshot()
+{
+    global $config;
+
+    $checks = [];
+    $status = 'ok';
+
+    $storageDir = dirname(__DIR__) . '/storage';
+    $storageWritable = is_dir($storageDir) ? is_writable($storageDir) : @mkdir($storageDir, 0775, true);
+    $checks[] = [
+        'check' => 'storage_writable',
+        'ok' => !empty($storageWritable),
+        'message' => !empty($storageWritable) ? 'Storage directory is writable.' : 'Storage directory is not writable.',
+    ];
+    if (empty($storageWritable)) {
+        $status = 'critical';
+    }
+
+    $env = (string) ($config['environment'] ?? 'development');
+    $checks[] = [
+        'check' => 'environment',
+        'ok' => $env !== '',
+        'message' => 'Environment: ' . $env,
+    ];
+
+    $requiredKeys = [
+        'session_key',
+        'automation_scheduler_key',
+        'seo_extension_ingest_key',
+    ];
+    foreach ($requiredKeys as $key) {
+        $value = trim((string) ($config[$key] ?? ''));
+        $ok = $value !== '' && stripos($value, 'REPLACE_') !== 0 && stripos($value, 'replace-') !== 0;
+        $checks[] = [
+            'check' => 'config_' . $key,
+            'ok' => $ok,
+            'message' => $ok ? ($key . ' is configured.') : ($key . ' is missing or placeholder.'),
+        ];
+        if (!$ok && $status !== 'critical') {
+            $status = 'warning';
+        }
+    }
+
+    $pluginSites = isset($config['plugin_sites']) && is_array($config['plugin_sites']) ? $config['plugin_sites'] : [];
+    $checks[] = [
+        'check' => 'plugin_sites',
+        'ok' => true,
+        'message' => 'Configured plugin sites: ' . count($pluginSites),
+    ];
+
+    return [
+        'status' => $status,
+        'checks' => $checks,
+        'time' => gmdate('c'),
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1019,7 +1076,7 @@ function execute_automation_run($settings, $source = 'manual')
     return $summary;
 }
 
-$publicActions = ['status', 'seo.extension.intake', 'automation.scheduler.tick'];
+$publicActions = ['status', 'healthcheck', 'seo.extension.intake', 'automation.scheduler.tick'];
 if (!in_array($action, $publicActions, true)) {
     app_require_auth();
 }
@@ -1041,10 +1098,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $rateLimitedWrite
 
 if ($action === 'status') {
     $automationSettings = get_automation_settings();
+    $health = healthcheck_snapshot();
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.7-hardening-rate-limit-audit-backup',
+        'phase' => '1.8-deployment-readiness-healthcheck',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -1053,9 +1111,23 @@ if ($action === 'status') {
             'seo_suite' => 'bootstrap',
         ],
         'automation' => $automationSettings,
+        'health' => [
+            'status' => (string) ($health['status'] ?? 'warning'),
+        ],
         'sites_configured' => count(all_sites()),
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'healthcheck') {
+    $snap = healthcheck_snapshot();
+    $http = ($snap['status'] === 'critical') ? 503 : 200;
+    out_json([
+        'ok' => $snap['status'] !== 'critical',
+        'status' => $snap['status'],
+        'checks' => $snap['checks'],
+        'time' => $snap['time'],
+    ], $http);
 }
 
 if ($action === 'notifications') {
