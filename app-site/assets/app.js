@@ -20,6 +20,8 @@
   const backupPayload = document.getElementById("backupPayload");
   const backupResult = document.getElementById("backupResult");
   const auditLogView = document.getElementById("auditLogView");
+  const runPreflightBtn = document.getElementById("runPreflightBtn");
+  const preflightView = document.getElementById("preflightView");
   const modules = [
     ["modLeads", "leads.summary"],
     ["modCrm", "crm.summary"],
@@ -225,6 +227,16 @@
     }
   }
 
+  async function loadPreflight() {
+    if (!preflightView) return;
+    try {
+      const data = await apiGet("deployment.preflight");
+      preflightView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      preflightView.textContent = "Failed to load deployment preflight.";
+    }
+  }
+
   loadStatus();
 
   modules.forEach(async function (entry) {
@@ -388,6 +400,7 @@
     await loadCronHelp();
     await loadNotificationSettings();
     await loadAuditLog();
+    await loadPreflight();
   })();
 
   if (crmConnectorForm) {
@@ -853,6 +866,12 @@
   if (refreshAuditBtn) {
     refreshAuditBtn.addEventListener("click", async function () {
       await loadAuditLog();
+    });
+  }
+
+  if (runPreflightBtn) {
+    runPreflightBtn.addEventListener("click", async function () {
+      await loadPreflight();
     });
   }
 

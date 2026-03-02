@@ -518,6 +518,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Audit Log</h3>
                 <pre id="auditLogView">Loading...</pre>
             </section>
+
+            <section class="api-status">
+                <h2>Deployment Preflight</h2>
+                <div class="actions">
+                    <button id="runPreflightBtn" type="button">Run Deployment Preflight</button>
+                </div>
+                <pre id="preflightView">Loading...</pre>
+            </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">
             <h3>Notifications</h3>

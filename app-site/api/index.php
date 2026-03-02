@@ -384,6 +384,70 @@ function healthcheck_snapshot()
     ];
 }
 
+function deployment_preflight_snapshot()
+{
+    $health = healthcheck_snapshot();
+    $checks = [];
+    $status = (string) ($health['status'] ?? 'warning');
+
+    $settings = get_automation_settings();
+    $automationEnabled = !empty($settings['enabled']);
+    $checks[] = [
+        'check' => 'automation_enabled',
+        'ok' => $automationEnabled,
+        'message' => $automationEnabled ? 'Automation is enabled.' : 'Automation is disabled.',
+    ];
+    if (!$automationEnabled && $status === 'ok') {
+        $status = 'warning';
+    }
+
+    $bridgeRows = [];
+    foreach (all_sites() as $site) {
+        $res = app_bridge_request($site, 'GET', 'bridge/status');
+        $ok = !empty($res['ok']);
+        $bridgeRows[] = [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'ok' => $ok,
+            'http_status' => (int) ($res['status'] ?? 0),
+        ];
+        if (!$ok && $status !== 'critical') {
+            $status = 'warning';
+        }
+    }
+    $checks[] = [
+        'check' => 'bridge_connectivity',
+        'ok' => empty($bridgeRows) ? false : array_reduce($bridgeRows, static function ($carry, $row) {
+            return $carry && !empty($row['ok']);
+        }, true),
+        'message' => empty($bridgeRows) ? 'No plugin sites configured.' : 'Bridge check completed for ' . count($bridgeRows) . ' site(s).',
+        'sites' => $bridgeRows,
+    ];
+    if (empty($bridgeRows) && $status === 'ok') {
+        $status = 'warning';
+    }
+
+    $moduleCounts = [
+        'crm_connectors' => count(app_read_json_file(app_storage_path('crm_connectors.json'), [])),
+        'social_connectors' => count(app_read_json_file(social_connectors_path(), [])),
+        'webops_monitors' => count(app_read_json_file(webops_monitors_path(), [])),
+        'seo_projects' => count(app_read_json_file(seo_projects_path(), [])),
+    ];
+    $checks[] = [
+        'check' => 'module_configuration',
+        'ok' => ($moduleCounts['webops_monitors'] > 0 || $moduleCounts['seo_projects'] > 0 || $moduleCounts['crm_connectors'] > 0 || $moduleCounts['social_connectors'] > 0),
+        'message' => 'Module config counts collected.',
+        'counts' => $moduleCounts,
+    ];
+
+    return [
+        'status' => $status,
+        'health' => $health,
+        'checks' => $checks,
+        'time' => gmdate('c'),
+    ];
+}
+
 function push_notification($type, $message, $meta = [])
 {
     $rows = app_read_json_file(notifications_path(), []);
@@ -1076,7 +1140,7 @@ function execute_automation_run($settings, $source = 'manual')
     return $summary;
 }
 
-$publicActions = ['status', 'healthcheck', 'seo.extension.intake', 'automation.scheduler.tick'];
+$publicActions = ['status', 'healthcheck', 'deployment.preflight', 'seo.extension.intake', 'automation.scheduler.tick'];
 if (!in_array($action, $publicActions, true)) {
     app_require_auth();
 }
@@ -1125,6 +1189,18 @@ if ($action === 'healthcheck') {
     out_json([
         'ok' => $snap['status'] !== 'critical',
         'status' => $snap['status'],
+        'checks' => $snap['checks'],
+        'time' => $snap['time'],
+    ], $http);
+}
+
+if ($action === 'deployment.preflight') {
+    $snap = deployment_preflight_snapshot();
+    $http = ($snap['status'] === 'critical') ? 503 : 200;
+    out_json([
+        'ok' => $snap['status'] !== 'critical',
+        'status' => $snap['status'],
+        'health' => $snap['health'],
         'checks' => $snap['checks'],
         'time' => $snap['time'],
     ], $http);
