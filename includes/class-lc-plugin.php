@@ -887,7 +887,11 @@ class LC_Plugin
 
     private function get_primary_admin_email()
     {
-        return defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : 'allen.bonagua@gmail.com';
+        $configured = defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower(trim((string) LC_PRIMARY_ADMIN_EMAIL)) : '';
+        if ($configured !== '') {
+            return $configured;
+        }
+        return strtolower((string) get_option('admin_email'));
     }
 
     private function get_primary_admin_password()

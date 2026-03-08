@@ -2723,7 +2723,10 @@ class LC_Frontend
     private function is_primary_admin($user)
     {
         $email = strtolower((string) ($user->user_email ?? ''));
-        $primary = defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower((string) LC_PRIMARY_ADMIN_EMAIL) : '';
+        $primary = defined('LC_PRIMARY_ADMIN_EMAIL') ? strtolower(trim((string) LC_PRIMARY_ADMIN_EMAIL)) : '';
+        if ($primary === '') {
+            $primary = strtolower((string) get_option('admin_email'));
+        }
         return $email !== '' && $email === $primary;
     }
 

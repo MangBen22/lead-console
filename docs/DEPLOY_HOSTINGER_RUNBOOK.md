@@ -47,6 +47,8 @@
 1. Run all automations once manually.
 2. Verify notifications, audit logs, and module summaries update.
 3. Verify `backup.export` and `backup.import` both work.
+4. Run deployment public-endpoint smoke test from repo root:
+   - `powershell -ExecutionPolicy Bypass -File scripts\smoke-deploy.ps1 -BaseUrl https://app.5n2digital.com`
 
 ## 8) Rollback Plan
 1. Restore previous app files.
