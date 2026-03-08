@@ -1407,6 +1407,46 @@ function deployment_incident_summary_snapshot()
     ];
 }
 
+function deployment_incident_sla_snapshot($thresholdMinutes = 120)
+{
+    $threshold = max(5, min(10080, (int) $thresholdMinutes));
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    $now = time();
+    $breaches = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower(trim((string) ($row['incident_status'] ?? 'open')));
+        if (!in_array($status, ['open', 'reopened'], true)) {
+            continue;
+        }
+        $createdTs = strtotime((string) ($row['generated_at'] ?? ''));
+        if ($createdTs === false) {
+            continue;
+        }
+        $ageMinutes = (int) floor(($now - $createdTs) / 60);
+        if ($ageMinutes < $threshold) {
+            continue;
+        }
+        $breaches[] = [
+            'report_id' => (string) ($row['report_id'] ?? ''),
+            'status' => $status,
+            'age_minutes' => $ageMinutes,
+            'generated_at' => (string) ($row['generated_at'] ?? ''),
+            'incident_note' => (string) ($row['incident_note'] ?? ''),
+            'note' => (string) ($row['note'] ?? ''),
+        ];
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'threshold_minutes' => $threshold,
+        'breach_count' => count($breaches),
+        'breaches' => array_slice($breaches, 0, 200),
+    ];
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2220,7 +2260,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.24-incident-summary-analytics',
+        'phase' => '1.25-incident-sla-monitor',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2717,6 +2757,16 @@ if ($action === 'deployment.incident.summary') {
     out_json([
         'ok' => true,
         'summary' => $summary,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.sla') {
+    $threshold = isset($_GET['threshold_minutes']) ? (int) $_GET['threshold_minutes'] : 120;
+    $sla = deployment_incident_sla_snapshot($threshold);
+    out_json([
+        'ok' => true,
+        'sla' => $sla,
         'time' => gmdate('c'),
     ]);
 }

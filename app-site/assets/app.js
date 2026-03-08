@@ -40,6 +40,7 @@
   const downloadIncidentReportBtn = document.getElementById("downloadIncidentReportBtn");
   const refreshIncidentReportsBtn = document.getElementById("refreshIncidentReportsBtn");
   const refreshIncidentSummaryBtn = document.getElementById("refreshIncidentSummaryBtn");
+  const refreshIncidentSlaBtn = document.getElementById("refreshIncidentSlaBtn");
   const resolveIncidentBtn = document.getElementById("resolveIncidentBtn");
   const reopenIncidentBtn = document.getElementById("reopenIncidentBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
@@ -63,6 +64,8 @@
   const incidentReportNote = document.getElementById("incidentReportNote");
   const incidentReportsView = document.getElementById("incidentReportsView");
   const incidentSummaryView = document.getElementById("incidentSummaryView");
+  const incidentSlaThresholdInput = document.getElementById("incidentSlaThresholdInput");
+  const incidentSlaView = document.getElementById("incidentSlaView");
   const incidentReportIdInput = document.getElementById("incidentReportIdInput");
   const incidentStatusNoteInput = document.getElementById("incidentStatusNoteInput");
   const incidentStatusActionView = document.getElementById("incidentStatusActionView");
@@ -392,6 +395,18 @@
     }
   }
 
+  async function loadIncidentSla() {
+    if (!incidentSlaView) return;
+    const threshold = incidentSlaThresholdInput && incidentSlaThresholdInput.value ? Number(incidentSlaThresholdInput.value) : 120;
+    const safeThreshold = Number.isFinite(threshold) ? Math.max(5, Math.min(10080, Math.round(threshold))) : 120;
+    try {
+      const data = await apiGet("deployment.incident.sla&threshold_minutes=" + encodeURIComponent(String(safeThreshold)));
+      incidentSlaView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      incidentSlaView.textContent = "Failed to load incident SLA.";
+    }
+  }
+
   function collectDeploymentGuardPayload() {
     const enforced = document.getElementById("guardEnforced");
     const launchWindowEnabled = document.getElementById("guardLaunchWindowEnabled");
@@ -599,6 +614,7 @@
     await loadBypassLog();
     await loadIncidentReports();
     await loadIncidentSummary();
+    await loadIncidentSla();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1326,6 +1342,12 @@
     });
   }
 
+  if (refreshIncidentSlaBtn) {
+    refreshIncidentSlaBtn.addEventListener("click", async function () {
+      await loadIncidentSla();
+    });
+  }
+
   async function runIncidentStatusAction(status) {
     const reportId = incidentReportIdInput && incidentReportIdInput.value ? incidentReportIdInput.value.trim() : "";
     const note = incidentStatusNoteInput && incidentStatusNoteInput.value ? incidentStatusNoteInput.value.trim() : "";
@@ -1346,6 +1368,7 @@
     await loadAuditLog();
     await loadStatus();
     await loadIncidentSummary();
+    await loadIncidentSla();
   }
 
   if (resolveIncidentBtn) {
