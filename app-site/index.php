@@ -618,10 +618,15 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="incidentSummaryView">Loading incident summary...</pre>
                 <label>SLA threshold minutes<input id="incidentSlaThresholdInput" type="number" min="5" max="10080" value="120" /></label>
+                <label>SLA alert cooldown minutes<input id="incidentSlaCooldownInput" type="number" min="1" max="1440" value="30" /></label>
                 <div class="actions">
                     <button id="refreshIncidentSlaBtn" type="button">Refresh Incident SLA</button>
+                    <button id="runIncidentSlaCheckBtn" type="button">Run Incident SLA Check</button>
+                    <button id="refreshIncidentSlaRunsBtn" type="button">Refresh SLA Check Runs</button>
                 </div>
                 <pre id="incidentSlaView">Loading incident SLA...</pre>
+                <pre id="incidentSlaCheckView">No SLA check run yet.</pre>
+                <pre id="incidentSlaRunsView">Loading SLA check runs...</pre>
             </section>
         </main>
         <aside id="notifyPanel" class="notifications hidden" aria-live="polite">

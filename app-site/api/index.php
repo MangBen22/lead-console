@@ -294,6 +294,16 @@ function deployment_incident_reports_path()
     return app_storage_path('deployment_incident_reports.json');
 }
 
+function deployment_incident_sla_state_path()
+{
+    return app_storage_path('deployment_incident_sla_state.json');
+}
+
+function deployment_incident_sla_runs_path()
+{
+    return app_storage_path('deployment_incident_sla_runs.json');
+}
+
 function module_storage_map()
 {
     return [
@@ -1447,6 +1457,62 @@ function deployment_incident_sla_snapshot($thresholdMinutes = 120)
     ];
 }
 
+function deployment_incident_sla_check_snapshot($thresholdMinutes = 120, $cooldownMinutes = 30)
+{
+    $threshold = max(5, min(10080, (int) $thresholdMinutes));
+    $cooldown = max(1, min(1440, (int) $cooldownMinutes));
+    $sla = deployment_incident_sla_snapshot($threshold);
+    $breachCount = (int) ($sla['breach_count'] ?? 0);
+
+    $state = app_read_json_file(deployment_incident_sla_state_path(), []);
+    if (!is_array($state)) {
+        $state = [];
+    }
+    $lastAlertAt = trim((string) ($state['last_alert_at'] ?? ''));
+    $lastAlertTs = $lastAlertAt !== '' ? strtotime($lastAlertAt) : false;
+    $now = time();
+    $cooldownActive = ($lastAlertTs !== false) ? (($now - $lastAlertTs) < ($cooldown * 60)) : false;
+
+    $alertSent = false;
+    $alertMessage = '';
+    if ($breachCount > 0 && !$cooldownActive) {
+        $alertSent = true;
+        $alertMessage = 'Incident SLA breaches detected: ' . $breachCount . ' item(s).';
+        push_notification('critical', $alertMessage, [
+            'breach_count' => $breachCount,
+            'threshold_minutes' => $threshold,
+        ]);
+        $state['last_alert_at'] = gmdate('c');
+    }
+
+    $state['last_check_at'] = gmdate('c');
+    $state['last_breach_count'] = $breachCount;
+    $state['last_threshold_minutes'] = $threshold;
+    $state['last_cooldown_minutes'] = $cooldown;
+    app_write_json_file(deployment_incident_sla_state_path(), $state);
+
+    $run = [
+        'run_id' => 'sla_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'threshold_minutes' => $threshold,
+        'cooldown_minutes' => $cooldown,
+        'breach_count' => $breachCount,
+        'alert_sent' => $alertSent ? 1 : 0,
+        'cooldown_active' => $cooldownActive ? 1 : 0,
+    ];
+    $runs = app_read_json_file(deployment_incident_sla_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 300);
+    app_write_json_file(deployment_incident_sla_runs_path(), $runs);
+
+    return [
+        'run' => $run,
+        'sla' => $sla,
+        'state' => $state,
+        'alert_message' => $alertMessage,
+    ];
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2214,6 +2280,7 @@ $rateLimitedWriteActions = [
     'deployment.guard.bypass.extend',
     'deployment.guard.bypass.disable',
     'deployment.incident.resolve',
+    'deployment.incident.sla.check',
     'deployment.verify',
     'backup.import',
 ];
@@ -2260,7 +2327,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.25-incident-sla-monitor',
+        'phase' => '1.26-incident-sla-alerting',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2767,6 +2834,43 @@ if ($action === 'deployment.incident.sla') {
     out_json([
         'ok' => true,
         'sla' => $sla,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.sla.check') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $threshold = isset($data['threshold_minutes']) ? (int) $data['threshold_minutes'] : 120;
+    $cooldown = isset($data['cooldown_minutes']) ? (int) $data['cooldown_minutes'] : 30;
+    $snap = deployment_incident_sla_check_snapshot($threshold, $cooldown);
+    audit_event('deployment', 'incident.sla.check', [
+        'run_id' => (string) ($snap['run']['run_id'] ?? ''),
+        'breach_count' => (int) ($snap['run']['breach_count'] ?? 0),
+        'alert_sent' => (int) ($snap['run']['alert_sent'] ?? 0),
+        'threshold_minutes' => (int) ($snap['run']['threshold_minutes'] ?? 0),
+        'cooldown_minutes' => (int) ($snap['run']['cooldown_minutes'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'check' => $snap,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.incident.sla.runs') {
+    $rows = app_read_json_file(deployment_incident_sla_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
         'time' => gmdate('c'),
     ]);
 }

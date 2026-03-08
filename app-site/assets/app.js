@@ -41,6 +41,8 @@
   const refreshIncidentReportsBtn = document.getElementById("refreshIncidentReportsBtn");
   const refreshIncidentSummaryBtn = document.getElementById("refreshIncidentSummaryBtn");
   const refreshIncidentSlaBtn = document.getElementById("refreshIncidentSlaBtn");
+  const runIncidentSlaCheckBtn = document.getElementById("runIncidentSlaCheckBtn");
+  const refreshIncidentSlaRunsBtn = document.getElementById("refreshIncidentSlaRunsBtn");
   const resolveIncidentBtn = document.getElementById("resolveIncidentBtn");
   const reopenIncidentBtn = document.getElementById("reopenIncidentBtn");
   const unlockDeploymentGuardBtn = document.getElementById("unlockDeploymentGuardBtn");
@@ -65,7 +67,10 @@
   const incidentReportsView = document.getElementById("incidentReportsView");
   const incidentSummaryView = document.getElementById("incidentSummaryView");
   const incidentSlaThresholdInput = document.getElementById("incidentSlaThresholdInput");
+  const incidentSlaCooldownInput = document.getElementById("incidentSlaCooldownInput");
   const incidentSlaView = document.getElementById("incidentSlaView");
+  const incidentSlaCheckView = document.getElementById("incidentSlaCheckView");
+  const incidentSlaRunsView = document.getElementById("incidentSlaRunsView");
   const incidentReportIdInput = document.getElementById("incidentReportIdInput");
   const incidentStatusNoteInput = document.getElementById("incidentStatusNoteInput");
   const incidentStatusActionView = document.getElementById("incidentStatusActionView");
@@ -109,6 +114,20 @@
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
+      credentials: "same-origin",
+    });
+    return res.json();
+  }
+
+  async function apiGetWithParams(action, params) {
+    const search = new URLSearchParams();
+    search.set("action", action);
+    Object.keys(params || {}).forEach(function (key) {
+      const value = params[key];
+      if (value === null || value === undefined || value === "") return;
+      search.set(key, String(value));
+    });
+    const res = await fetch("/api/index.php?" + search.toString(), {
       credentials: "same-origin",
     });
     return res.json();
@@ -400,10 +419,20 @@
     const threshold = incidentSlaThresholdInput && incidentSlaThresholdInput.value ? Number(incidentSlaThresholdInput.value) : 120;
     const safeThreshold = Number.isFinite(threshold) ? Math.max(5, Math.min(10080, Math.round(threshold))) : 120;
     try {
-      const data = await apiGet("deployment.incident.sla&threshold_minutes=" + encodeURIComponent(String(safeThreshold)));
+      const data = await apiGetWithParams("deployment.incident.sla", { threshold_minutes: safeThreshold });
       incidentSlaView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       incidentSlaView.textContent = "Failed to load incident SLA.";
+    }
+  }
+
+  async function loadIncidentSlaRuns() {
+    if (!incidentSlaRunsView) return;
+    try {
+      const data = await apiGet("deployment.incident.sla.runs");
+      incidentSlaRunsView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      incidentSlaRunsView.textContent = "Failed to load incident SLA runs.";
     }
   }
 
@@ -615,6 +644,7 @@
     await loadIncidentReports();
     await loadIncidentSummary();
     await loadIncidentSla();
+    await loadIncidentSlaRuns();
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
@@ -1313,8 +1343,7 @@
   if (downloadIncidentReportBtn) {
     downloadIncidentReportBtn.addEventListener("click", async function () {
       const note = incidentReportNote && incidentReportNote.value ? incidentReportNote.value.trim() : "";
-      const action = "deployment.incident.report" + (note ? ("&note=" + encodeURIComponent(note)) : "");
-      const data = await apiGet(action);
+      const data = await apiGetWithParams("deployment.incident.report", { note: note });
       if (deploymentGuardView) {
         deploymentGuardView.textContent = JSON.stringify(data, null, 2);
       }
@@ -1345,6 +1374,33 @@
   if (refreshIncidentSlaBtn) {
     refreshIncidentSlaBtn.addEventListener("click", async function () {
       await loadIncidentSla();
+    });
+  }
+
+  if (runIncidentSlaCheckBtn) {
+    runIncidentSlaCheckBtn.addEventListener("click", async function () {
+      const threshold = incidentSlaThresholdInput && incidentSlaThresholdInput.value ? Number(incidentSlaThresholdInput.value) : 120;
+      const cooldown = incidentSlaCooldownInput && incidentSlaCooldownInput.value ? Number(incidentSlaCooldownInput.value) : 30;
+      const safeThreshold = Number.isFinite(threshold) ? Math.max(5, Math.min(10080, Math.round(threshold))) : 120;
+      const safeCooldown = Number.isFinite(cooldown) ? Math.max(1, Math.min(1440, Math.round(cooldown))) : 30;
+      const result = await apiPost("deployment.incident.sla.check", {
+        threshold_minutes: safeThreshold,
+        cooldown_minutes: safeCooldown,
+      });
+      if (incidentSlaCheckView) {
+        incidentSlaCheckView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadIncidentSla();
+      await loadIncidentSlaRuns();
+      await loadNotifications();
+      await loadAuditLog();
+      await loadStatus();
+    });
+  }
+
+  if (refreshIncidentSlaRunsBtn) {
+    refreshIncidentSlaRunsBtn.addEventListener("click", async function () {
+      await loadIncidentSlaRuns();
     });
   }
 
