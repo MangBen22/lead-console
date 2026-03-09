@@ -41,6 +41,9 @@
   const createCutoverSignoffBtn = document.getElementById("createCutoverSignoffBtn");
   const refreshCutoverSignoffsBtn = document.getElementById("refreshCutoverSignoffsBtn");
   const downloadLatestSignoffBtn = document.getElementById("downloadLatestSignoffBtn");
+  const refreshActiveSignoffBtn = document.getElementById("refreshActiveSignoffBtn");
+  const activateSignoffBtn = document.getElementById("activateSignoffBtn");
+  const revokeSignoffBtn = document.getElementById("revokeSignoffBtn");
   const verifyLatestSignoffBtn = document.getElementById("verifyLatestSignoffBtn");
   const verifyAllSignoffsBtn = document.getElementById("verifyAllSignoffsBtn");
   const recordPublicSmokePassBtn = document.getElementById("recordPublicSmokePassBtn");
@@ -88,11 +91,14 @@
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const cutoverSmokeNote = document.getElementById("cutoverSmokeNote");
   const cutoverSignoffNote = document.getElementById("cutoverSignoffNote");
+  const cutoverSignoffIdInput = document.getElementById("cutoverSignoffIdInput");
+  const cutoverSignoffReasonInput = document.getElementById("cutoverSignoffReasonInput");
   const cutoverReadinessView = document.getElementById("cutoverReadinessView");
   const cutoverSmokeHistoryView = document.getElementById("cutoverSmokeHistoryView");
   const cutoverSmokeRecordView = document.getElementById("cutoverSmokeRecordView");
   const cutoverSignoffResultView = document.getElementById("cutoverSignoffResultView");
   const cutoverSignoffListView = document.getElementById("cutoverSignoffListView");
+  const cutoverActiveSignoffView = document.getElementById("cutoverActiveSignoffView");
   const cutoverSignoffVerifyView = document.getElementById("cutoverSignoffVerifyView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
@@ -517,8 +523,26 @@
     try {
       const data = await apiGet("deployment.cutover.signoff.list");
       cutoverSignoffListView.textContent = JSON.stringify(data, null, 2);
+      const latest = data && data.latest && data.latest.latest ? data.latest.latest : null;
+      if (cutoverSignoffIdInput && latest && latest.signoff_id) {
+        cutoverSignoffIdInput.value = String(latest.signoff_id);
+      }
     } catch (err) {
       cutoverSignoffListView.textContent = "Failed to load cutover signoffs.";
+    }
+  }
+
+  async function loadActiveCutoverSignoff() {
+    if (!cutoverActiveSignoffView) return;
+    try {
+      const data = await apiGet("deployment.cutover.signoff.active");
+      cutoverActiveSignoffView.textContent = JSON.stringify(data, null, 2);
+      const active = data && data.active && data.active.active ? data.active.active : null;
+      if (cutoverSignoffIdInput && active && active.signoff_id) {
+        cutoverSignoffIdInput.value = String(active.signoff_id);
+      }
+    } catch (err) {
+      cutoverActiveSignoffView.textContent = "Failed to load active signoff.";
     }
   }
 
@@ -585,9 +609,55 @@
     if (cutoverSignoffResultView) {
       cutoverSignoffResultView.textContent = JSON.stringify(result, null, 2);
     }
+    const signoff = result && result.signoff ? result.signoff : null;
+    if (cutoverSignoffIdInput && signoff && signoff.signoff_id) {
+      cutoverSignoffIdInput.value = String(signoff.signoff_id);
+    }
     await loadCutoverSignoffs();
+    await loadActiveCutoverSignoff();
     await verifyLatestCutoverSignoff();
     await loadCutoverReadiness();
+    await loadReleaseGate();
+    await loadGoLiveStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function activateCutoverSignoff() {
+    const signoffId = cutoverSignoffIdInput && cutoverSignoffIdInput.value ? cutoverSignoffIdInput.value.trim() : "";
+    if (!signoffId) {
+      if (cutoverSignoffResultView) cutoverSignoffResultView.textContent = "Enter signoff ID first.";
+      return;
+    }
+    const result = await apiPost("deployment.cutover.signoff.activate", { signoff_id: signoffId });
+    if (cutoverSignoffResultView) {
+      cutoverSignoffResultView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCutoverSignoffs();
+    await loadActiveCutoverSignoff();
+    await verifyLatestCutoverSignoff();
+    await loadReleaseGate();
+    await loadGoLiveStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function revokeCutoverSignoff() {
+    const signoffId = cutoverSignoffIdInput && cutoverSignoffIdInput.value ? cutoverSignoffIdInput.value.trim() : "";
+    const reason = cutoverSignoffReasonInput && cutoverSignoffReasonInput.value ? cutoverSignoffReasonInput.value.trim() : "";
+    if (!signoffId) {
+      if (cutoverSignoffResultView) cutoverSignoffResultView.textContent = "Enter signoff ID first.";
+      return;
+    }
+    const result = await apiPost("deployment.cutover.signoff.revoke", { signoff_id: signoffId, reason: reason });
+    if (cutoverSignoffResultView) {
+      cutoverSignoffResultView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCutoverSignoffs();
+    await loadActiveCutoverSignoff();
+    await verifyLatestCutoverSignoff();
     await loadReleaseGate();
     await loadGoLiveStatus();
     await loadNotifications();
@@ -856,6 +926,7 @@
     await loadCutoverReadiness();
     await loadSmokeHistory();
     await loadCutoverSignoffs();
+    await loadActiveCutoverSignoff();
     await verifyLatestCutoverSignoff();
     await loadCutoverPipelineRuns();
     await loadBypassLog();
@@ -1497,6 +1568,7 @@
       await loadCutoverReadiness();
       await loadSmokeHistory();
       await loadCutoverSignoffs();
+      await loadActiveCutoverSignoff();
       await verifyLatestCutoverSignoff();
     });
   }
@@ -1543,6 +1615,7 @@
   if (refreshCutoverSignoffsBtn) {
     refreshCutoverSignoffsBtn.addEventListener("click", async function () {
       await loadCutoverSignoffs();
+      await loadActiveCutoverSignoff();
       await verifyLatestCutoverSignoff();
     });
   }
@@ -1559,6 +1632,24 @@
         return;
       }
       downloadJsonFile(String(signoff.signoff_id) + ".json", data);
+    });
+  }
+
+  if (refreshActiveSignoffBtn) {
+    refreshActiveSignoffBtn.addEventListener("click", async function () {
+      await loadActiveCutoverSignoff();
+    });
+  }
+
+  if (activateSignoffBtn) {
+    activateSignoffBtn.addEventListener("click", async function () {
+      await activateCutoverSignoff();
+    });
+  }
+
+  if (revokeSignoffBtn) {
+    revokeSignoffBtn.addEventListener("click", async function () {
+      await revokeCutoverSignoff();
     });
   }
 

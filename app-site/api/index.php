@@ -1133,7 +1133,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     $requireSignoff = !empty($guardCfg['release_gate_require_cutover_signoff']) ? 1 : 0;
     $readiness = deployment_cutover_readiness_snapshot();
     $history = deployment_smoke_history_snapshot();
-    $latestSignoff = deployment_cutover_signoff_latest_snapshot();
+    $activeSignoff = deployment_cutover_signoff_active_snapshot();
     $now = time();
     $latestPublicPass = null;
     $latestAuthPass = null;
@@ -1194,10 +1194,10 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     $checks[] = [
         'item' => 'cutover_signoff_fresh',
         'required' => $requireSignoff,
-        'ok' => !$requireSignoff || !empty($latestSignoff['is_fresh']),
-        'message' => !empty($latestSignoff['latest'])
-            ? ('Latest cutover signoff age: ' . (int) ($latestSignoff['age_minutes'] ?? 0) . ' minute(s).')
-            : 'No cutover signoff found.',
+        'ok' => !$requireSignoff || !empty($activeSignoff['is_fresh']),
+        'message' => !empty($activeSignoff['active'])
+            ? ('Active cutover signoff age: ' . (int) ($activeSignoff['age_minutes'] ?? 0) . ' minute(s).')
+            : 'No active cutover signoff found.',
     ];
 
     $reasons = [];
@@ -1223,7 +1223,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
         'latest_auth_pass' => $latestAuthPass,
         'latest_public_pass_age_minutes' => $publicAge,
         'latest_auth_pass_age_minutes' => $authAge,
-        'latest_cutover_signoff' => $latestSignoff,
+        'active_cutover_signoff' => $activeSignoff,
         'readiness' => [
             'status' => (string) ($readiness['status'] ?? 'review_required'),
             'summary' => isset($readiness['summary']) && is_array($readiness['summary']) ? $readiness['summary'] : [],
@@ -2055,6 +2055,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $releaseLog = app_read_json_file(deployment_release_log_path(), []);
     $signoffRows = deployment_cutover_signoff_list_snapshot();
     $latestSignoff = (!empty($signoffRows) && is_array($signoffRows[0])) ? $signoffRows[0] : null;
+    $activeSignoff = deployment_cutover_signoff_active_snapshot();
     $incidentSummary = deployment_incident_summary_snapshot();
     $slaState = app_read_json_file(deployment_incident_sla_state_path(), []);
     $threshold = is_array($slaState) && isset($slaState['last_threshold_minutes'])
@@ -2073,7 +2074,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.35-cutover-signoff-integrity',
+        'phase' => '1.36-cutover-signoff-lifecycle-control',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2082,6 +2083,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
             'pipeline_runs' => count($pipelineRuns),
             'release_candidates' => count($releaseLog),
             'cutover_signoffs' => count($signoffRows),
+            'active_signoff_id' => is_array($activeSignoff['active'] ?? null) ? (string) (($activeSignoff['active']['signoff_id'] ?? '')) : '',
             'open_incidents' => (int) ($incidentSummary['open_total'] ?? 0),
             'sla_breach_count' => (int) ($incidentSla['breach_count'] ?? 0),
         ],
@@ -2096,6 +2098,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
         'release_log' => array_slice(is_array($releaseLog) ? $releaseLog : [], 0, 100),
         'cutover_signoff' => [
             'latest' => $latestSignoff,
+            'active' => $activeSignoff,
             'items' => array_slice(is_array($signoffRows) ? $signoffRows : [], 0, 100),
         ],
         'incidents' => [
@@ -2137,7 +2140,11 @@ function deployment_cutover_signoff_create_snapshot($note = '')
         'created_at' => gmdate('c'),
         'actor' => current_actor(),
         'status' => 'approved',
+        'active' => 1,
         'note' => trim((string) $note),
+        'revoked_at' => '',
+        'revoked_by' => '',
+        'revocation_reason' => '',
         'evidence_bundle_id' => (string) ($evidence['bundle_id'] ?? ''),
         'evidence_digest_version' => 'sha256_json_v1',
         'evidence_sha256' => hash('sha256', json_encode($evidence, JSON_UNESCAPED_SLASHES)),
@@ -2152,6 +2159,13 @@ function deployment_cutover_signoff_create_snapshot($note = '')
     ];
 
     $rows = app_read_json_file(deployment_cutover_signoffs_path(), []);
+    foreach ($rows as &$row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $row['active'] = 0;
+    }
+    unset($row);
     array_unshift($rows, $signoff);
     $rows = array_slice($rows, 0, 300);
     app_write_json_file(deployment_cutover_signoffs_path(), $rows);
@@ -2166,7 +2180,125 @@ function deployment_cutover_signoff_create_snapshot($note = '')
 function deployment_cutover_signoff_list_snapshot()
 {
     $rows = app_read_json_file(deployment_cutover_signoffs_path(), []);
-    return is_array($rows) ? $rows : [];
+    if (!is_array($rows)) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (!array_key_exists('active', $row)) {
+            $row['active'] = 0;
+        }
+        if (!array_key_exists('revoked_at', $row)) {
+            $row['revoked_at'] = '';
+        }
+        if (!array_key_exists('revoked_by', $row)) {
+            $row['revoked_by'] = '';
+        }
+        if (!array_key_exists('revocation_reason', $row)) {
+            $row['revocation_reason'] = '';
+        }
+        if (!array_key_exists('status', $row) || trim((string) $row['status']) === '') {
+            $row['status'] = 'approved';
+        }
+        $out[] = $row;
+    }
+    return $out;
+}
+
+function deployment_cutover_signoff_active_snapshot()
+{
+    $rows = deployment_cutover_signoff_list_snapshot();
+    $active = null;
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (!empty($row['active']) && strtolower(trim((string) ($row['status'] ?? 'approved'))) !== 'revoked') {
+            $active = $row;
+            break;
+        }
+    }
+
+    $guard = get_deployment_guard();
+    $window = max(5, min(1440, (int) ($guard['release_gate_freshness_minutes'] ?? 30)));
+    $age = null;
+    $isFresh = false;
+    if (is_array($active)) {
+        $createdTs = strtotime((string) ($active['created_at'] ?? ''));
+        if ($createdTs !== false) {
+            $age = max(0, (int) floor((time() - $createdTs) / 60));
+            $isFresh = $age <= $window;
+        }
+    }
+    return [
+        'active' => $active,
+        'freshness_window_minutes' => $window,
+        'age_minutes' => $age,
+        'is_fresh' => $isFresh ? 1 : 0,
+    ];
+}
+
+function deployment_cutover_signoff_update_snapshot($signoffId, $operation, $reason = '')
+{
+    $id = trim((string) $signoffId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'signoff_id is required.'];
+    }
+    $op = strtolower(trim((string) $operation));
+    if (!in_array($op, ['activate', 'revoke'], true)) {
+        return ['ok' => false, 'error' => 'Unsupported signoff operation.'];
+    }
+
+    $rows = deployment_cutover_signoff_list_snapshot();
+    $foundIndex = -1;
+    for ($i = 0; $i < count($rows); $i++) {
+        if ((string) ($rows[$i]['signoff_id'] ?? '') === $id) {
+            $foundIndex = $i;
+            break;
+        }
+    }
+    if ($foundIndex < 0) {
+        return ['ok' => false, 'error' => 'Cutover signoff not found.'];
+    }
+
+    $updated = null;
+    if ($op === 'activate') {
+        if (strtolower(trim((string) ($rows[$foundIndex]['status'] ?? 'approved'))) === 'revoked') {
+            return ['ok' => false, 'error' => 'Revoked signoff cannot be activated.'];
+        }
+        foreach ($rows as &$row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $row['active'] = ((string) ($row['signoff_id'] ?? '') === $id) ? 1 : 0;
+        }
+        unset($row);
+        $rows[$foundIndex]['status'] = 'approved';
+        $rows[$foundIndex]['active'] = 1;
+        $updated = $rows[$foundIndex];
+    } else {
+        $revReason = trim((string) $reason);
+        if (strlen($revReason) < 8) {
+            return ['ok' => false, 'error' => 'Revocation reason must be at least 8 characters.'];
+        }
+        $rows[$foundIndex]['status'] = 'revoked';
+        $rows[$foundIndex]['active'] = 0;
+        $rows[$foundIndex]['revoked_at'] = gmdate('c');
+        $rows[$foundIndex]['revoked_by'] = current_actor();
+        $rows[$foundIndex]['revocation_reason'] = $revReason;
+        $updated = $rows[$foundIndex];
+    }
+
+    app_write_json_file(deployment_cutover_signoffs_path(), $rows);
+    return [
+        'ok' => true,
+        'item' => $updated,
+        'active' => deployment_cutover_signoff_active_snapshot(),
+        'latest' => deployment_cutover_signoff_latest_snapshot(),
+    ];
 }
 
 function deployment_cutover_signoff_latest_snapshot()
@@ -3077,6 +3209,8 @@ $rateLimitedWriteActions = [
     'deployment.smoke.report',
     'deployment.smoke.suite',
     'deployment.cutover.signoff.create',
+    'deployment.cutover.signoff.activate',
+    'deployment.cutover.signoff.revoke',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3125,7 +3259,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.32-cutover-evidence-bundle',
+        'phase' => '1.36-cutover-signoff-lifecycle-control',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -3931,6 +4065,7 @@ if ($action === 'deployment.cutover.signoff.list') {
         'count' => count($rows),
         'items' => $rows,
         'latest' => deployment_cutover_signoff_latest_snapshot(),
+        'active' => deployment_cutover_signoff_active_snapshot(),
         'time' => gmdate('c'),
     ]);
 }
@@ -3939,6 +4074,83 @@ if ($action === 'deployment.cutover.signoff.latest') {
     out_json([
         'ok' => true,
         'latest' => deployment_cutover_signoff_latest_snapshot(),
+        'active' => deployment_cutover_signoff_active_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.active') {
+    out_json([
+        'ok' => true,
+        'active' => deployment_cutover_signoff_active_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.activate') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $signoffId = isset($data['signoff_id']) ? (string) $data['signoff_id'] : '';
+    $snap = deployment_cutover_signoff_update_snapshot($signoffId, 'activate', '');
+    if (empty($snap['ok'])) {
+        out_json([
+            'ok' => false,
+            'error' => (string) ($snap['error'] ?? 'Signoff activate failed.'),
+        ], 400);
+    }
+    audit_event('deployment', 'cutover.signoff.activate', [
+        'signoff_id' => (string) ($snap['item']['signoff_id'] ?? ''),
+    ]);
+    push_notification('info', 'Cutover signoff activated: ' . (string) ($snap['item']['signoff_id'] ?? ''), [
+        'signoff_id' => (string) ($snap['item']['signoff_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'item' => $snap['item'],
+        'active' => $snap['active'],
+        'latest' => $snap['latest'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.revoke') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $signoffId = isset($data['signoff_id']) ? (string) $data['signoff_id'] : '';
+    $reason = isset($data['reason']) ? (string) $data['reason'] : '';
+    $snap = deployment_cutover_signoff_update_snapshot($signoffId, 'revoke', $reason);
+    if (empty($snap['ok'])) {
+        out_json([
+            'ok' => false,
+            'error' => (string) ($snap['error'] ?? 'Signoff revoke failed.'),
+        ], 400);
+    }
+    audit_event('deployment', 'cutover.signoff.revoke', [
+        'signoff_id' => (string) ($snap['item']['signoff_id'] ?? ''),
+        'reason' => (string) ($snap['item']['revocation_reason'] ?? ''),
+    ]);
+    push_notification('warning', 'Cutover signoff revoked: ' . (string) ($snap['item']['signoff_id'] ?? ''), [
+        'signoff_id' => (string) ($snap['item']['signoff_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'item' => $snap['item'],
+        'active' => $snap['active'],
+        'latest' => $snap['latest'],
         'time' => gmdate('c'),
     ]);
 }
