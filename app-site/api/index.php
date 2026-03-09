@@ -289,6 +289,16 @@ function deployment_smoke_runs_path()
     return app_storage_path('deployment_smoke_runs.json');
 }
 
+function deployment_release_gate_state_path()
+{
+    return app_storage_path('deployment_release_gate_state.json');
+}
+
+function deployment_release_gate_runs_path()
+{
+    return app_storage_path('deployment_release_gate_runs.json');
+}
+
 function deployment_bypass_log_path()
 {
     return app_storage_path('deployment_bypass_log.json');
@@ -328,6 +338,8 @@ function module_storage_map()
         'notification_settings' => notification_settings_path(),
         'automation_runs' => automation_runs_path(),
         'automation_settings' => automation_settings_path(),
+        'deployment_release_gate_state' => deployment_release_gate_state_path(),
+        'deployment_release_gate_runs' => deployment_release_gate_runs_path(),
     ];
 }
 
@@ -1200,7 +1212,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     ];
 }
 
-function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = 30)
+function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = null)
 {
     $bundle = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
@@ -1231,6 +1243,83 @@ function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = 3
         'candidate' => $candidate,
         'bundle' => $bundle,
         'release_gate' => $gate,
+    ];
+}
+
+function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMinutes = null)
+{
+    $gate = deployment_release_gate_snapshot($freshnessMinutes);
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    if (!is_array($state)) {
+        $state = [];
+    }
+    $previousAllowed = array_key_exists('last_allowed', $state) ? !empty($state['last_allowed']) : null;
+    $allowed = !empty($gate['allowed']) ? 1 : 0;
+    $statusChanged = ($previousAllowed !== null) ? (((int) $previousAllowed) !== $allowed) : false;
+    $now = gmdate('c');
+    $alertSent = 0;
+    $alertType = '';
+    $alertMessage = '';
+
+    $lastAlertAt = isset($state['last_alert_at']) ? (string) $state['last_alert_at'] : '';
+    $lastAlertTs = $lastAlertAt !== '' ? strtotime($lastAlertAt) : false;
+    $cooldownMinutes = 30;
+    $cooldownActive = ($lastAlertTs !== false) ? ((time() - $lastAlertTs) < ($cooldownMinutes * 60)) : false;
+
+    if ($statusChanged) {
+        if ($allowed === 1) {
+            $alertType = 'success';
+            $alertMessage = 'Release gate changed to ALLOWED.';
+        } else {
+            $alertType = 'critical';
+            $alertMessage = 'Release gate changed to BLOCKED.';
+        }
+        $alertSent = 1;
+    } elseif ($allowed === 0 && !$cooldownActive) {
+        $alertType = 'warning';
+        $alertMessage = 'Release gate remains BLOCKED.';
+        $alertSent = 1;
+    }
+
+    if ($alertSent === 1) {
+        push_notification($alertType, $alertMessage, [
+            'source' => (string) $source,
+            'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
+            'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+        ]);
+    }
+
+    $run = [
+        'run_id' => 'gate_watch_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => $now,
+        'source' => (string) $source,
+        'allowed' => $allowed,
+        'status_changed' => $statusChanged ? 1 : 0,
+        'alert_sent' => $alertSent,
+        'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
+        'reason_count' => isset($gate['reasons']) && is_array($gate['reasons']) ? count($gate['reasons']) : 0,
+        'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+    ];
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 400);
+    app_write_json_file(deployment_release_gate_runs_path(), $runs);
+
+    $nextState = [
+        'last_checked_at' => $now,
+        'last_allowed' => $allowed,
+        'last_reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => (string) $source,
+        'last_alert_at' => $alertSent === 1 ? $now : (string) ($state['last_alert_at'] ?? ''),
+        'last_alert_sent' => $alertSent,
+    ];
+    app_write_json_file(deployment_release_gate_state_path(), $nextState);
+
+    return [
+        'run' => $run,
+        'gate' => $gate,
+        'state' => $nextState,
     ];
 }
 
@@ -2706,6 +2795,7 @@ $rateLimitedWriteActions = [
     'deployment.incident.sla.check',
     'deployment.smoke.report',
     'deployment.smoke.suite',
+    'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
     'backup.import',
@@ -2753,7 +2843,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.30-release-gate-settings',
+        'phase' => '1.31-release-gate-watchdog',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2926,6 +3016,45 @@ if ($action === 'deployment.release.gate.settings.save') {
             'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
         ],
         'gate' => deployment_release_gate_snapshot(null),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.watch') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $source = isset($data['source']) ? (string) $data['source'] : 'manual';
+    $freshness = isset($data['freshness_minutes']) ? (int) $data['freshness_minutes'] : null;
+    $snap = deployment_release_gate_watch_snapshot($source, $freshness);
+    audit_event('deployment', 'release.gate.watch', [
+        'run_id' => (string) ($snap['run']['run_id'] ?? ''),
+        'allowed' => (int) ($snap['run']['allowed'] ?? 0),
+        'status_changed' => (int) ($snap['run']['status_changed'] ?? 0),
+        'alert_sent' => (int) ($snap['run']['alert_sent'] ?? 0),
+        'source' => (string) ($snap['run']['source'] ?? 'manual'),
+    ]);
+    out_json([
+        'ok' => true,
+        'watch' => $snap,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.runs') {
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($runs),
+        'items' => $runs,
+        'state' => is_array($state) ? $state : [],
         'time' => gmdate('c'),
     ]);
 }
@@ -4627,6 +4756,7 @@ if ($action === 'automation.scheduler.status') {
     $elapsed = $lastTs > 0 ? ($nowTs - $lastTs) : null;
     $due = ($lastTs === 0) ? true : ($elapsed >= $intervalSecs);
     $nextDueIn = ($lastTs === 0) ? 0 : max(0, $intervalSecs - max(0, (int) $elapsed));
+    $gateWatchState = app_read_json_file(deployment_release_gate_state_path(), []);
     out_json([
         'ok' => true,
         'enabled' => !empty($settings['enabled']),
@@ -4635,6 +4765,7 @@ if ($action === 'automation.scheduler.status') {
         'due_now' => $due,
         'next_due_in_seconds' => $nextDueIn,
         'modules' => $settings['modules'],
+        'release_gate_watch_state' => is_array($gateWatchState) ? $gateWatchState : [],
         'time' => gmdate('c'),
     ]);
 }
@@ -4692,26 +4823,36 @@ if ($action === 'automation.scheduler.tick') {
     }
     $settings = get_automation_settings();
     if (empty($settings['enabled'])) {
-        out_json(['ok' => true, 'skipped' => true, 'reason' => 'Automation disabled in settings.']);
+        $watch = deployment_release_gate_watch_snapshot('scheduler_tick_disabled', null);
+        out_json([
+            'ok' => true,
+            'skipped' => true,
+            'reason' => 'Automation disabled in settings.',
+            'release_gate_watch' => $watch,
+        ]);
     }
     $nowTs = time();
     $lastTs = $settings['last_run_at'] !== '' ? strtotime((string) $settings['last_run_at']) : 0;
     $interval = max(5, (int) ($settings['interval_minutes'] ?? 30)) * 60;
     if ($lastTs > 0 && ($nowTs - $lastTs) < $interval) {
+        $watch = deployment_release_gate_watch_snapshot('scheduler_tick_interval_skip', null);
         out_json([
             'ok' => true,
             'skipped' => true,
             'reason' => 'Interval not reached.',
             'next_due_in_seconds' => $interval - ($nowTs - $lastTs),
+            'release_gate_watch' => $watch,
         ]);
     }
     $summary = execute_automation_run($settings, 'scheduler');
+    $watch = deployment_release_gate_watch_snapshot('scheduler_tick_run', null);
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
     audit_event('automation', 'scheduler.tick', ['automation_id' => (string) $summary['automation_id'], 'source' => 'scheduler']);
     out_json([
         'ok' => true,
         'run' => $summary,
+        'release_gate_watch' => $watch,
     ]);
 }
 

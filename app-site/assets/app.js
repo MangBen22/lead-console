@@ -25,6 +25,8 @@
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
   const refreshReleaseGateBtn = document.getElementById("refreshReleaseGateBtn");
   const saveReleaseGateSettingsBtn = document.getElementById("saveReleaseGateSettingsBtn");
+  const runReleaseGateWatchBtn = document.getElementById("runReleaseGateWatchBtn");
+  const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -64,6 +66,8 @@
   const releaseGateRequireAuthSmokeInput = document.getElementById("releaseGateRequireAuthSmokeInput");
   const releaseGateSettingsView = document.getElementById("releaseGateSettingsView");
   const releaseGateView = document.getElementById("releaseGateView");
+  const releaseGateWatchView = document.getElementById("releaseGateWatchView");
+  const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -373,6 +377,36 @@
     } catch (err) {
       releaseGateView.textContent = "Failed to load release gate.";
     }
+  }
+
+  async function loadReleaseGateRuns() {
+    if (!releaseGateRunsView) return;
+    try {
+      const data = await apiGet("deployment.release.gate.runs");
+      releaseGateRunsView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseGateRunsView.textContent = "Failed to load release gate runs.";
+    }
+  }
+
+  async function runReleaseGateWatch() {
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+    const result = await apiPost("deployment.release.gate.watch", {
+      source: "dashboard_manual",
+      freshness_minutes: safeFreshness,
+    });
+    if (releaseGateWatchView) {
+      releaseGateWatchView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadReleaseGate();
+    await loadGoLiveStatus();
+    await loadReleaseGateRuns();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
   }
 
   async function loadReleaseLog() {
@@ -756,6 +790,7 @@
     await loadReleaseGateSettings();
     await loadGoLiveStatus();
     await loadReleaseGate();
+    await loadReleaseGateRuns();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1135,6 +1170,9 @@
       await loadNotifications();
       await loadAutomationSettings();
       await loadSchedulerStatus();
+      await loadReleaseGateRuns();
+      await loadReleaseGate();
+      await loadGoLiveStatus();
       await loadStatus();
     });
   }
@@ -1255,6 +1293,7 @@
     refreshReleaseGateBtn.addEventListener("click", async function () {
       await loadReleaseGate();
       await loadGoLiveStatus();
+      await loadReleaseGateRuns();
     });
   }
 
@@ -1277,8 +1316,21 @@
       await loadReleaseGateSettings();
       await loadReleaseGate();
       await loadGoLiveStatus();
+      await loadReleaseGateRuns();
       await loadAuditLog();
       await loadStatus();
+    });
+  }
+
+  if (runReleaseGateWatchBtn) {
+    runReleaseGateWatchBtn.addEventListener("click", async function () {
+      await runReleaseGateWatch();
+    });
+  }
+
+  if (refreshReleaseGateRunsBtn) {
+    refreshReleaseGateRunsBtn.addEventListener("click", async function () {
+      await loadReleaseGateRuns();
     });
   }
 

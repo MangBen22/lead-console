@@ -529,10 +529,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshGoLiveStatusBtn" type="button">Refresh Go-Live Status</button>
                     <button id="refreshReleaseGateBtn" type="button">Refresh Release Gate</button>
                     <button id="saveReleaseGateSettingsBtn" type="button">Save Release Gate Settings</button>
+                    <button id="runReleaseGateWatchBtn" type="button">Run Gate Watch</button>
+                    <button id="refreshReleaseGateRunsBtn" type="button">Refresh Gate Runs</button>
                 </div>
                 <pre id="goLiveStatusView">Loading...</pre>
                 <pre id="releaseGateSettingsView">Loading release gate settings...</pre>
                 <pre id="releaseGateView">Loading release gate...</pre>
+                <pre id="releaseGateWatchView">No gate watch run yet.</pre>
+                <pre id="releaseGateRunsView">Loading gate watch runs...</pre>
             </section>
 
             <section class="api-status">
