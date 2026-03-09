@@ -1532,6 +1532,28 @@ function deployment_watchdogs_status_snapshot($freshnessMinutes = null)
     ];
 }
 
+function deployment_find_open_watchdogs_incident()
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    if (!is_array($rows)) {
+        return null;
+    }
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower(trim((string) ($row['incident_status'] ?? 'open')));
+        if (!in_array($status, ['open', 'reopened'], true)) {
+            continue;
+        }
+        $origin = strtolower(trim((string) ($row['incident_origin'] ?? '')));
+        if ($origin === 'watchdogs_check') {
+            return $row;
+        }
+    }
+    return null;
+}
+
 function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $src = trim((string) $source);
@@ -1550,6 +1572,13 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
     }
     $prevStatus = isset($state['last_status']) ? strtolower(trim((string) $state['last_status'])) : '';
     $statusChanged = ($prevStatus !== '' && $prevStatus !== $status) ? 1 : 0;
+    $prevCriticalStreak = isset($state['critical_streak']) ? (int) $state['critical_streak'] : 0;
+    $criticalStreak = ($status === 'critical') ? ($prevCriticalStreak + 1) : 0;
+    $autoIncidentThreshold = 2;
+    $autoIncidentCreated = 0;
+    $autoIncidentReportId = '';
+    $autoIncidentExistingOpenId = '';
+    $autoIncidentAction = 'none';
 
     $lastAlertAt = isset($state['last_alert_at']) ? (string) $state['last_alert_at'] : '';
     $lastAlertTs = $lastAlertAt !== '' ? strtotime($lastAlertAt) : false;
@@ -1585,13 +1614,60 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         ]);
     }
 
+    $runId = 'watchdogs_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
+    if ($status === 'critical' && $criticalStreak >= $autoIncidentThreshold) {
+        $openAutoIncident = deployment_find_open_watchdogs_incident();
+        if (is_array($openAutoIncident)) {
+            $autoIncidentExistingOpenId = (string) ($openAutoIncident['report_id'] ?? '');
+            $autoIncidentAction = 'linked_existing_open';
+        } else {
+            $note = 'Auto incident created after repeated critical watchdog checks.';
+            $report = deployment_incident_report_snapshot($note);
+            $report['incident_origin'] = 'watchdogs_check';
+            $report['incident_origin_status'] = $status;
+            $report['incident_origin_run_id'] = $runId;
+            $report['incident_origin_source'] = $src;
+            $report['incident_origin_critical_streak'] = $criticalStreak;
+            $report['incident_origin_watchdogs_summary'] = isset($watchdogs['summary']) && is_array($watchdogs['summary']) ? $watchdogs['summary'] : [];
+            $report['incident_note'] = 'Auto-created after ' . (int) $criticalStreak . ' consecutive critical watchdog checks.';
+            if (!isset($report['summary']) || !is_array($report['summary'])) {
+                $report['summary'] = [];
+            }
+            $report['summary']['watchdogs_status'] = $status;
+            $report['summary']['watchdogs_critical_failed'] = (int) ($watchdogs['summary']['critical_failed'] ?? 0);
+            $report['summary']['watchdogs_warning_failed'] = (int) ($watchdogs['summary']['warning_failed'] ?? 0);
+            save_incident_report($report);
+            audit_event('deployment', 'incident.report.auto.watchdogs', [
+                'report_id' => (string) ($report['report_id'] ?? ''),
+                'run_id' => $runId,
+                'critical_streak' => $criticalStreak,
+                'source' => $src,
+            ]);
+            push_notification('critical', 'Auto incident created from watchdogs critical status.', [
+                'report_id' => (string) ($report['report_id'] ?? ''),
+                'run_id' => $runId,
+                'critical_streak' => $criticalStreak,
+                'source' => $src,
+            ]);
+            $autoIncidentCreated = 1;
+            $autoIncidentReportId = (string) ($report['report_id'] ?? '');
+            $autoIncidentAction = 'created';
+        }
+    }
+
     $run = [
-        'run_id' => 'watchdogs_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'run_id' => $runId,
         'created_at' => gmdate('c'),
         'source' => $src,
         'status' => $status,
         'status_changed' => $statusChanged,
         'alert_sent' => $alertSent,
+        'critical_streak' => $criticalStreak,
+        'auto_incident_threshold' => $autoIncidentThreshold,
+        'auto_incident_action' => $autoIncidentAction,
+        'auto_incident_created' => $autoIncidentCreated,
+        'auto_incident_report_id' => $autoIncidentReportId,
+        'auto_incident_existing_open_id' => $autoIncidentExistingOpenId,
         'freshness_window_minutes' => (int) ($watchdogs['freshness_window_minutes'] ?? 30),
         'critical_failed' => (int) ($watchdogs['summary']['critical_failed'] ?? 0),
         'warning_failed' => (int) ($watchdogs['summary']['warning_failed'] ?? 0),
@@ -1612,6 +1688,11 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         'last_source' => $src,
         'last_alert_at' => ($alertSent === 1) ? $now : (string) ($state['last_alert_at'] ?? ''),
         'last_alert_sent' => $alertSent,
+        'critical_streak' => $criticalStreak,
+        'auto_incident_threshold' => $autoIncidentThreshold,
+        'last_auto_incident_report_id' => $autoIncidentReportId !== '' ? $autoIncidentReportId : (string) ($state['last_auto_incident_report_id'] ?? ''),
+        'last_auto_incident_action' => $autoIncidentAction,
+        'last_auto_incident_at' => $autoIncidentCreated === 1 ? $now : (string) ($state['last_auto_incident_at'] ?? ''),
     ];
     app_write_json_file(deployment_watchdogs_state_path(), $nextState);
 
@@ -2358,7 +2439,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.42-watchdogs-check-runs',
+        'phase' => '1.43-watchdogs-auto-incident-escalation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3673,7 +3754,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.42-watchdogs-check-runs',
+        'phase' => '1.43-watchdogs-auto-incident-escalation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
