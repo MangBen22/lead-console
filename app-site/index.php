@@ -568,12 +568,15 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <label>Smoke check note<input id="cutoverSmokeNote" type="text" placeholder="Optional note for smoke check records..." /></label>
                 <div class="actions">
                     <button id="refreshCutoverReadinessBtn" type="button">Refresh Readiness</button>
+                    <button id="runSmokeSuiteBtn" type="button">Run Full Smoke Suite</button>
+                    <button id="downloadSmokeHistoryBtn" type="button">Download Smoke History</button>
                     <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
                     <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
                     <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>
                     <button id="recordAuthSmokeFailBtn" type="button">Record Auth Smoke Fail</button>
                 </div>
                 <pre id="cutoverReadinessView">Loading readiness...</pre>
+                <pre id="cutoverSmokeHistoryView">Loading smoke history...</pre>
                 <pre id="cutoverSmokeRecordView">No smoke record action yet.</pre>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>

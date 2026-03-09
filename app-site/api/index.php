@@ -1544,6 +1544,159 @@ function deployment_smoke_record_snapshot($smokeType, $ok, $source = 'dashboard_
     return $run;
 }
 
+function deployment_smoke_history_snapshot()
+{
+    $rows = app_read_json_file(deployment_smoke_runs_path(), []);
+    $summary = [
+        'total_runs' => count($rows),
+        'pass_count' => 0,
+        'fail_count' => 0,
+        'by_type' => [
+            'public' => ['pass' => 0, 'fail' => 0],
+            'auth' => ['pass' => 0, 'fail' => 0],
+        ],
+    ];
+    $latestByType = ['public' => null, 'auth' => null];
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $type = strtolower(trim((string) ($row['smoke_type'] ?? 'public')));
+        if (!isset($summary['by_type'][$type])) {
+            continue;
+        }
+        $isOk = !empty($row['ok']);
+        if ($isOk) {
+            $summary['pass_count']++;
+            $summary['by_type'][$type]['pass']++;
+        } else {
+            $summary['fail_count']++;
+            $summary['by_type'][$type]['fail']++;
+        }
+        if ($latestByType[$type] === null) {
+            $latestByType[$type] = $row;
+        }
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => $summary,
+        'latest_by_type' => $latestByType,
+        'items' => $rows,
+    ];
+}
+
+function deployment_smoke_suite_snapshot($note = '')
+{
+    $health = healthcheck_snapshot();
+    $install = install_check_snapshot();
+    $preflight = deployment_preflight_snapshot();
+    $guard = deployment_guard_evaluate();
+    $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
+    $incidentSummary = deployment_incident_summary_snapshot();
+    $slaState = app_read_json_file(deployment_incident_sla_state_path(), []);
+    $threshold = is_array($slaState) && isset($slaState['last_threshold_minutes'])
+        ? max(5, min(10080, (int) $slaState['last_threshold_minutes']))
+        : 120;
+    $incidentSla = deployment_incident_sla_snapshot($threshold);
+
+    $publicChecks = [
+        [
+            'check' => 'status_endpoint',
+            'ok' => true,
+            'message' => 'API status endpoint is available.',
+        ],
+        [
+            'check' => 'healthcheck_not_critical',
+            'ok' => (string) ($health['status'] ?? 'warning') !== 'critical',
+            'message' => 'Healthcheck status: ' . (string) ($health['status'] ?? 'warning'),
+        ],
+        [
+            'check' => 'install_check_not_critical',
+            'ok' => (string) ($install['status'] ?? 'warning') !== 'critical',
+            'message' => 'Install check status: ' . (string) ($install['status'] ?? 'warning'),
+        ],
+        [
+            'check' => 'deployment_preflight_not_critical',
+            'ok' => (string) ($preflight['status'] ?? 'warning') !== 'critical',
+            'message' => 'Preflight status: ' . (string) ($preflight['status'] ?? 'warning'),
+        ],
+    ];
+
+    $authChecks = [
+        [
+            'check' => 'deployment_guard_status_access',
+            'ok' => true,
+            'message' => 'Deployment guard status loaded.',
+        ],
+        [
+            'check' => 'deployment_pipeline_runs_access',
+            'ok' => is_array($pipelineRuns),
+            'message' => 'Pipeline runs loaded: ' . count($pipelineRuns),
+        ],
+        [
+            'check' => 'deployment_incident_summary_access',
+            'ok' => is_array($incidentSummary),
+            'message' => 'Incident summary loaded.',
+        ],
+        [
+            'check' => 'deployment_incident_sla_runs_access',
+            'ok' => is_array(app_read_json_file(deployment_incident_sla_runs_path(), [])),
+            'message' => 'Incident SLA runs loaded.',
+        ],
+        [
+            'check' => 'deployment_guard_currently_allows',
+            'ok' => !empty($guard['allowed']),
+            'message' => !empty($guard['allowed']) ? 'Guard currently allows writes.' : 'Guard currently blocks writes.',
+        ],
+    ];
+
+    $publicOk = true;
+    foreach ($publicChecks as $row) {
+        if (empty($row['ok'])) {
+            $publicOk = false;
+            break;
+        }
+    }
+    $authOk = true;
+    foreach ($authChecks as $row) {
+        if (empty($row['ok'])) {
+            $authOk = false;
+            break;
+        }
+    }
+
+    $runPublic = deployment_smoke_record_snapshot('public', $publicOk ? 1 : 0, 'dashboard_suite', $note, [
+        'checks' => $publicChecks,
+        'install_status' => (string) ($install['status'] ?? 'warning'),
+        'preflight_status' => (string) ($preflight['status'] ?? 'warning'),
+    ]);
+    $runAuth = deployment_smoke_record_snapshot('auth', $authOk ? 1 : 0, 'dashboard_suite', $note, [
+        'checks' => $authChecks,
+        'guard_allowed' => !empty($guard['allowed']) ? 1 : 0,
+        'open_incidents' => (int) ($incidentSummary['open_total'] ?? 0),
+        'sla_breach_count' => (int) ($incidentSla['breach_count'] ?? 0),
+    ]);
+
+    return [
+        'suite_id' => 'smoke_suite_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'note' => trim((string) $note),
+        'public' => [
+            'ok' => $publicOk ? 1 : 0,
+            'checks' => $publicChecks,
+            'run' => $runPublic,
+        ],
+        'auth' => [
+            'ok' => $authOk ? 1 : 0,
+            'checks' => $authChecks,
+            'run' => $runAuth,
+        ],
+        'overall_ok' => ($publicOk && $authOk) ? 1 : 0,
+    ];
+}
+
 function deployment_cutover_readiness_snapshot()
 {
     $install = install_check_snapshot();
@@ -2445,6 +2598,7 @@ $rateLimitedWriteActions = [
     'deployment.incident.resolve',
     'deployment.incident.sla.check',
     'deployment.smoke.report',
+    'deployment.smoke.suite',
     'deployment.verify',
     'backup.import',
 ];
@@ -2491,7 +2645,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.27-cutover-readiness-card',
+        'phase' => '1.28-smoke-suite-and-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -3071,6 +3225,45 @@ if ($action === 'deployment.smoke.report') {
         'ok' => true,
         'run' => $run,
         'readiness' => deployment_cutover_readiness_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.smoke.suite') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $note = isset($data['note']) ? (string) $data['note'] : '';
+    $suite = deployment_smoke_suite_snapshot($note);
+    $overallOk = !empty($suite['overall_ok']);
+    push_notification($overallOk ? 'success' : 'warning', $overallOk ? 'Smoke suite passed.' : 'Smoke suite failed.', [
+        'suite_id' => (string) ($suite['suite_id'] ?? ''),
+        'overall_ok' => $overallOk ? 1 : 0,
+    ]);
+    audit_event('deployment', 'smoke.suite.run', [
+        'suite_id' => (string) ($suite['suite_id'] ?? ''),
+        'overall_ok' => $overallOk ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'suite' => $suite,
+        'history' => deployment_smoke_history_snapshot(),
+        'readiness' => deployment_cutover_readiness_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.smoke.history') {
+    $history = deployment_smoke_history_snapshot();
+    out_json([
+        'ok' => true,
+        'history' => $history,
         'time' => gmdate('c'),
     ]);
 }
