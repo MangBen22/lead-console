@@ -536,8 +536,67 @@ function deployment_watchdogs_policy_settings_from_guard($guard = null)
 {
     $row = is_array($guard) ? $guard : get_deployment_guard();
     return [
-        'auto_incident_threshold' => max(1, min(10, (int) ($row['watchdogs_auto_incident_threshold'] ?? 2))),
-        'auto_resolve_ok_streak' => max(1, min(10, (int) ($row['watchdogs_auto_resolve_ok_streak'] ?? 2))),
+        'auto_incident_threshold' => max(1, min(10, (int) ($row['auto_incident_threshold'] ?? $row['watchdogs_auto_incident_threshold'] ?? 2))),
+        'auto_resolve_ok_streak' => max(1, min(10, (int) ($row['auto_resolve_ok_streak'] ?? $row['watchdogs_auto_resolve_ok_streak'] ?? 2))),
+    ];
+}
+
+function deployment_watchdogs_policy_history_rows()
+{
+    $rows = app_read_json_file(deployment_watchdogs_policy_history_path(), []);
+    if (!is_array($rows)) {
+        return [];
+    }
+    return $rows;
+}
+
+function deployment_watchdogs_policy_history_select($rows, $historyId = '')
+{
+    if (!is_array($rows) || empty($rows)) {
+        return null;
+    }
+    $needle = trim((string) $historyId);
+    if ($needle === '') {
+        return is_array($rows[0] ?? null) ? $rows[0] : null;
+    }
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['history_id'] ?? '') === $needle) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function deployment_watchdogs_policy_diff_summary($current, $candidate)
+{
+    $base = deployment_watchdogs_policy_settings_from_guard($current);
+    $next = deployment_watchdogs_policy_settings_from_guard($candidate);
+    $fields = ['auto_incident_threshold', 'auto_resolve_ok_streak'];
+    $changes = [];
+    $changedCount = 0;
+    foreach ($fields as $field) {
+        $from = (int) ($base[$field] ?? 0);
+        $to = (int) ($next[$field] ?? 0);
+        $changed = ($from !== $to);
+        if ($changed) {
+            $changedCount++;
+        }
+        $changes[$field] = [
+            'from' => $from,
+            'to' => $to,
+            'changed' => $changed ? 1 : 0,
+            'direction' => ($to > $from) ? 'increase' : (($to < $from) ? 'decrease' : 'same'),
+        ];
+    }
+    return [
+        'current' => $base,
+        'candidate' => $next,
+        'changes' => $changes,
+        'changed_count' => $changedCount,
+        'has_changes' => ($changedCount > 0) ? 1 : 0,
     ];
 }
 
@@ -2620,7 +2679,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.52-watchdogs-policy-restore',
+        'phase' => '1.53-watchdogs-policy-restore-preview',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3939,7 +3998,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.52-watchdogs-policy-restore',
+        'phase' => '1.53-watchdogs-policy-restore-preview',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4226,14 +4285,47 @@ if ($action === 'deployment.watchdogs.policy.get') {
 }
 
 if ($action === 'deployment.watchdogs.policy.history') {
-    $rows = app_read_json_file(deployment_watchdogs_policy_history_path(), []);
-    if (!is_array($rows)) {
-        $rows = [];
-    }
+    $rows = deployment_watchdogs_policy_history_rows();
     out_json([
         'ok' => true,
         'count' => count($rows),
         'items' => $rows,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.preview') {
+    $historyId = trim((string) ($_GET['history_id'] ?? ''));
+    $mode = strtolower(trim((string) ($_GET['mode'] ?? 'previous')));
+    if (!in_array($mode, ['previous', 'current'], true)) {
+        $mode = 'previous';
+    }
+    $rows = deployment_watchdogs_policy_history_rows();
+    if (empty($rows)) {
+        out_json(['ok' => false, 'error' => 'No watchdog policy history available.'], 404);
+    }
+    $target = deployment_watchdogs_policy_history_select($rows, $historyId);
+    if (!is_array($target)) {
+        out_json(['ok' => false, 'error' => 'History entry not found.'], 404);
+    }
+    $candidateRaw = isset($target[$mode]) && is_array($target[$mode]) ? $target[$mode] : [];
+    $current = deployment_watchdogs_policy_settings_from_guard();
+    $candidate = deployment_watchdogs_policy_settings_from_guard($candidateRaw);
+    $delta = deployment_watchdogs_policy_diff_summary($current, $candidate);
+    out_json([
+        'ok' => true,
+        'mode' => $mode,
+        'target' => [
+            'history_id' => (string) ($target['history_id'] ?? ''),
+            'created_at' => (string) ($target['created_at'] ?? ''),
+            'source' => (string) ($target['source'] ?? ''),
+            'actor' => isset($target['actor']) && is_array($target['actor']) ? $target['actor'] : [],
+        ],
+        'current' => $delta['current'],
+        'candidate' => $delta['candidate'],
+        'delta' => $delta['changes'],
+        'changed_count' => (int) ($delta['changed_count'] ?? 0),
+        'has_changes' => !empty($delta['has_changes']) ? 1 : 0,
         'time' => gmdate('c'),
     ]);
 }
@@ -4288,37 +4380,37 @@ if ($action === 'deployment.watchdogs.policy.restore') {
     if (!in_array($mode, ['previous', 'current'], true)) {
         $mode = 'previous';
     }
-    $rows = app_read_json_file(deployment_watchdogs_policy_history_path(), []);
-    if (!is_array($rows) || empty($rows)) {
+    $rows = deployment_watchdogs_policy_history_rows();
+    if (empty($rows)) {
         out_json(['ok' => false, 'error' => 'No watchdog policy history available.'], 404);
     }
-    $target = null;
-    if ($historyId !== '') {
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            if ((string) ($row['history_id'] ?? '') === $historyId) {
-                $target = $row;
-                break;
-            }
-        }
-        if (!is_array($target)) {
-            out_json(['ok' => false, 'error' => 'History entry not found.'], 404);
-        }
-    } else {
-        $target = is_array($rows[0] ?? null) ? $rows[0] : null;
-        if (!is_array($target)) {
-            out_json(['ok' => false, 'error' => 'History entry not found.'], 404);
-        }
+    $target = deployment_watchdogs_policy_history_select($rows, $historyId);
+    if (!is_array($target)) {
+        out_json(['ok' => false, 'error' => 'History entry not found.'], 404);
     }
-    $candidate = isset($target[$mode]) && is_array($target[$mode]) ? $target[$mode] : [];
+    $candidateRaw = isset($target[$mode]) && is_array($target[$mode]) ? $target[$mode] : [];
+    $current = deployment_watchdogs_policy_settings_from_guard();
+    $candidate = deployment_watchdogs_policy_settings_from_guard($candidateRaw);
+    $delta = deployment_watchdogs_policy_diff_summary($current, $candidate);
+    if (empty($delta['has_changes'])) {
+        out_json([
+            'ok' => true,
+            'no_change' => 1,
+            'message' => 'Selected policy snapshot already matches current settings.',
+            'settings' => $current,
+            'restored_from' => [
+                'history_id' => (string) ($target['history_id'] ?? ''),
+                'mode' => $mode,
+            ],
+            'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
+            'time' => gmdate('c'),
+        ]);
+    }
     $settings = [
         'watchdogs_auto_incident_threshold' => max(1, min(10, (int) ($candidate['auto_incident_threshold'] ?? 2))),
         'watchdogs_auto_resolve_ok_streak' => max(1, min(10, (int) ($candidate['auto_resolve_ok_streak'] ?? 2))),
     ];
-    $guardBefore = get_deployment_guard();
-    $previous = deployment_watchdogs_policy_settings_from_guard($guardBefore);
+    $previous = $current;
     $saved = save_deployment_guard($settings);
     $response = deployment_watchdogs_policy_settings_from_guard($saved);
     $source = isset($data['source']) ? (string) $data['source'] : ('dashboard_restore_' . $mode);
@@ -4328,6 +4420,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
         'mode' => $mode,
         'previous' => $previous,
         'current' => $response,
+        'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
         'history_id' => (string) ($history['history_id'] ?? ''),
         'source' => (string) ($history['source'] ?? ''),
     ]);
@@ -4343,6 +4436,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
             'history_id' => (string) ($target['history_id'] ?? ''),
             'mode' => $mode,
         ],
+        'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
         'time' => gmdate('c'),
     ]);
 }

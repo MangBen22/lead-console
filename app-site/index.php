@@ -554,6 +554,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </label>
                 <div class="actions">
                     <button id="saveWatchdogsPolicyBtn" type="button">Save Watchdogs Policy</button>
+                    <button id="previewWatchdogsPolicyRestoreBtn" type="button">Preview Restore Diff</button>
                     <button id="restoreWatchdogsPolicyBtn" type="button">Restore Watchdogs Policy</button>
                     <button id="refreshWatchdogsPolicyHistoryBtn" type="button">Refresh Watchdogs Policy History</button>
                 </div>
@@ -568,6 +569,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="watchdogsIncidentView">Loading watchdogs incident...</pre>
                 <pre id="watchdogsIncidentSummaryView">Loading watchdogs incident summary...</pre>
                 <pre id="watchdogsPolicyView">Loading watchdogs policy...</pre>
+                <pre id="watchdogsPolicyPreviewView">No restore preview yet.</pre>
                 <pre id="watchdogsPolicyHistoryView">Loading watchdogs policy history...</pre>
             </section>
 
