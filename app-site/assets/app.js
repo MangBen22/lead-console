@@ -355,12 +355,16 @@
       if (schedulerGateSummaryView) {
         const summary = data && data.release_gate_watch_summary ? data.release_gate_watch_summary : {};
         const sustainedState = data && data.release_gate_sustained_state ? data.release_gate_sustained_state : {};
+        const sustainedTimeline = data && data.release_gate_sustained_timeline ? data.release_gate_sustained_timeline : {};
         const sustainedDigest = formatSustainedStateDigest(sustainedState);
+        const sustainedTimelineDigest = formatSustainedTimelineDigest(sustainedTimeline);
         schedulerGateSummaryView.textContent = JSON.stringify({
           ok: true,
           release_gate_watch_summary: summary,
           release_gate_sustained_state: sustainedState,
+          release_gate_sustained_timeline: sustainedTimeline,
           release_gate_sustained_digest: sustainedDigest,
+          release_gate_sustained_timeline_digest: sustainedTimelineDigest,
         }, null, 2);
       }
     } catch (err) {
@@ -516,7 +520,7 @@
   }
 
   function formatReleaseGateRunDigest(summary, filters) {
-    return formatReleaseGateRunDigestWithSustained(summary, filters, {});
+    return formatReleaseGateRunDigestWithSustained(summary, filters, {}, {});
   }
 
   function formatSustainedStateDigest(sustainedState) {
@@ -534,7 +538,27 @@
       + ", last_alert_at=" + alertAt;
   }
 
-  function formatReleaseGateRunDigestWithSustained(summary, filters, sustainedState) {
+  function formatSustainedTimelineDigest(sustainedTimeline) {
+    const t = sustainedTimeline && typeof sustainedTimeline === "object" ? sustainedTimeline : {};
+    const currentActive = Number(t.current_active || 0) === 1;
+    const streakRuns = Number(t.current_streak_runs || 0);
+    const currentSince = t.current_since ? String(t.current_since) : "n/a";
+    const transitionCount = Number(t.transition_count || 0);
+    const latestTransition = t.latest_transition && typeof t.latest_transition === "object" ? t.latest_transition : null;
+    let latestText = "none";
+    if (latestTransition) {
+      latestText = String(latestTransition.transitioned_to || "unknown")
+        + " at " + String(latestTransition.created_at || "n/a")
+        + " via " + String(latestTransition.source || "n/a");
+    }
+    return "current_state=" + (currentActive ? "active" : "clear")
+      + ", current_streak_runs=" + String(streakRuns)
+      + ", current_since=" + currentSince
+      + ", transitions=" + String(transitionCount)
+      + ", latest_transition=" + latestText;
+  }
+
+  function formatReleaseGateRunDigestWithSustained(summary, filters, sustainedState, sustainedTimeline) {
     const s = summary && typeof summary === "object" ? summary : {};
     const f = filters && typeof filters === "object" ? filters : {};
     const totalRuns = Number(s.total_runs || 0);
@@ -564,6 +588,7 @@
       + ", baseline_check=" + String(baselineCheckShare) + "%"
       + ", signoff_watch=" + String(signoffShare) + "%");
     lines.push("Sustained blocked trend: " + formatSustainedStateDigest(sustainedState));
+    lines.push("Sustained transitions: " + formatSustainedTimelineDigest(sustainedTimeline));
     if (topFailedEntries.length > 0) {
       lines.push("Top failed items:");
       topFailedEntries.forEach(function (entry) {
@@ -584,15 +609,17 @@
       if (releaseGateRunSummaryView) {
         const summary = data && data.summary ? data.summary : {};
         const sustainedState = data && data.sustained_state ? data.sustained_state : {};
+        const sustainedTimeline = data && data.sustained_timeline ? data.sustained_timeline : {};
         const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
         releaseGateRunSummaryView.textContent = JSON.stringify({
           ok: true,
           applied_filters: appliedFilters,
           summary: summary,
           sustained_state: sustainedState,
+          sustained_timeline: sustainedTimeline,
         }, null, 2);
         if (releaseGateRunDigestView) {
-          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, appliedFilters, sustainedState);
+          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, appliedFilters, sustainedState, sustainedTimeline);
         }
       }
     } catch (err) {
