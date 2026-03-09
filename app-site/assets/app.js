@@ -221,6 +221,7 @@
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
+  const refreshSocialInboxBtn = document.getElementById("refreshSocialInboxBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -228,6 +229,8 @@
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
+  const socialInboxThreads = document.getElementById("socialInboxThreads");
+  const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
@@ -2203,6 +2206,16 @@
     }
   }
 
+  async function loadSocialInboxThreads() {
+    if (!socialInboxThreads) return;
+    try {
+      const data = await apiGet("social.inbox.list");
+      socialInboxThreads.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialInboxThreads.textContent = "Failed to load social inbox.";
+    }
+  }
+
   async function loadSocialPlatforms() {
     if (!socialPlatforms) return;
     try {
@@ -2312,6 +2325,7 @@
     await loadSocialConnectors();
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
+    await loadSocialInboxThreads();
     await loadSocialSyncLog();
     await loadSocialRetryQueue();
     await loadWebopsMonitors();
@@ -2514,6 +2528,7 @@
         await loadSocialConnectors();
         await loadSocialDraftsPreview();
         await loadSocialActivityFeed();
+        await loadSocialInboxThreads();
       });
     }
 
@@ -2535,6 +2550,7 @@
         await loadSocialConnectors();
         await loadSocialDraftsPreview();
         await loadSocialActivityFeed();
+        await loadSocialInboxThreads();
       });
     }
 
@@ -2629,6 +2645,41 @@
     }
   }
 
+  if (socialInboxReplyForm) {
+    socialInboxReplyForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const replyBtn = document.getElementById("replySocialInboxBtn");
+    if (replyBtn) {
+      replyBtn.addEventListener("click", async function () {
+        const threadId = document.getElementById("socialInboxThreadId");
+        const message = document.getElementById("socialInboxReplyMessage");
+        const id = threadId && threadId.value ? threadId.value.trim() : "";
+        const text = message && message.value ? message.value.trim() : "";
+        if (!id || !text) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Enter Thread ID and reply message.";
+          }
+          return;
+        }
+        const result = await apiPost("social.inbox.reply", {
+          thread_id: id,
+          message: text,
+        });
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialInboxThreads();
+        await loadSocialActivityFeed();
+        const socialData = await apiGet("social.summary");
+        const socialPanel = document.getElementById("modSocial");
+        if (socialPanel) {
+          socialPanel.textContent = JSON.stringify(socialData, null, 2);
+        }
+      });
+    }
+  }
+
   if (refreshSocialPlatformsBtn) {
     refreshSocialPlatformsBtn.addEventListener("click", async function () {
       await loadSocialPlatforms();
@@ -2644,6 +2695,12 @@
   if (refreshSocialActivityBtn) {
     refreshSocialActivityBtn.addEventListener("click", async function () {
       await loadSocialActivityFeed();
+    });
+  }
+
+  if (refreshSocialInboxBtn) {
+    refreshSocialInboxBtn.addEventListener("click", async function () {
+      await loadSocialInboxThreads();
     });
   }
 

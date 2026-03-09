@@ -459,6 +459,25 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Inbox</h2>
+                <div class="actions">
+                    <button id="refreshSocialInboxBtn" type="button">Refresh Social Inbox</button>
+                </div>
+                <pre id="socialInboxThreads">Loading...</pre>
+                <form id="socialInboxReplyForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialInboxThreadId">Thread ID</label>
+                        <input id="socialInboxThreadId" type="text" placeholder="social_thread_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxReplyMessage">Reply message</label>
+                        <textarea id="socialInboxReplyMessage" rows="4" placeholder="Type the reply to send..."></textarea>
+                    </div>
+                    <button id="replySocialInboxBtn" type="button">Reply to Thread</button>
+                </form>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Push Pipeline</h2>
                 <div class="actions">
                     <button id="runSocialSyncBtn" type="button">Run Social Sync</button>

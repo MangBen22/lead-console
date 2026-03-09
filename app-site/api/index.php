@@ -219,6 +219,11 @@ function social_activity_feed_path()
     return app_storage_path('social_activity_feed.json');
 }
 
+function social_inbox_threads_path()
+{
+    return app_storage_path('social_inbox_threads.json');
+}
+
 function social_platform_catalog()
 {
     return [
@@ -541,6 +546,7 @@ function module_storage_map()
         'social_retry_queue' => social_retry_queue_path(),
         'social_schedule_queue' => social_schedule_queue_path(),
         'social_activity_feed' => social_activity_feed_path(),
+        'social_inbox_threads' => social_inbox_threads_path(),
         'webops_monitors' => webops_monitors_path(),
         'webops_log' => webops_log_path(),
         'webops_retry_queue' => webops_retry_queue_path(),
@@ -3771,7 +3777,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.10-social-activity-feed',
+        'phase' => '2.11-social-inbox-workflow',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4670,6 +4676,44 @@ function record_social_activity($type, $message, $meta = [])
     app_write_json_file(social_activity_feed_path(), $rows);
 }
 
+function social_inbox_threads_rows($seedIfEmpty = false)
+{
+    $rows = app_read_json_file(social_inbox_threads_path(), []);
+    if (!empty($rows) || !$seedIfEmpty) {
+        return $rows;
+    }
+
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $seeded = [];
+    foreach ($connectors as $connector) {
+        $decorated = decorate_social_connector($connector);
+        $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+        $capabilities = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
+        if (!in_array($status, ['active', 'enabled'], true) || !in_array('can_read_inbox', $capabilities, true)) {
+            continue;
+        }
+        $seeded[] = [
+            'thread_id' => 'social_thread_' . substr(sha1((string) mt_rand()), 0, 10),
+            'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'account_label' => (string) ($decorated['account_label'] ?? ''),
+            'from_name' => 'Prospect Inquiry',
+            'subject' => 'Question about services',
+            'message' => 'Can you share more details about your service offer?',
+            'status' => 'open',
+            'created_at' => gmdate('c'),
+            'updated_at' => gmdate('c'),
+        ];
+    }
+
+    if (!empty($seeded)) {
+        app_write_json_file(social_inbox_threads_path(), $seeded);
+        return $seeded;
+    }
+
+    return [];
+}
+
 function social_connector_readiness($connector, $drafts)
 {
     $decorated = decorate_social_connector($connector);
@@ -5161,7 +5205,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.10-social-activity-feed',
+        'phase' => '2.11-social-inbox-workflow',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7273,6 +7317,13 @@ if ($action === 'social.summary') {
     $activity = app_read_json_file(social_activity_feed_path(), []);
     $lastActivity = isset($activity[0]) && is_array($activity[0]) ? $activity[0] : null;
     $retryCount = count(app_read_json_file(social_retry_queue_path(), []));
+    $threads = social_inbox_threads_rows(true);
+    $openThreads = 0;
+    foreach ($threads as $thread) {
+        if (is_array($thread) && strtolower((string) ($thread['status'] ?? 'open')) === 'open') {
+            $openThreads++;
+        }
+    }
     $scheduledCount = 0;
     foreach (app_read_json_file(social_schedule_queue_path(), []) as $row) {
         if (is_array($row) && strtolower((string) ($row['status'] ?? 'queued')) === 'queued') {
@@ -7287,7 +7338,8 @@ if ($action === 'social.summary') {
             'connected_accounts' => count($active),
             'active_platforms' => count($platforms),
             'scheduled_posts' => $scheduledCount,
-            'unread_conversations' => $retryCount,
+            'unread_conversations' => $openThreads,
+            'retry_backlog' => $retryCount,
         ],
         'last_sync' => $lastSync,
         'last_activity' => $lastActivity,
@@ -7397,6 +7449,61 @@ if ($action === 'social.activity.list') {
         'ok' => true,
         'count' => count($rows),
         'items' => $rows,
+    ]);
+}
+
+if ($action === 'social.inbox.list') {
+    $rows = social_inbox_threads_rows(true);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
+if ($action === 'social.inbox.reply') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['thread_id']) || trim((string) ($data['message'] ?? '')) === '') {
+        out_json(['ok' => false, 'error' => 'thread_id and message are required.'], 400);
+    }
+    $threadId = (string) $data['thread_id'];
+    $replyMessage = trim((string) $data['message']);
+    $rows = social_inbox_threads_rows(true);
+    $updated = null;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row) || (string) ($row['thread_id'] ?? '') !== $threadId) {
+            continue;
+        }
+        $connector = social_connector_by_id((string) ($row['connector_id'] ?? ''));
+        $decorated = is_array($connector) ? decorate_social_connector($connector) : null;
+        $capabilities = is_array($decorated) && isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled'])
+            ? $decorated['capabilities_enabled']
+            : [];
+        if (!in_array('can_reply_inbox', $capabilities, true)) {
+            out_json(['ok' => false, 'error' => 'Connector cannot reply to inbox threads.'], 400);
+        }
+        $row['status'] = 'replied';
+        $row['reply_message'] = $replyMessage;
+        $row['last_reply_at'] = gmdate('c');
+        $row['updated_at'] = gmdate('c');
+        $rows[$index] = $row;
+        $updated = $row;
+        break;
+    }
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Inbox thread not found.'], 404);
+    }
+    app_write_json_file(social_inbox_threads_path(), $rows);
+    audit_event('social', 'inbox.reply', ['thread_id' => $threadId]);
+    record_social_activity('inbox_reply', 'Social inbox reply recorded.', ['thread_id' => $threadId]);
+    out_json([
+        'ok' => true,
+        'thread' => $updated,
     ]);
 }
 
