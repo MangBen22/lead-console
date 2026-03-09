@@ -509,6 +509,11 @@
     const baselineMatchBlocked = Number(s.baseline_match_blocked_runs || 0);
     const baselineCheckBlocked = Number(s.baseline_check_blocked_runs || 0);
     const signoffWatchBlocked = Number(s.signoff_integrity_watch_blocked_runs || 0);
+    const blockedRatio = Number(s.blocked_ratio_percent || 0);
+    const allowedRatio = Number(s.allowed_ratio_percent || 0);
+    const baselineMatchShare = Number(s.baseline_match_blocked_share_percent || 0);
+    const baselineCheckShare = Number(s.baseline_check_blocked_share_percent || 0);
+    const signoffShare = Number(s.signoff_integrity_watch_blocked_share_percent || 0);
     const topFailed = s.top_failed_items && typeof s.top_failed_items === "object" ? s.top_failed_items : {};
     const topFailedEntries = Object.entries(topFailed).slice(0, 5);
     const lines = [];
@@ -517,9 +522,13 @@
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)"));
     lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
+    lines.push("Ratios: allowed=" + String(allowedRatio) + "%, blocked=" + String(blockedRatio) + "%");
     lines.push("Blocker runs: baseline_match=" + String(baselineMatchBlocked)
       + ", baseline_check=" + String(baselineCheckBlocked)
       + ", signoff_watch=" + String(signoffWatchBlocked));
+    lines.push("Blocked share: baseline_match=" + String(baselineMatchShare) + "%"
+      + ", baseline_check=" + String(baselineCheckShare) + "%"
+      + ", signoff_watch=" + String(signoffShare) + "%");
     if (topFailedEntries.length > 0) {
       lines.push("Top failed items:");
       topFailedEntries.forEach(function (entry) {

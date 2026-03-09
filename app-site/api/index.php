@@ -1707,6 +1707,14 @@ function deployment_release_gate_runs_summary($runs)
         arsort($summary['failed_item_counts']);
     }
     $summary['top_failed_items'] = array_slice($summary['failed_item_counts'], 0, 10, true);
+    $total = max(1, (int) ($summary['total_runs'] ?? 0));
+    $blocked = (int) ($summary['blocked_runs'] ?? 0);
+    $summary['blocked_ratio_percent'] = round(($blocked / $total) * 100, 2);
+    $summary['allowed_ratio_percent'] = round((((int) ($summary['allowed_runs'] ?? 0)) / $total) * 100, 2);
+    $denominator = max(1, $blocked);
+    $summary['baseline_match_blocked_share_percent'] = round((((int) ($summary['baseline_match_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
+    $summary['baseline_check_blocked_share_percent'] = round((((int) ($summary['baseline_check_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
+    $summary['signoff_integrity_watch_blocked_share_percent'] = round((((int) ($summary['signoff_integrity_watch_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
     return $summary;
 }
 
@@ -3146,7 +3154,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.71-release-gate-notification-digest',
+        'phase' => '1.72-release-gate-summary-ratios',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4474,7 +4482,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.71-release-gate-notification-digest',
+        'phase' => '1.72-release-gate-summary-ratios',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
