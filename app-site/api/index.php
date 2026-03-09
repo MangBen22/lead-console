@@ -3759,7 +3759,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.07-social-platform-catalog',
+        'phase' => '2.08-social-drafts-preview',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4636,6 +4636,46 @@ function enqueue_social_retry_item($item)
     app_write_json_file(social_retry_queue_path(), $queue);
 }
 
+function social_connector_readiness($connector, $drafts)
+{
+    $decorated = decorate_social_connector($connector);
+    $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+    $enabledCapabilities = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
+    $config = isset($decorated['config']) && is_array($decorated['config']) ? $decorated['config'] : [];
+    $state = 'ready';
+    $reason = '';
+
+    if (!in_array($status, ['active', 'enabled'], true)) {
+        $state = 'blocked';
+        $reason = 'connector_inactive';
+    } elseif (!in_array('can_publish_post', $enabledCapabilities, true) && !in_array('can_publish_video', $enabledCapabilities, true)) {
+        $state = 'blocked';
+        $reason = 'publish_capability_missing';
+    } elseif ((string) ($decorated['provider'] ?? '') === 'wordpress_social_bridge') {
+        $siteId = trim((string) ($config['bridge_site_id'] ?? ($decorated['site_id'] ?? '')));
+        if ($siteId === '' || site_by_id($siteId) === null) {
+            $state = 'blocked';
+            $reason = 'bridge_site_missing';
+        }
+    } elseif ((string) ($decorated['provider'] ?? '') === 'social_webhook') {
+        if (trim((string) ($config['webhook_url'] ?? '')) === '') {
+            $state = 'blocked';
+            $reason = 'webhook_missing';
+        }
+    }
+
+    return [
+        'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+        'account_label' => (string) ($decorated['account_label'] ?? ''),
+        'provider' => (string) ($decorated['provider'] ?? ''),
+        'state' => $state,
+        'reason' => $reason,
+        'draft_count' => count($drafts),
+        'capabilities_enabled' => $enabledCapabilities,
+        'profile' => isset($decorated['profile']) && is_array($decorated['profile']) ? $decorated['profile'] : [],
+    ];
+}
+
 function collect_social_drafts()
 {
     $payload = collect_approved_leads();
@@ -5087,7 +5127,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.07-social-platform-catalog',
+        'phase' => '2.08-social-drafts-preview',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7268,6 +7308,34 @@ if ($action === 'social.platforms.list') {
         'ok' => true,
         'count' => count($items),
         'items' => $items,
+    ]);
+}
+
+if ($action === 'social.drafts.preview') {
+    $drafts = collect_social_drafts();
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $readiness = [];
+    $readyCount = 0;
+    $blockedCount = 0;
+    foreach ($connectors as $connector) {
+        $row = social_connector_readiness($connector, $drafts);
+        $readiness[] = $row;
+        if (($row['state'] ?? '') === 'ready') {
+            $readyCount++;
+        } else {
+            $blockedCount++;
+        }
+    }
+    out_json([
+        'ok' => true,
+        'draft_count' => count($drafts),
+        'connector_count' => count($connectors),
+        'summary' => [
+            'ready_connectors' => $readyCount,
+            'blocked_connectors' => $blockedCount,
+        ],
+        'drafts' => $drafts,
+        'connector_readiness' => $readiness,
     ]);
 }
 

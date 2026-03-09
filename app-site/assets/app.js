@@ -219,7 +219,9 @@
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
+  const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
+  const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
@@ -2187,6 +2189,16 @@
     }
   }
 
+  async function loadSocialDraftsPreview() {
+    if (!socialDraftsPreview) return;
+    try {
+      const data = await apiGet("social.drafts.preview");
+      socialDraftsPreview.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDraftsPreview.textContent = "Failed to load social drafts preview.";
+    }
+  }
+
   async function loadSocialSyncLog() {
     if (!socialSyncLog) return;
     try {
@@ -2270,6 +2282,7 @@
   (async function initCrm() {
     await loadCrmConnectors();
     await loadSocialPlatforms();
+    await loadSocialDraftsPreview();
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadSocialConnectors();
@@ -2473,6 +2486,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialConnectors();
+        await loadSocialDraftsPreview();
       });
     }
 
@@ -2492,6 +2506,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialConnectors();
+        await loadSocialDraftsPreview();
       });
     }
 
@@ -2517,6 +2532,12 @@
   if (refreshSocialPlatformsBtn) {
     refreshSocialPlatformsBtn.addEventListener("click", async function () {
       await loadSocialPlatforms();
+    });
+  }
+
+  if (refreshSocialDraftsBtn) {
+    refreshSocialDraftsBtn.addEventListener("click", async function () {
+      await loadSocialDraftsPreview();
     });
   }
 
