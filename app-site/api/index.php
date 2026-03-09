@@ -3912,7 +3912,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.29-seo-regression-watch',
+        'phase' => '2.30-seo-regression-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6341,7 +6341,7 @@ function execute_automation_run($settings, $source = 'manual')
         'crm' => ['processed' => 0, 'failed' => 0],
         'social' => ['processed' => 0, 'failed' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
-        'seo' => ['processed' => 0, 'failed' => 0],
+        'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
 
     if (!empty($settings['modules']['crm'])) {
@@ -6443,6 +6443,9 @@ function execute_automation_run($settings, $source = 'manual')
         }
         $seoAudits = array_slice($seoAudits, 0, 500);
         app_write_json_file(seo_audits_path(), $seoAudits);
+        $watch = seo_regression_watch_snapshot('automation_' . (string) $source, true);
+        $summary['seo']['regressions'] = (int) (($watch['run']['summary']['regression'] ?? 0));
+        $summary['seo']['regression_run_id'] = (string) ($watch['run']['run_id'] ?? '');
     }
 
     $runs = app_read_json_file(automation_runs_path(), []);
@@ -6550,7 +6553,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.29-seo-regression-watch',
+        'phase' => '2.30-seo-regression-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9324,10 +9327,12 @@ if ($action === 'seo.audit.run') {
     array_unshift($rows, $audit);
     $rows = array_slice($rows, 0, 500);
     app_write_json_file(seo_audits_path(), $rows);
+    $watch = seo_regression_watch_snapshot('manual_audit', true);
     audit_event('seo', 'audit.run', ['project_id' => (string) $project['project_id'], 'audit_id' => (string) $audit['audit_id']]);
     out_json([
         'ok' => true,
         'audit' => $audit,
+        'regression_watch' => $watch['run'],
     ]);
 }
 
