@@ -355,10 +355,12 @@
       if (schedulerGateSummaryView) {
         const summary = data && data.release_gate_watch_summary ? data.release_gate_watch_summary : {};
         const sustainedState = data && data.release_gate_sustained_state ? data.release_gate_sustained_state : {};
+        const sustainedDigest = formatSustainedStateDigest(sustainedState);
         schedulerGateSummaryView.textContent = JSON.stringify({
           ok: true,
           release_gate_watch_summary: summary,
           release_gate_sustained_state: sustainedState,
+          release_gate_sustained_digest: sustainedDigest,
         }, null, 2);
       }
     } catch (err) {
@@ -514,6 +516,25 @@
   }
 
   function formatReleaseGateRunDigest(summary, filters) {
+    return formatReleaseGateRunDigestWithSustained(summary, filters, {});
+  }
+
+  function formatSustainedStateDigest(sustainedState) {
+    const s = sustainedState && typeof sustainedState === "object" ? sustainedState : {};
+    const active = Number(s.active || 0) === 1;
+    const ratioValue = Number(s.recent_ratio_percent || 0);
+    const ratio = Number.isFinite(ratioValue) ? Math.round(ratioValue * 10) / 10 : 0;
+    const windowRuns = Number(s.recent_window_runs || 0);
+    const changedAt = s.last_changed_at ? String(s.last_changed_at) : "n/a";
+    const alertAt = s.last_alert_at ? String(s.last_alert_at) : "n/a";
+    return "state=" + (active ? "active" : "clear")
+      + ", ratio=" + String(ratio) + "%"
+      + ", window_runs=" + String(windowRuns)
+      + ", last_changed_at=" + changedAt
+      + ", last_alert_at=" + alertAt;
+  }
+
+  function formatReleaseGateRunDigestWithSustained(summary, filters, sustainedState) {
     const s = summary && typeof summary === "object" ? summary : {};
     const f = filters && typeof filters === "object" ? filters : {};
     const totalRuns = Number(s.total_runs || 0);
@@ -542,6 +563,7 @@
     lines.push("Blocked share: baseline_match=" + String(baselineMatchShare) + "%"
       + ", baseline_check=" + String(baselineCheckShare) + "%"
       + ", signoff_watch=" + String(signoffShare) + "%");
+    lines.push("Sustained blocked trend: " + formatSustainedStateDigest(sustainedState));
     if (topFailedEntries.length > 0) {
       lines.push("Top failed items:");
       topFailedEntries.forEach(function (entry) {
@@ -561,10 +583,16 @@
       releaseGateRunsView.textContent = JSON.stringify(data, null, 2);
       if (releaseGateRunSummaryView) {
         const summary = data && data.summary ? data.summary : {};
+        const sustainedState = data && data.sustained_state ? data.sustained_state : {};
         const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
-        releaseGateRunSummaryView.textContent = JSON.stringify({ ok: true, applied_filters: appliedFilters, summary: summary }, null, 2);
+        releaseGateRunSummaryView.textContent = JSON.stringify({
+          ok: true,
+          applied_filters: appliedFilters,
+          summary: summary,
+          sustained_state: sustainedState,
+        }, null, 2);
         if (releaseGateRunDigestView) {
-          releaseGateRunDigestView.textContent = formatReleaseGateRunDigest(summary, appliedFilters);
+          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, appliedFilters, sustainedState);
         }
       }
     } catch (err) {

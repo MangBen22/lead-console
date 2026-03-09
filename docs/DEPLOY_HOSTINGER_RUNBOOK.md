@@ -103,6 +103,7 @@
 50. Use source presets (`Scheduler Blocked`, `Manual Blocked`) to quickly split cron-driven issues from operator-triggered checks.
 51. Monitor `sustained_blocked_active` and recent blocked ratio in gate watch telemetry to detect prolonged release blocking conditions.
 52. Check scheduler status `release_gate_sustained_state` (`active`, `recent_ratio_percent`, `recent_window_runs`) to confirm sustained blocking trend state during unattended runs.
+53. Use `Download Gate Runs` exports and Gate Runs digest to review `sustained_state` alongside blocker analytics during escalation or launch review.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

@@ -3222,7 +3222,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.76-release-gate-sustained-state-telemetry',
+        'phase' => '1.77-release-gate-sustained-export-digest',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4550,7 +4550,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.76-release-gate-sustained-state-telemetry',
+        'phase' => '1.77-release-gate-sustained-export-digest',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4812,6 +4812,14 @@ if ($action === 'deployment.release.gate.runs.export') {
     }
     $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
     $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    $sustainedState = [
+        'active' => !empty($state['sustained_blocked_active']) ? 1 : 0,
+        'recent_ratio_percent' => isset($state['sustained_blocked_recent_ratio_percent']) ? (float) $state['sustained_blocked_recent_ratio_percent'] : 0.0,
+        'recent_window_runs' => isset($state['sustained_blocked_recent_window_runs']) ? (int) $state['sustained_blocked_recent_window_runs'] : 0,
+        'last_changed_at' => isset($state['sustained_blocked_last_changed_at']) ? (string) $state['sustained_blocked_last_changed_at'] : '',
+        'last_alert_at' => isset($state['sustained_blocked_last_alert_at']) ? (string) $state['sustained_blocked_last_alert_at'] : '',
+    ];
     $summary = deployment_release_gate_runs_summary($items);
     out_json([
         'ok' => true,
@@ -4822,6 +4830,8 @@ if ($action === 'deployment.release.gate.runs.export') {
         'total_count' => (int) ($filter['total_count'] ?? count($runs)),
         'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'summary' => $summary,
+        'state' => is_array($state) ? $state : [],
+        'sustained_state' => $sustainedState,
         'items' => $items,
         'exported_at' => gmdate('c'),
     ]);
