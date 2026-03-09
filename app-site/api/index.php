@@ -1851,6 +1851,10 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     if (!in_array($statusChangeFilter, ['all', 'changed', 'stable'], true)) {
         $statusChangeFilter = 'all';
     }
+    $transitionToFilter = strtolower(trim((string) ($query['transition_to'] ?? 'all')));
+    if (!in_array($transitionToFilter, ['all', 'to_blocked', 'to_allowed'], true)) {
+        $transitionToFilter = 'all';
+    }
     $sourceGroupFilter = strtolower(trim((string) ($query['source_group'] ?? 'all')));
     if (!in_array($sourceGroupFilter, ['all', 'scheduler', 'manual'], true)) {
         $sourceGroupFilter = 'all';
@@ -1904,6 +1908,12 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         if ($statusChangeFilter === 'stable' && $statusChanged !== 0) {
             continue;
         }
+        if ($transitionToFilter === 'to_blocked' && !($statusChanged === 1 && $allowed === 0)) {
+            continue;
+        }
+        if ($transitionToFilter === 'to_allowed' && !($statusChanged === 1 && $allowed === 1)) {
+            continue;
+        }
         $sourceValue = strtolower(trim((string) ($row['source'] ?? '')));
         $isScheduler = (strpos($sourceValue, 'scheduler_') === 0);
         if ($sourceGroupFilter === 'scheduler' && !$isScheduler) {
@@ -1955,6 +1965,7 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'sustained' => $sustainedFilter,
             'sustained_alert' => $sustainedAlertFilter,
             'status_change' => $statusChangeFilter,
+            'transition_to' => $transitionToFilter,
             'source_group' => $sourceGroupFilter,
             'source' => $sourceFilter,
             'failed_item' => $failedItemFilterRaw,
@@ -3404,7 +3415,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.89-release-gate-recent-ratio-filter',
+        'phase' => '1.90-release-gate-transition-direction-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4732,7 +4743,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.89-release-gate-recent-ratio-filter',
+        'phase' => '1.90-release-gate-transition-direction-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

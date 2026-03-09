@@ -123,6 +123,7 @@
   const releaseGateRunsSustainedFilter = document.getElementById("releaseGateRunsSustainedFilter");
   const releaseGateRunsSustainedAlertFilter = document.getElementById("releaseGateRunsSustainedAlertFilter");
   const releaseGateRunsStatusChangeFilter = document.getElementById("releaseGateRunsStatusChangeFilter");
+  const releaseGateRunsTransitionToFilter = document.getElementById("releaseGateRunsTransitionToFilter");
   const releaseGateRunsSourceGroupFilter = document.getElementById("releaseGateRunsSourceGroupFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
@@ -520,6 +521,9 @@
     const statusChange = releaseGateRunsStatusChangeFilter && releaseGateRunsStatusChangeFilter.value
       ? releaseGateRunsStatusChangeFilter.value
       : "all";
+    const transitionTo = releaseGateRunsTransitionToFilter && releaseGateRunsTransitionToFilter.value
+      ? releaseGateRunsTransitionToFilter.value
+      : "all";
     const sourceGroup = releaseGateRunsSourceGroupFilter && releaseGateRunsSourceGroupFilter.value
       ? releaseGateRunsSourceGroupFilter.value
       : "all";
@@ -554,6 +558,7 @@
       sustained: sustained,
       sustained_alert: sustainedAlert,
       status_change: statusChange,
+      transition_to: transitionTo,
       source_group: sourceGroup,
       source: source,
       failed_item: failedItem,
@@ -638,6 +643,7 @@
       + ", sustained=" + String(f.sustained || "all")
       + ", sustained_alert=" + String(f.sustained_alert || "all")
       + ", status_change=" + String(f.status_change || "all")
+      + ", transition_to=" + String(f.transition_to || "all")
       + ", source_group=" + String(f.source_group || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
@@ -760,6 +766,9 @@
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "all";
     }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
+    }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";
     }
@@ -821,6 +830,10 @@
         const statusChange = ["all", "changed", "stable"].includes(stored.status_change) ? stored.status_change : "all";
         releaseGateRunsStatusChangeFilter.value = statusChange;
       }
+      if (releaseGateRunsTransitionToFilter && typeof stored.transition_to === "string") {
+        const transitionTo = ["all", "to_blocked", "to_allowed"].includes(stored.transition_to) ? stored.transition_to : "all";
+        releaseGateRunsTransitionToFilter.value = transitionTo;
+      }
       if (releaseGateRunsSourceGroupFilter && typeof stored.source_group === "string") {
         const sourceGroup = ["all", "scheduler", "manual"].includes(stored.source_group) ? stored.source_group : "all";
         releaseGateRunsSourceGroupFilter.value = sourceGroup;
@@ -870,6 +883,9 @@
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "all";
     }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
+    }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";
     }
@@ -912,6 +928,9 @@
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "all";
     }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
+    }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";
     }
@@ -950,6 +969,9 @@
     }
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "all";
+    }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
     }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";
@@ -996,6 +1018,9 @@
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "all";
     }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
+    }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";
     }
@@ -1028,6 +1053,9 @@
   function applyReleaseGateRunsStatusChangedPreset() {
     if (releaseGateRunsStatusChangeFilter) {
       releaseGateRunsStatusChangeFilter.value = "changed";
+    }
+    if (releaseGateRunsTransitionToFilter) {
+      releaseGateRunsTransitionToFilter.value = "all";
     }
     if (releaseGateRunsSourceGroupFilter) {
       releaseGateRunsSourceGroupFilter.value = "all";

@@ -577,6 +577,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                             <option value="stable">stable</option>
                         </select>
                     </label>
+                    <label>Transition to filter
+                        <select id="releaseGateRunsTransitionToFilter">
+                            <option value="all">all</option>
+                            <option value="to_blocked">to_blocked</option>
+                            <option value="to_allowed">to_allowed</option>
+                        </select>
+                    </label>
                     <label>Source group filter
                         <select id="releaseGateRunsSourceGroupFilter">
                             <option value="all">all</option>
