@@ -354,7 +354,12 @@
       schedulerStatusView.textContent = JSON.stringify(data, null, 2);
       if (schedulerGateSummaryView) {
         const summary = data && data.release_gate_watch_summary ? data.release_gate_watch_summary : {};
-        schedulerGateSummaryView.textContent = JSON.stringify({ ok: true, release_gate_watch_summary: summary }, null, 2);
+        const sustainedState = data && data.release_gate_sustained_state ? data.release_gate_sustained_state : {};
+        schedulerGateSummaryView.textContent = JSON.stringify({
+          ok: true,
+          release_gate_watch_summary: summary,
+          release_gate_sustained_state: sustainedState,
+        }, null, 2);
       }
     } catch (err) {
       schedulerStatusView.textContent = "Failed to load scheduler status.";

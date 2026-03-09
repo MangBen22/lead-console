@@ -3222,7 +3222,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.75-release-gate-sustained-blocked-alert',
+        'phase' => '1.76-release-gate-sustained-state-telemetry',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4550,7 +4550,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.75-release-gate-sustained-blocked-alert',
+        'phase' => '1.76-release-gate-sustained-state-telemetry',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4782,6 +4782,13 @@ if ($action === 'deployment.release.gate.runs') {
     $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
     $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
     $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    $sustainedState = [
+        'active' => !empty($state['sustained_blocked_active']) ? 1 : 0,
+        'recent_ratio_percent' => isset($state['sustained_blocked_recent_ratio_percent']) ? (float) $state['sustained_blocked_recent_ratio_percent'] : 0.0,
+        'recent_window_runs' => isset($state['sustained_blocked_recent_window_runs']) ? (int) $state['sustained_blocked_recent_window_runs'] : 0,
+        'last_changed_at' => isset($state['sustained_blocked_last_changed_at']) ? (string) $state['sustained_blocked_last_changed_at'] : '',
+        'last_alert_at' => isset($state['sustained_blocked_last_alert_at']) ? (string) $state['sustained_blocked_last_alert_at'] : '',
+    ];
     $summary = deployment_release_gate_runs_summary($items);
     out_json([
         'ok' => true,
@@ -4793,6 +4800,7 @@ if ($action === 'deployment.release.gate.runs') {
         'summary' => $summary,
         'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'state' => is_array($state) ? $state : [],
+        'sustained_state' => $sustainedState,
         'time' => gmdate('c'),
     ]);
 }
@@ -4833,11 +4841,19 @@ if ($action === 'deployment.release.gate.blockers.report') {
     if (!is_array($state)) {
         $state = [];
     }
+    $sustainedState = [
+        'active' => !empty($state['sustained_blocked_active']) ? 1 : 0,
+        'recent_ratio_percent' => isset($state['sustained_blocked_recent_ratio_percent']) ? (float) $state['sustained_blocked_recent_ratio_percent'] : 0.0,
+        'recent_window_runs' => isset($state['sustained_blocked_recent_window_runs']) ? (int) $state['sustained_blocked_recent_window_runs'] : 0,
+        'last_changed_at' => isset($state['sustained_blocked_last_changed_at']) ? (string) $state['sustained_blocked_last_changed_at'] : '',
+        'last_alert_at' => isset($state['sustained_blocked_last_alert_at']) ? (string) $state['sustained_blocked_last_alert_at'] : '',
+    ];
     $report = [
         'report_id' => 'release_gate_blockers_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
         'release_gate' => $gate,
         'release_gate_state' => $state,
+        'release_gate_sustained_state' => $sustainedState,
         'runs_summary' => $summary,
         'runs_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'runs_count' => count($items),
@@ -7272,6 +7288,13 @@ if ($action === 'automation.scheduler.status') {
     $gateWatchState = app_read_json_file(deployment_release_gate_state_path(), []);
     $gateWatchRuns = app_read_json_file(deployment_release_gate_runs_path(), []);
     $gateWatchSummary = deployment_release_gate_runs_summary($gateWatchRuns);
+    $gateWatchSustainedState = [
+        'active' => !empty($gateWatchState['sustained_blocked_active']) ? 1 : 0,
+        'recent_ratio_percent' => isset($gateWatchState['sustained_blocked_recent_ratio_percent']) ? (float) $gateWatchState['sustained_blocked_recent_ratio_percent'] : 0.0,
+        'recent_window_runs' => isset($gateWatchState['sustained_blocked_recent_window_runs']) ? (int) $gateWatchState['sustained_blocked_recent_window_runs'] : 0,
+        'last_changed_at' => isset($gateWatchState['sustained_blocked_last_changed_at']) ? (string) $gateWatchState['sustained_blocked_last_changed_at'] : '',
+        'last_alert_at' => isset($gateWatchState['sustained_blocked_last_alert_at']) ? (string) $gateWatchState['sustained_blocked_last_alert_at'] : '',
+    ];
     $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsCheckState = app_read_json_file(deployment_watchdogs_state_path(), []);
@@ -7301,6 +7324,7 @@ if ($action === 'automation.scheduler.status') {
         'modules' => $settings['modules'],
         'release_gate_watch_state' => is_array($gateWatchState) ? $gateWatchState : [],
         'release_gate_watch_summary' => $gateWatchSummary,
+        'release_gate_sustained_state' => $gateWatchSustainedState,
         'signoff_integrity_watch_state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
         'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'watchdogs_check_state' => is_array($watchdogsCheckState) ? $watchdogsCheckState : [],
