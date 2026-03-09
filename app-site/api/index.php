@@ -1734,6 +1734,31 @@ function deployment_release_gate_sustained_transition_limit_from_query($query, $
     return max(1, min(50, $limit));
 }
 
+function deployment_release_gate_quick_digest_snapshot($count, $summary, $sustainedState, $sustainedTimeline)
+{
+    if (!is_array($summary)) {
+        $summary = [];
+    }
+    if (!is_array($sustainedState)) {
+        $sustainedState = [];
+    }
+    if (!is_array($sustainedTimeline)) {
+        $sustainedTimeline = [];
+    }
+    $blockedRatio = isset($summary['blocked_ratio_percent']) ? (float) $summary['blocked_ratio_percent'] : 0.0;
+    $statusChangedRatio = isset($summary['status_changed_ratio_percent']) ? (float) $summary['status_changed_ratio_percent'] : 0.0;
+    $sustainedActive = !empty($sustainedState['active']) ? 1 : 0;
+    $sustainedRecentRatio = isset($sustainedState['recent_ratio_percent']) ? (float) $sustainedState['recent_ratio_percent'] : 0.0;
+    $lines = [];
+    $lines[] = 'count=' . (int) $count
+        . ', blocked_ratio=' . $blockedRatio . '%'
+        . ', status_changed_ratio=' . $statusChangedRatio . '%';
+    $lines[] = 'sustained=' . ($sustainedActive === 1 ? 'active' : 'clear')
+        . ', recent_ratio=' . $sustainedRecentRatio . '%'
+        . ', transition_count=' . (int) ($sustainedTimeline['transition_count'] ?? 0);
+    return implode("\n", $lines);
+}
+
 function deployment_release_gate_runs_summary($runs)
 {
     if (!is_array($runs)) {
@@ -3472,7 +3497,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.01-release-gate-transition-presets',
+        'phase' => '2.02-release-gate-scheduler-quickstats',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4800,7 +4825,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.01-release-gate-transition-presets',
+        'phase' => '2.02-release-gate-scheduler-quickstats',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5147,18 +5172,7 @@ if ($action === 'deployment.release.gate.runs.quickstats') {
     $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
     $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 12);
     $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
-    $blockedRatio = isset($summary['blocked_ratio_percent']) ? (float) $summary['blocked_ratio_percent'] : 0.0;
-    $statusChangedRatio = isset($summary['status_changed_ratio_percent']) ? (float) $summary['status_changed_ratio_percent'] : 0.0;
-    $sustainedActive = !empty($sustainedState['active']) ? 1 : 0;
-    $sustainedRecentRatio = isset($sustainedState['recent_ratio_percent']) ? (float) $sustainedState['recent_ratio_percent'] : 0.0;
-    $quickDigestLines = [];
-    $quickDigestLines[] = 'count=' . count($items)
-        . ', blocked_ratio=' . $blockedRatio . '%'
-        . ', status_changed_ratio=' . $statusChangedRatio . '%';
-    $quickDigestLines[] = 'sustained=' . ($sustainedActive === 1 ? 'active' : 'clear')
-        . ', recent_ratio=' . $sustainedRecentRatio . '%'
-        . ', transition_count=' . (int) ($sustainedTimeline['transition_count'] ?? 0);
-    $quickDigest = implode("\n", $quickDigestLines);
+    $quickDigest = deployment_release_gate_quick_digest_snapshot(count($items), $summary, $sustainedState, $sustainedTimeline);
     out_json([
         'ok' => true,
         'count' => count($items),
@@ -7663,6 +7677,14 @@ if ($action === 'automation.scheduler.status') {
     $gateWatchSummary = deployment_release_gate_runs_summary($gateWatchRuns);
     $gateWatchSustainedState = deployment_release_gate_sustained_state_snapshot($gateWatchState);
     $gateWatchSustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($gateWatchRuns, 12);
+    $gateWatchRunCount = is_array($gateWatchRuns) ? count($gateWatchRuns) : 0;
+    $gateWatchQuickstats = [
+        'count' => $gateWatchRunCount,
+        'summary' => $gateWatchSummary,
+        'sustained_state' => $gateWatchSustainedState,
+        'sustained_timeline' => $gateWatchSustainedTimeline,
+        'quick_digest' => deployment_release_gate_quick_digest_snapshot($gateWatchRunCount, $gateWatchSummary, $gateWatchSustainedState, $gateWatchSustainedTimeline),
+    ];
     $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsCheckState = app_read_json_file(deployment_watchdogs_state_path(), []);
@@ -7694,6 +7716,7 @@ if ($action === 'automation.scheduler.status') {
         'release_gate_watch_summary' => $gateWatchSummary,
         'release_gate_sustained_state' => $gateWatchSustainedState,
         'release_gate_sustained_timeline' => $gateWatchSustainedTimeline,
+        'release_gate_quickstats' => $gateWatchQuickstats,
         'signoff_integrity_watch_state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
         'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'watchdogs_check_state' => is_array($watchdogsCheckState) ? $watchdogsCheckState : [],

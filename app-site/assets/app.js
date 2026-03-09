@@ -382,6 +382,7 @@
         const summary = data && data.release_gate_watch_summary ? data.release_gate_watch_summary : {};
         const sustainedState = data && data.release_gate_sustained_state ? data.release_gate_sustained_state : {};
         const sustainedTimeline = data && data.release_gate_sustained_timeline ? data.release_gate_sustained_timeline : {};
+        const quickstats = data && data.release_gate_quickstats ? data.release_gate_quickstats : {};
         const sustainedDigest = formatSustainedStateDigest(sustainedState);
         const sustainedTimelineDigest = formatSustainedTimelineDigest(sustainedTimeline);
         schedulerGateSummaryView.textContent = JSON.stringify({
@@ -389,6 +390,7 @@
           release_gate_watch_summary: summary,
           release_gate_sustained_state: sustainedState,
           release_gate_sustained_timeline: sustainedTimeline,
+          release_gate_quickstats: quickstats,
           release_gate_sustained_digest: sustainedDigest,
           release_gate_sustained_timeline_digest: sustainedTimelineDigest,
         }, null, 2);
