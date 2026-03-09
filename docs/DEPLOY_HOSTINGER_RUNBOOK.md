@@ -113,6 +113,7 @@
 60. Use Gate runs `status_change` filter to separate transition runs (`changed`) from stable-state runs (`stable`) during troubleshooting.
 61. Use presets `Sustained Alerted` and `Status Changed` for fast access to alert-driven windows and gate flip events.
 62. Use Gate runs summary sustained counters/ratios (`sustained_active_runs`, `sustained_alert_sent_runs`, `status_changed_ratio_percent`) for quick severity scoring.
+63. Use `source_group` filter (`scheduler` / `manual`) to split cron-driven behavior from operator-triggered runs without typing exact sources.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
