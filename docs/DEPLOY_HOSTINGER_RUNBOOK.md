@@ -131,6 +131,7 @@
 78. Check scheduler status `release_gate_quickstats` to monitor gate health in unattended windows.
 79. Use `Severe Ratio` preset for quick focus on sustained-block windows with high recent blocked ratio.
 80. Use `Download Quickstats` to archive a filtered quickstats snapshot for incident and release notes.
+81. Use `deployment.release.gate.operations.snapshot` when you need quickstats + filter metadata in one response.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

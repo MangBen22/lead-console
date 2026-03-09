@@ -1786,6 +1786,85 @@ function deployment_release_gate_runs_quickstats_snapshot($query)
     ];
 }
 
+function deployment_release_gate_runs_meta_snapshot($query)
+{
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $metaQuery = is_array($query) ? $query : [];
+    $metaQuery['source'] = '';
+    $metaQuery['source_contains'] = '';
+    $metaQuery['failed_item'] = '';
+    $metaQuery['failed_item_mode'] = 'exact';
+    $metaQuery['limit'] = 400;
+    $filter = deployment_release_gate_runs_apply_filters($runs, $metaQuery);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+
+    $sourceCounts = [];
+    $failedCounts = [];
+    $sourceGroupCounts = ['scheduler' => 0, 'manual' => 0];
+    $statusChangeCounts = ['changed' => 0, 'stable' => 0];
+    $transitionToCounts = ['to_blocked' => 0, 'to_allowed' => 0];
+    foreach ($items as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $sourceRaw = trim((string) ($row['source'] ?? ''));
+        $sourceLower = strtolower($sourceRaw);
+        $isScheduler = (strpos($sourceLower, 'scheduler_') === 0);
+        $sourceGroupCounts[$isScheduler ? 'scheduler' : 'manual']++;
+        $statusChanged = !empty($row['status_changed']) ? 1 : 0;
+        $statusChangeCounts[$statusChanged === 1 ? 'changed' : 'stable']++;
+        if ($statusChanged === 1) {
+            $allowed = !empty($row['allowed']) ? 1 : 0;
+            if ($allowed === 1) {
+                $transitionToCounts['to_allowed']++;
+            } else {
+                $transitionToCounts['to_blocked']++;
+            }
+        }
+        $source = $sourceRaw;
+        if ($sourceRaw === '') {
+            $source = '(unknown)';
+        }
+        if (!isset($sourceCounts[$source])) {
+            $sourceCounts[$source] = 0;
+        }
+        $sourceCounts[$source]++;
+
+        $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
+        foreach ($failedItems as $item) {
+            $key = trim((string) $item);
+            if ($key === '') {
+                continue;
+            }
+            if (!isset($failedCounts[$key])) {
+                $failedCounts[$key] = 0;
+            }
+            $failedCounts[$key]++;
+        }
+    }
+    if (!empty($sourceCounts)) {
+        arsort($sourceCounts);
+    }
+    if (!empty($failedCounts)) {
+        arsort($failedCounts);
+    }
+
+    return [
+        'items_considered' => count($items),
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'source_options' => array_slice($sourceCounts, 0, 50, true),
+        'failed_item_options' => array_slice($failedCounts, 0, 50, true),
+        'source_group_counts' => $sourceGroupCounts,
+        'status_change_counts' => $statusChangeCounts,
+        'transition_to_counts' => $transitionToCounts,
+        'source_group_options' => ['all', 'scheduler', 'manual'],
+        'failed_item_mode_options' => ['exact', 'contains'],
+    ];
+}
+
 function deployment_release_gate_runs_summary($runs)
 {
     if (!is_array($runs)) {
@@ -3524,7 +3603,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.04-release-gate-quickstats-export',
+        'phase' => '2.05-release-gate-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4852,7 +4931,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.04-release-gate-quickstats-export',
+        'phase' => '2.05-release-gate-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5106,81 +5185,18 @@ if ($action === 'deployment.release.gate.runs') {
 }
 
 if ($action === 'deployment.release.gate.runs.meta') {
-    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
-    if (!is_array($runs)) {
-        $runs = [];
-    }
-    $metaQuery = is_array($_GET) ? $_GET : [];
-    $metaQuery['source'] = '';
-    $metaQuery['source_contains'] = '';
-    $metaQuery['failed_item'] = '';
-    $metaQuery['failed_item_mode'] = 'exact';
-    $metaQuery['limit'] = 400;
-    $filter = deployment_release_gate_runs_apply_filters($runs, $metaQuery);
-    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
-
-    $sourceCounts = [];
-    $failedCounts = [];
-    $sourceGroupCounts = ['scheduler' => 0, 'manual' => 0];
-    $statusChangeCounts = ['changed' => 0, 'stable' => 0];
-    $transitionToCounts = ['to_blocked' => 0, 'to_allowed' => 0];
-    foreach ($items as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $sourceRaw = trim((string) ($row['source'] ?? ''));
-        $sourceLower = strtolower($sourceRaw);
-        $isScheduler = (strpos($sourceLower, 'scheduler_') === 0);
-        $sourceGroupCounts[$isScheduler ? 'scheduler' : 'manual']++;
-        $statusChanged = !empty($row['status_changed']) ? 1 : 0;
-        $statusChangeCounts[$statusChanged === 1 ? 'changed' : 'stable']++;
-        if ($statusChanged === 1) {
-            $allowed = !empty($row['allowed']) ? 1 : 0;
-            if ($allowed === 1) {
-                $transitionToCounts['to_allowed']++;
-            } else {
-                $transitionToCounts['to_blocked']++;
-            }
-        }
-        $source = $sourceRaw;
-        if ($sourceRaw === '') {
-            $source = '(unknown)';
-        }
-        if (!isset($sourceCounts[$source])) {
-            $sourceCounts[$source] = 0;
-        }
-        $sourceCounts[$source]++;
-
-        $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
-        foreach ($failedItems as $item) {
-            $key = trim((string) $item);
-            if ($key === '') {
-                continue;
-            }
-            if (!isset($failedCounts[$key])) {
-                $failedCounts[$key] = 0;
-            }
-            $failedCounts[$key]++;
-        }
-    }
-    if (!empty($sourceCounts)) {
-        arsort($sourceCounts);
-    }
-    if (!empty($failedCounts)) {
-        arsort($failedCounts);
-    }
-
+    $meta = deployment_release_gate_runs_meta_snapshot($_GET);
     out_json([
         'ok' => true,
-        'items_considered' => count($items),
-        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
-        'source_options' => array_slice($sourceCounts, 0, 50, true),
-        'failed_item_options' => array_slice($failedCounts, 0, 50, true),
-        'source_group_counts' => $sourceGroupCounts,
-        'status_change_counts' => $statusChangeCounts,
-        'transition_to_counts' => $transitionToCounts,
-        'source_group_options' => ['all', 'scheduler', 'manual'],
-        'failed_item_mode_options' => ['exact', 'contains'],
+        'items_considered' => (int) ($meta['items_considered'] ?? 0),
+        'applied_filters' => isset($meta['applied_filters']) && is_array($meta['applied_filters']) ? $meta['applied_filters'] : [],
+        'source_options' => isset($meta['source_options']) && is_array($meta['source_options']) ? $meta['source_options'] : [],
+        'failed_item_options' => isset($meta['failed_item_options']) && is_array($meta['failed_item_options']) ? $meta['failed_item_options'] : [],
+        'source_group_counts' => isset($meta['source_group_counts']) && is_array($meta['source_group_counts']) ? $meta['source_group_counts'] : [],
+        'status_change_counts' => isset($meta['status_change_counts']) && is_array($meta['status_change_counts']) ? $meta['status_change_counts'] : [],
+        'transition_to_counts' => isset($meta['transition_to_counts']) && is_array($meta['transition_to_counts']) ? $meta['transition_to_counts'] : [],
+        'source_group_options' => isset($meta['source_group_options']) && is_array($meta['source_group_options']) ? $meta['source_group_options'] : ['all', 'scheduler', 'manual'],
+        'failed_item_mode_options' => isset($meta['failed_item_mode_options']) && is_array($meta['failed_item_mode_options']) ? $meta['failed_item_mode_options'] : ['exact', 'contains'],
         'time' => gmdate('c'),
     ]);
 }
@@ -5207,6 +5223,17 @@ if ($action === 'deployment.release.gate.runs.quickstats.export') {
         'filename' => 'release-gate-quickstats-' . gmdate('Ymd-His') . '.json',
         'quickstats' => $quickstats,
         'exported_at' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.operations.snapshot') {
+    $quickstats = deployment_release_gate_runs_quickstats_snapshot($_GET);
+    $meta = deployment_release_gate_runs_meta_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'quickstats' => $quickstats,
+        'meta' => $meta,
+        'generated_at' => gmdate('c'),
     ]);
 }
 
