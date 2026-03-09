@@ -558,6 +558,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </label>
                     <label>Gate source filter<input id="releaseGateRunsSourceFilter" type="text" placeholder="Optional source (e.g. scheduler_tick_run)" /></label>
                     <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
+                    <label>Sustained transitions<input id="releaseGateRunsTransitionLimitInput" type="number" min="1" max="50" value="12" /></label>
                 </div>
                 <div class="actions">
                     <button id="applyReleaseGateRunsFilterBtn" type="button">Apply Gate Filters</button>

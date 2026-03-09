@@ -117,6 +117,7 @@
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
+  const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
@@ -504,12 +505,17 @@
     const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
       ? releaseGateRunsFailedItemFilter.value.trim()
       : "";
+    const transitionLimitRaw = releaseGateRunsTransitionLimitInput && releaseGateRunsTransitionLimitInput.value
+      ? Number(releaseGateRunsTransitionLimitInput.value)
+      : 12;
+    const transitionLimit = Number.isFinite(transitionLimitRaw) ? Math.max(1, Math.min(50, Math.round(transitionLimitRaw))) : 12;
     const filters = {
       limit: safeLimit,
       window: safeWindow,
       allowed: allowed,
       source: source,
       failed_item: failedItem,
+      transition_limit: transitionLimit,
     };
     try {
       if (window.localStorage) {
@@ -578,7 +584,8 @@
     lines.push("Release Gate Runs Digest");
     lines.push("Filters: limit=" + String(f.limit || 0) + ", window=" + String(f.window || 0) + ", allowed=" + String(f.allowed || "all")
       + ", source=" + String(f.source || "(any)")
-      + ", failed_item=" + String(f.failed_item || "(any)"));
+      + ", failed_item=" + String(f.failed_item || "(any)")
+      + ", transition_limit=" + String(f.transition_limit || 12));
     lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
     lines.push("Ratios: allowed=" + String(allowedRatio) + "%, blocked=" + String(blockedRatio) + "%");
     lines.push("Blocker runs: baseline_match=" + String(baselineMatchBlocked)
@@ -611,15 +618,18 @@
         const sustainedState = data && data.sustained_state ? data.sustained_state : {};
         const sustainedTimeline = data && data.sustained_timeline ? data.sustained_timeline : {};
         const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
+        const sustainedTransitionLimit = data && data.sustained_transition_limit ? Number(data.sustained_transition_limit) : Number(params.transition_limit || 12);
         releaseGateRunSummaryView.textContent = JSON.stringify({
           ok: true,
           applied_filters: appliedFilters,
           summary: summary,
           sustained_state: sustainedState,
           sustained_timeline: sustainedTimeline,
+          sustained_transition_limit: sustainedTransitionLimit,
         }, null, 2);
         if (releaseGateRunDigestView) {
-          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, appliedFilters, sustainedState, sustainedTimeline);
+          const digestFilters = Object.assign({}, appliedFilters, { transition_limit: sustainedTransitionLimit });
+          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, digestFilters, sustainedState, sustainedTimeline);
         }
       }
     } catch (err) {
@@ -668,6 +678,9 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
+    }
     try {
       if (window.localStorage) {
         window.localStorage.removeItem(releaseGateRunsFilterStorageKey);
@@ -702,6 +715,11 @@
       if (releaseGateRunsFailedItemFilter && typeof stored.failed_item === "string") {
         releaseGateRunsFailedItemFilter.value = stored.failed_item;
       }
+      if (releaseGateRunsTransitionLimitInput && stored.transition_limit !== undefined && stored.transition_limit !== null) {
+        const parsed = Number(stored.transition_limit);
+        const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(50, Math.round(parsed))) : 12;
+        releaseGateRunsTransitionLimitInput.value = String(safe);
+      }
     } catch (err) {}
   }
 
@@ -721,6 +739,9 @@
     if (releaseGateRunsWindowInput) {
       releaseGateRunsWindowInput.value = "0";
     }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
+    }
   }
 
   function applyReleaseGateRunsSourcePreset(source) {
@@ -738,6 +759,9 @@
     }
     if (releaseGateRunsWindowInput) {
       releaseGateRunsWindowInput.value = "0";
+    }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
     }
   }
 

@@ -1728,6 +1728,12 @@ function deployment_release_gate_sustained_timeline_snapshot($runs, $limit = 12)
     return $timeline;
 }
 
+function deployment_release_gate_sustained_transition_limit_from_query($query, $default = 12)
+{
+    $limit = isset($query['transition_limit']) ? (int) $query['transition_limit'] : (int) $default;
+    return max(1, min(50, $limit));
+}
+
 function deployment_release_gate_runs_summary($runs)
 {
     if (!is_array($runs)) {
@@ -3310,7 +3316,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.78-release-gate-sustained-transition-timeline',
+        'phase' => '1.79-release-gate-transition-limit',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4638,7 +4644,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.78-release-gate-sustained-transition-timeline',
+        'phase' => '1.79-release-gate-transition-limit',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4868,10 +4874,11 @@ if ($action === 'deployment.release.gate.runs') {
         $runs = [];
     }
     $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 12);
     $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
     $state = app_read_json_file(deployment_release_gate_state_path(), []);
     $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
-    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, 12);
+    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
     $summary = deployment_release_gate_runs_summary($items);
     out_json([
         'ok' => true,
@@ -4885,6 +4892,7 @@ if ($action === 'deployment.release.gate.runs') {
         'state' => is_array($state) ? $state : [],
         'sustained_state' => $sustainedState,
         'sustained_timeline' => $sustainedTimeline,
+        'sustained_transition_limit' => $transitionLimit,
         'time' => gmdate('c'),
     ]);
 }
@@ -4895,10 +4903,11 @@ if ($action === 'deployment.release.gate.runs.export') {
         $runs = [];
     }
     $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 20);
     $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
     $state = app_read_json_file(deployment_release_gate_state_path(), []);
     $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
-    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, 20);
+    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
     $summary = deployment_release_gate_runs_summary($items);
     out_json([
         'ok' => true,
@@ -4912,6 +4921,7 @@ if ($action === 'deployment.release.gate.runs.export') {
         'state' => is_array($state) ? $state : [],
         'sustained_state' => $sustainedState,
         'sustained_timeline' => $sustainedTimeline,
+        'sustained_transition_limit' => $transitionLimit,
         'items' => $items,
         'exported_at' => gmdate('c'),
     ]);
@@ -4923,6 +4933,7 @@ if ($action === 'deployment.release.gate.blockers.report') {
         $runs = [];
     }
     $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 20);
     $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
     $summary = deployment_release_gate_runs_summary($items);
     $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
@@ -4932,7 +4943,7 @@ if ($action === 'deployment.release.gate.blockers.report') {
         $state = [];
     }
     $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
-    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, 20);
+    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
     $report = [
         'report_id' => 'release_gate_blockers_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
@@ -4940,6 +4951,7 @@ if ($action === 'deployment.release.gate.blockers.report') {
         'release_gate_state' => $state,
         'release_gate_sustained_state' => $sustainedState,
         'release_gate_sustained_timeline' => $sustainedTimeline,
+        'release_gate_sustained_transition_limit' => $transitionLimit,
         'runs_summary' => $summary,
         'runs_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'runs_count' => count($items),
