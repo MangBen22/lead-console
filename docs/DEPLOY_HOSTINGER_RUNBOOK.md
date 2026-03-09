@@ -73,6 +73,7 @@
 21. Run `Run Watchdogs Check` and `Refresh Watchdogs Runs` to verify watchdog check execution is logged with current status.
 22. If watchdog checks remain `critical`, review `Incident Reports` for auto-created watchdog incidents and resolve root cause before cutover.
 23. Use `Refresh Watchdogs Incident` plus `Resolve/Reopen Watchdogs Incident` quick actions in Go-Live after remediation, and include an operator note before actioning.
+24. Use `Refresh Watchdogs Incident Summary` to confirm watchdog incident counts and latest open state are back within expected levels.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

@@ -1583,6 +1583,51 @@ function deployment_find_latest_watchdogs_incident($statuses = [])
     return null;
 }
 
+function deployment_watchdogs_incident_summary_snapshot()
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    if (!is_array($rows)) {
+        $rows = [];
+    }
+    $counts = [
+        'open' => 0,
+        'reopened' => 0,
+        'resolved' => 0,
+        'unknown' => 0,
+    ];
+    $latest = null;
+    $latestOpen = null;
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $origin = strtolower(trim((string) ($row['incident_origin'] ?? '')));
+        if ($origin !== 'watchdogs_check') {
+            continue;
+        }
+        if ($latest === null) {
+            $latest = $row;
+        }
+        $status = strtolower(trim((string) ($row['incident_status'] ?? 'open')));
+        if (!isset($counts[$status])) {
+            $counts['unknown']++;
+        } else {
+            $counts[$status]++;
+        }
+        if ($latestOpen === null && in_array($status, ['open', 'reopened'], true)) {
+            $latestOpen = $row;
+        }
+    }
+    return [
+        'generated_at' => gmdate('c'),
+        'total' => $counts['open'] + $counts['reopened'] + $counts['resolved'] + $counts['unknown'],
+        'counts' => $counts,
+        'has_open' => ($counts['open'] + $counts['reopened']) > 0 ? 1 : 0,
+        'latest_incident' => $latest,
+        'latest_open_incident' => $latestOpen,
+    ];
+}
+
 function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $src = trim((string) $source);
@@ -2495,7 +2540,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.46-watchdogs-incident-action-notes',
+        'phase' => '1.47-watchdogs-incident-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3812,7 +3857,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.46-watchdogs-incident-action-notes',
+        'phase' => '1.47-watchdogs-incident-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4095,6 +4140,7 @@ if ($action === 'deployment.watchdogs.incident.open') {
         'ok' => true,
         'has_open_incident' => is_array($open),
         'incident' => is_array($open) ? $open : null,
+        'summary' => deployment_watchdogs_incident_summary_snapshot(),
         'time' => gmdate('c'),
     ], is_array($open) ? 200 : 404);
 }
@@ -4105,8 +4151,18 @@ if ($action === 'deployment.watchdogs.incident.latest') {
         'ok' => true,
         'has_watchdogs_incident' => is_array($latest),
         'incident' => is_array($latest) ? $latest : null,
+        'summary' => deployment_watchdogs_incident_summary_snapshot(),
         'time' => gmdate('c'),
     ], is_array($latest) ? 200 : 404);
+}
+
+if ($action === 'deployment.watchdogs.incident.summary') {
+    $summary = deployment_watchdogs_incident_summary_snapshot();
+    out_json([
+        'ok' => true,
+        'summary' => $summary,
+        'time' => gmdate('c'),
+    ]);
 }
 
 if ($action === 'deployment.watchdogs.incident.resolve') {
@@ -4144,6 +4200,7 @@ if ($action === 'deployment.watchdogs.incident.resolve') {
         'ok' => true,
         'incident' => $updated,
         'summary' => deployment_incident_summary_snapshot(),
+        'watchdogs_summary' => deployment_watchdogs_incident_summary_snapshot(),
         'time' => gmdate('c'),
     ]);
 }
@@ -4192,6 +4249,7 @@ if ($action === 'deployment.watchdogs.incident.reopen') {
         'ok' => true,
         'incident' => $updated,
         'summary' => deployment_incident_summary_snapshot(),
+        'watchdogs_summary' => deployment_watchdogs_incident_summary_snapshot(),
         'time' => gmdate('c'),
     ]);
 }

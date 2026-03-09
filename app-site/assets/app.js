@@ -31,6 +31,7 @@
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
   const refreshWatchdogsIncidentBtn = document.getElementById("refreshWatchdogsIncidentBtn");
+  const refreshWatchdogsIncidentSummaryBtn = document.getElementById("refreshWatchdogsIncidentSummaryBtn");
   const resolveWatchdogsIncidentBtn = document.getElementById("resolveWatchdogsIncidentBtn");
   const reopenWatchdogsIncidentBtn = document.getElementById("reopenWatchdogsIncidentBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
@@ -92,6 +93,7 @@
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
   const watchdogsIncidentView = document.getElementById("watchdogsIncidentView");
+  const watchdogsIncidentSummaryView = document.getElementById("watchdogsIncidentSummaryView");
   const watchdogsIncidentNoteInput = document.getElementById("watchdogsIncidentNoteInput");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
@@ -470,6 +472,16 @@
     }
   }
 
+  async function loadWatchdogsIncidentSummary() {
+    if (!watchdogsIncidentSummaryView) return;
+    try {
+      const data = await apiGet("deployment.watchdogs.incident.summary");
+      watchdogsIncidentSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      watchdogsIncidentSummaryView.textContent = "Failed to load watchdogs incident summary.";
+    }
+  }
+
   async function resolveWatchdogsIncident() {
     const note = watchdogsIncidentNoteInput && watchdogsIncidentNoteInput.value ? watchdogsIncidentNoteInput.value.trim() : "";
     const result = await apiPost("deployment.watchdogs.incident.resolve", { note: note });
@@ -482,6 +494,7 @@
     await loadIncidentSla();
     await loadWatchdogsRuns();
     await loadWatchdogsStatus();
+    await loadWatchdogsIncidentSummary();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -499,6 +512,7 @@
     await loadIncidentSla();
     await loadWatchdogsRuns();
     await loadWatchdogsStatus();
+    await loadWatchdogsIncidentSummary();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -519,6 +533,7 @@
     await loadWatchdogsStatus();
     await loadWatchdogsRuns();
     await loadWatchdogsOpenIncident();
+    await loadWatchdogsIncidentSummary();
     await loadSchedulerStatus();
     await loadNotifications();
     await loadAuditLog();
@@ -1078,6 +1093,7 @@
     await loadWatchdogsStatus();
     await loadWatchdogsRuns();
     await loadWatchdogsOpenIncident();
+    await loadWatchdogsIncidentSummary();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1467,6 +1483,7 @@
       await loadWatchdogsStatus();
       await loadWatchdogsRuns();
       await loadWatchdogsOpenIncident();
+      await loadWatchdogsIncidentSummary();
       await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
     });
@@ -1641,6 +1658,7 @@
       await loadWatchdogsStatus();
       await loadWatchdogsRuns();
       await loadWatchdogsOpenIncident();
+      await loadWatchdogsIncidentSummary();
     });
   }
 
@@ -1654,6 +1672,7 @@
     refreshWatchdogsRunsBtn.addEventListener("click", async function () {
       await loadWatchdogsRuns();
       await loadWatchdogsOpenIncident();
+      await loadWatchdogsIncidentSummary();
       await loadSchedulerStatus();
     });
   }
@@ -1663,6 +1682,15 @@
       await loadWatchdogsOpenIncident();
       await loadWatchdogsRuns();
       await loadWatchdogsStatus();
+      await loadWatchdogsIncidentSummary();
+    });
+  }
+
+  if (refreshWatchdogsIncidentSummaryBtn) {
+    refreshWatchdogsIncidentSummaryBtn.addEventListener("click", async function () {
+      await loadWatchdogsIncidentSummary();
+      await loadWatchdogsOpenIncident();
+      await loadWatchdogsRuns();
     });
   }
 
