@@ -23,6 +23,7 @@
   const runPreflightBtn = document.getElementById("runPreflightBtn");
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
+  const refreshReleaseGateBtn = document.getElementById("refreshReleaseGateBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -56,6 +57,8 @@
   const lockDeploymentGuardBtn = document.getElementById("lockDeploymentGuardBtn");
   const preflightView = document.getElementById("preflightView");
   const goLiveStatusView = document.getElementById("goLiveStatusView");
+  const releaseGateFreshnessInput = document.getElementById("releaseGateFreshnessInput");
+  const releaseGateView = document.getElementById("releaseGateView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -318,11 +321,29 @@
 
   async function loadGoLiveStatus() {
     if (!goLiveStatusView) return;
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
     try {
-      const data = await apiGet("deployment.go_live_status");
+      const data = await apiGetWithParams("deployment.go_live_status", { freshness_minutes: safeFreshness });
       goLiveStatusView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       goLiveStatusView.textContent = "Failed to load go-live status.";
+    }
+  }
+
+  async function loadReleaseGate() {
+    if (!releaseGateView) return;
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+    try {
+      const data = await apiGetWithParams("deployment.release.gate", { freshness_minutes: safeFreshness });
+      releaseGateView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseGateView.textContent = "Failed to load release gate.";
     }
   }
 
@@ -432,6 +453,7 @@
     }
     await loadCutoverReadiness();
     await loadSmokeHistory();
+    await loadReleaseGate();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -445,6 +467,7 @@
     }
     await loadCutoverReadiness();
     await loadSmokeHistory();
+    await loadReleaseGate();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -703,6 +726,7 @@
     await loadNotificationSettings();
     await loadAuditLog();
     await loadGoLiveStatus();
+    await loadReleaseGate();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1194,13 +1218,28 @@
   if (refreshGoLiveStatusBtn) {
     refreshGoLiveStatusBtn.addEventListener("click", async function () {
       await loadGoLiveStatus();
+      await loadReleaseGate();
+    });
+  }
+
+  if (refreshReleaseGateBtn) {
+    refreshReleaseGateBtn.addEventListener("click", async function () {
+      await loadReleaseGate();
+      await loadGoLiveStatus();
     });
   }
 
   if (generateReleaseCandidateBtn) {
     generateReleaseCandidateBtn.addEventListener("click", async function () {
       const note = releaseCandidateNote && releaseCandidateNote.value ? releaseCandidateNote.value.trim() : "";
-      const result = await apiPost("deployment.release.candidate", { note: note });
+      const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+        ? Number(releaseGateFreshnessInput.value)
+        : 30;
+      const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+      const result = await apiPost("deployment.release.candidate", {
+        note: note,
+        freshness_minutes: safeFreshness,
+      });
       if (releaseCandidateView) {
         releaseCandidateView.textContent = JSON.stringify(result, null, 2);
       }
@@ -1209,6 +1248,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadGoLiveStatus();
+      await loadReleaseGate();
       await loadDeploymentGuard();
       await loadArtifactManifest();
     });

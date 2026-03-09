@@ -55,6 +55,7 @@
 7. In dashboard `Hosting Cutover Toolkit -> Cutover Readiness`, record the public smoke result and confirm readiness state moves to `ready` (or shows exact blockers/warnings).
 8. Click `Run Full Smoke Suite` to record both public+auth smoke snapshots in one action.
 9. Click `Download Smoke History` and archive the JSON with deployment artifacts.
+10. In `Go-Live Status`, set release gate freshness window (recommended 30 minutes), click `Refresh Release Gate`, and confirm gate `allowed=true` before generating a release candidate.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

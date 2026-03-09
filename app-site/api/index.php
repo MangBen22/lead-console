@@ -1098,12 +1098,97 @@ function deployment_handoff_bundle_snapshot()
     ];
 }
 
-function deployment_release_candidate_snapshot($note = '')
+function deployment_release_gate_snapshot($freshnessMinutes = 30)
+{
+    $window = max(5, min(1440, (int) $freshnessMinutes));
+    $readiness = deployment_cutover_readiness_snapshot();
+    $history = deployment_smoke_history_snapshot();
+    $now = time();
+    $latestPublicPass = null;
+    $latestAuthPass = null;
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    foreach ($items as $row) {
+        if (!is_array($row) || empty($row['ok'])) {
+            continue;
+        }
+        $type = strtolower(trim((string) ($row['smoke_type'] ?? '')));
+        if ($type === 'public' && $latestPublicPass === null) {
+            $latestPublicPass = $row;
+        }
+        if ($type === 'auth' && $latestAuthPass === null) {
+            $latestAuthPass = $row;
+        }
+        if ($latestPublicPass !== null && $latestAuthPass !== null) {
+            break;
+        }
+    }
+    $publicAge = null;
+    $authAge = null;
+    if (is_array($latestPublicPass)) {
+        $ts = strtotime((string) ($latestPublicPass['created_at'] ?? ''));
+        if ($ts !== false) {
+            $publicAge = max(0, (int) floor(($now - $ts) / 60));
+        }
+    }
+    if (is_array($latestAuthPass)) {
+        $ts = strtotime((string) ($latestAuthPass['created_at'] ?? ''));
+        if ($ts !== false) {
+            $authAge = max(0, (int) floor(($now - $ts) / 60));
+        }
+    }
+
+    $checks = [];
+    $checks[] = [
+        'item' => 'readiness_ready',
+        'ok' => (string) ($readiness['status'] ?? 'review_required') === 'ready',
+        'message' => 'Readiness status: ' . (string) ($readiness['status'] ?? 'review_required'),
+    ];
+    $checks[] = [
+        'item' => 'public_smoke_pass_fresh',
+        'ok' => is_array($latestPublicPass) && $publicAge !== null && $publicAge <= $window,
+        'message' => is_array($latestPublicPass)
+            ? ('Latest passing public smoke age: ' . (int) $publicAge . ' minute(s).')
+            : 'No passing public smoke run found.',
+    ];
+    $checks[] = [
+        'item' => 'auth_smoke_pass_fresh',
+        'ok' => is_array($latestAuthPass) && $authAge !== null && $authAge <= $window,
+        'message' => is_array($latestAuthPass)
+            ? ('Latest passing auth smoke age: ' . (int) $authAge . ' minute(s).')
+            : 'No passing auth smoke run found.',
+    ];
+
+    $reasons = [];
+    foreach ($checks as $check) {
+        if (empty($check['ok'])) {
+            $reasons[] = (string) ($check['message'] ?? 'Release gate check failed.');
+        }
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'allowed' => empty($reasons),
+        'freshness_window_minutes' => $window,
+        'reasons' => $reasons,
+        'checks' => $checks,
+        'latest_public_pass' => $latestPublicPass,
+        'latest_auth_pass' => $latestAuthPass,
+        'latest_public_pass_age_minutes' => $publicAge,
+        'latest_auth_pass_age_minutes' => $authAge,
+        'readiness' => [
+            'status' => (string) ($readiness['status'] ?? 'review_required'),
+            'summary' => isset($readiness['summary']) && is_array($readiness['summary']) ? $readiness['summary'] : [],
+        ],
+    ];
+}
+
+function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = 30)
 {
     $bundle = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
+    $gate = deployment_release_gate_snapshot($freshnessMinutes);
 
-    $ready = ((string) ($bundle['status'] ?? 'review_required') === 'ready') && !empty($guardEval['allowed']);
+    $ready = ((string) ($bundle['status'] ?? 'review_required') === 'ready') && !empty($guardEval['allowed']) && !empty($gate['allowed']);
     $candidate = [
         'candidate_id' => 'release_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'created_at' => gmdate('c'),
@@ -1112,6 +1197,9 @@ function deployment_release_candidate_snapshot($note = '')
         'summary' => isset($bundle['summary']) && is_array($bundle['summary']) ? $bundle['summary'] : [],
         'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
         'guard_reasons' => $guardEval['reasons'],
+        'release_gate_allowed' => !empty($gate['allowed']) ? 1 : 0,
+        'release_gate_reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+        'release_gate_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
         'failed_environment_checklist' => isset($bundle['failed_environment_checklist']) && is_array($bundle['failed_environment_checklist']) ? $bundle['failed_environment_checklist'] : [],
         'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
     ];
@@ -1124,6 +1212,7 @@ function deployment_release_candidate_snapshot($note = '')
     return [
         'candidate' => $candidate,
         'bundle' => $bundle,
+        'release_gate' => $gate,
     ];
 }
 
@@ -2645,7 +2734,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.28-smoke-suite-and-history',
+        'phase' => '1.29-release-gate-freshness',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2736,7 +2825,12 @@ if ($action === 'deployment.handoff.bundle') {
 if ($action === 'deployment.go_live_status') {
     $bundle = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    $gate = deployment_release_gate_snapshot($freshness);
     $status = (string) ($bundle['status'] ?? 'review_required');
+    if (empty($gate['allowed'])) {
+        $status = 'blocked';
+    }
     $headline = $status === 'ready'
         ? 'Go-live checks passed. System is ready for controlled launch.'
         : 'Go-live checks need attention before launch.';
@@ -2746,10 +2840,21 @@ if ($action === 'deployment.go_live_status') {
         'headline' => $headline,
         'guard_allowed' => !empty($guardEval['allowed']),
         'guard_reasons' => $guardEval['reasons'],
+        'release_gate' => $gate,
         'summary' => $bundle['summary'],
         'failed_environment_checklist' => $bundle['failed_environment_checklist'],
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'deployment.release.gate') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    $gate = deployment_release_gate_snapshot($freshness);
+    out_json([
+        'ok' => true,
+        'gate' => $gate,
+        'time' => gmdate('c'),
+    ], !empty($gate['allowed']) ? 200 : 409);
 }
 
 if ($action === 'deployment.release.log') {
@@ -2826,9 +2931,11 @@ if ($action === 'deployment.release.candidate') {
         $data = [];
     }
     $note = trim((string) ($data['note'] ?? ''));
-    $snap = deployment_release_candidate_snapshot($note);
+    $freshness = isset($data['freshness_minutes']) ? (int) $data['freshness_minutes'] : 30;
+    $snap = deployment_release_candidate_snapshot($note, $freshness);
     $candidate = $snap['candidate'];
     $bundle = $snap['bundle'];
+    $gate = isset($snap['release_gate']) && is_array($snap['release_gate']) ? $snap['release_gate'] : [];
 
     if ((string) ($candidate['status'] ?? 'blocked') === 'ready') {
         push_notification('success', 'Release candidate ready: ' . (string) ($candidate['candidate_id'] ?? ''), [
@@ -2843,11 +2950,13 @@ if ($action === 'deployment.release.candidate') {
         'candidate_id' => (string) ($candidate['candidate_id'] ?? ''),
         'status' => (string) ($candidate['status'] ?? 'blocked'),
         'bundle_id' => (string) ($candidate['bundle_id'] ?? ''),
+        'release_gate_allowed' => !empty($gate['allowed']) ? 1 : 0,
     ]);
     out_json([
         'ok' => true,
         'candidate' => $candidate,
         'bundle' => $bundle,
+        'release_gate' => $gate,
     ], ((string) ($candidate['status'] ?? 'blocked') === 'ready') ? 200 : 409);
 }
 

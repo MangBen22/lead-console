@@ -521,10 +521,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>Go-Live Status</h2>
+                <label>Release gate freshness window (minutes)<input id="releaseGateFreshnessInput" type="number" min="5" max="1440" value="30" /></label>
                 <div class="actions">
                     <button id="refreshGoLiveStatusBtn" type="button">Refresh Go-Live Status</button>
+                    <button id="refreshReleaseGateBtn" type="button">Refresh Release Gate</button>
                 </div>
                 <pre id="goLiveStatusView">Loading...</pre>
+                <pre id="releaseGateView">Loading release gate...</pre>
             </section>
 
             <section class="api-status">
