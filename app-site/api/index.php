@@ -3472,7 +3472,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.96-release-gate-latest-run-pointers',
+        'phase' => '1.97-release-gate-quickstats-endpoint',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4800,7 +4800,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.96-release-gate-latest-run-pointers',
+        'phase' => '1.97-release-gate-quickstats-endpoint',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5109,6 +5109,32 @@ if ($action === 'deployment.release.gate.runs.meta') {
         'failed_item_options' => array_slice($failedCounts, 0, 50, true),
         'source_group_options' => ['all', 'scheduler', 'manual'],
         'failed_item_mode_options' => ['exact', 'contains'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.runs.quickstats') {
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $quickQuery = is_array($_GET) ? $_GET : [];
+    $quickQuery['limit'] = 400;
+    $filter = deployment_release_gate_runs_apply_filters($runs, $quickQuery);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+    $summary = deployment_release_gate_runs_summary($items);
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
+    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 12);
+    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
+    out_json([
+        'ok' => true,
+        'count' => count($items),
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'summary' => $summary,
+        'sustained_state' => $sustainedState,
+        'sustained_timeline' => $sustainedTimeline,
+        'sustained_transition_limit' => $transitionLimit,
         'time' => gmdate('c'),
     ]);
 }

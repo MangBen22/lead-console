@@ -31,6 +31,7 @@
   const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
   const refreshReleaseGateRunsMetaBtn = document.getElementById("refreshReleaseGateRunsMetaBtn");
+  const refreshReleaseGateQuickstatsBtn = document.getElementById("refreshReleaseGateQuickstatsBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
   const downloadReleaseGateBlockerReportBtn = document.getElementById("downloadReleaseGateBlockerReportBtn");
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
@@ -116,6 +117,7 @@
   const releaseGateSettingsView = document.getElementById("releaseGateSettingsView");
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
+  const releaseGateQuickstatsView = document.getElementById("releaseGateQuickstatsView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
@@ -753,6 +755,7 @@
         }, null, 2);
       }
       await loadReleaseGateRunsMeta(params);
+      await loadReleaseGateQuickstats(params);
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
       if (releaseGateRunSummaryView) {
@@ -767,6 +770,9 @@
       if (releaseGateRunsMetaView) {
         releaseGateRunsMetaView.textContent = "Failed to load gate filter metadata.";
       }
+      if (releaseGateQuickstatsView) {
+        releaseGateQuickstatsView.textContent = "Failed to load gate quickstats.";
+      }
     }
   }
 
@@ -778,6 +784,17 @@
       releaseGateRunsMetaView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       releaseGateRunsMetaView.textContent = "Failed to load gate filter metadata.";
+    }
+  }
+
+  async function loadReleaseGateQuickstats(existingParams) {
+    if (!releaseGateQuickstatsView) return;
+    const params = existingParams && typeof existingParams === "object" ? existingParams : collectReleaseGateRunsFilters();
+    try {
+      const data = await apiGetWithParams("deployment.release.gate.runs.quickstats", params);
+      releaseGateQuickstatsView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseGateQuickstatsView.textContent = "Failed to load gate quickstats.";
     }
   }
 
@@ -2654,6 +2671,12 @@
   if (refreshReleaseGateRunsMetaBtn) {
     refreshReleaseGateRunsMetaBtn.addEventListener("click", async function () {
       await loadReleaseGateRunsMeta();
+    });
+  }
+
+  if (refreshReleaseGateQuickstatsBtn) {
+    refreshReleaseGateQuickstatsBtn.addEventListener("click", async function () {
+      await loadReleaseGateQuickstats();
     });
   }
 

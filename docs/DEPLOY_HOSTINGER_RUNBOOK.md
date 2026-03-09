@@ -123,6 +123,7 @@
 70. Use `Refresh Gate Meta` to inspect top source and failed-item options before setting deep filters.
 71. Review source summary ratios (`scheduler_blocked_ratio_percent`, `manual_blocked_ratio_percent`) to compare cron vs manual blocker rates.
 72. Use summary pointers (`latest_allowed_run`, `latest_status_change_run`) for faster recovery/regression timeline reads.
+73. Use `Refresh Quickstats` for fast, filtered summary checks without reading the full gate runs payload.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
