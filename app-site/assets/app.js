@@ -224,6 +224,8 @@
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
+  const socialScheduleQueue = document.getElementById("socialScheduleQueue");
+  const socialScheduleForm = document.getElementById("socialScheduleForm");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
@@ -2179,6 +2181,16 @@
     }
   }
 
+  async function loadSocialScheduleQueue() {
+    if (!socialScheduleQueue) return;
+    try {
+      const data = await apiGet("social.schedule.list");
+      socialScheduleQueue.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialScheduleQueue.textContent = "Failed to load social schedule queue.";
+    }
+  }
+
   async function loadSocialPlatforms() {
     if (!socialPlatforms) return;
     try {
@@ -2286,6 +2298,7 @@
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadSocialConnectors();
+    await loadSocialScheduleQueue();
     await loadSocialSyncLog();
     await loadSocialRetryQueue();
     await loadWebopsMonitors();
@@ -2524,6 +2537,75 @@
         const result = await apiPost("social.connectors.test", { connector_id: id });
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+      });
+    }
+  }
+
+  if (socialScheduleForm) {
+    socialScheduleForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const saveScheduleBtn = document.getElementById("saveSocialScheduleBtn");
+    if (saveScheduleBtn) {
+      saveScheduleBtn.addEventListener("click", async function () {
+        const scheduleId = document.getElementById("socialScheduleId");
+        const title = document.getElementById("socialScheduleTitle");
+        const message = document.getElementById("socialScheduleMessage");
+        const url = document.getElementById("socialScheduleUrl");
+        const connectorIds = document.getElementById("socialScheduleConnectorIds");
+        const scheduledFor = document.getElementById("socialScheduleFor");
+        const payload = {
+          schedule_id: scheduleId && scheduleId.value ? scheduleId.value.trim() : "",
+          title: title ? title.value.trim() : "",
+          message: message ? message.value.trim() : "",
+          url: url ? url.value.trim() : "",
+          connector_ids: (connectorIds && connectorIds.value ? connectorIds.value.split(",") : []).map(function (value) {
+            return value.trim();
+          }).filter(Boolean),
+          scheduled_for: scheduledFor && scheduledFor.value ? new Date(scheduledFor.value).toISOString() : "",
+        };
+        const result = await apiPost("social.schedule.save", payload);
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialScheduleQueue();
+      });
+    }
+
+    const deleteScheduleBtn = document.getElementById("deleteSocialScheduleBtn");
+    if (deleteScheduleBtn) {
+      deleteScheduleBtn.addEventListener("click", async function () {
+        const scheduleId = document.getElementById("socialScheduleId");
+        const id = scheduleId && scheduleId.value ? scheduleId.value.trim() : "";
+        if (!id) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Enter Schedule ID to delete.";
+          }
+          return;
+        }
+        const result = await apiPost("social.schedule.delete", { schedule_id: id });
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialScheduleQueue();
+      });
+    }
+
+    const runScheduleBtn = document.getElementById("runSocialScheduleBtn");
+    if (runScheduleBtn) {
+      runScheduleBtn.addEventListener("click", async function () {
+        const result = await apiPost("social.schedule.run", {});
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialScheduleQueue();
+        await loadSocialSyncLog();
+        await loadSocialRetryQueue();
+        const socialData = await apiGet("social.summary");
+        const socialPanel = document.getElementById("modSocial");
+        if (socialPanel) {
+          socialPanel.textContent = JSON.stringify(socialData, null, 2);
         }
       });
     }

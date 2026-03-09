@@ -417,6 +417,40 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Schedule Queue</h2>
+                <pre id="socialScheduleQueue">Loading...</pre>
+                <form id="socialScheduleForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialScheduleId">Schedule ID (optional for update)</label>
+                        <input id="socialScheduleId" type="text" placeholder="social_schedule_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleTitle">Title</label>
+                        <input id="socialScheduleTitle" type="text" placeholder="Spotlight Post">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleMessage">Message</label>
+                        <textarea id="socialScheduleMessage" rows="4" placeholder="Write the scheduled social post..." required></textarea>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleUrl">URL</label>
+                        <input id="socialScheduleUrl" type="text" placeholder="https://example.com/post">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleConnectorIds">Connector IDs (comma, optional)</label>
+                        <input id="socialScheduleConnectorIds" type="text" placeholder="social_abc123,social_xyz789">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleFor">Schedule for</label>
+                        <input id="socialScheduleFor" type="datetime-local">
+                    </div>
+                    <button id="saveSocialScheduleBtn" type="button">Save Scheduled Post</button>
+                    <button id="deleteSocialScheduleBtn" type="button">Delete Scheduled Post</button>
+                    <button id="runSocialScheduleBtn" type="button">Run Due Scheduled Posts</button>
+                </form>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Push Pipeline</h2>
                 <div class="actions">
                     <button id="runSocialSyncBtn" type="button">Run Social Sync</button>
