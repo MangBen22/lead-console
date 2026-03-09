@@ -198,6 +198,7 @@
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   let lastNotificationToneKey = "";
+  const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -472,12 +473,18 @@
     const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
       ? releaseGateRunsFailedItemFilter.value.trim()
       : "";
-    return {
+    const filters = {
       limit: safeLimit,
       allowed: allowed,
       source: source,
       failed_item: failedItem,
     };
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(releaseGateRunsFilterStorageKey, JSON.stringify(filters));
+      }
+    } catch (err) {}
+    return filters;
   }
 
   async function loadReleaseGateRuns() {
@@ -519,6 +526,36 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    try {
+      if (window.localStorage) {
+        window.localStorage.removeItem(releaseGateRunsFilterStorageKey);
+      }
+    } catch (err) {}
+  }
+
+  function loadReleaseGateRunsFiltersFromStorage() {
+    try {
+      if (!window.localStorage) return;
+      const raw = window.localStorage.getItem(releaseGateRunsFilterStorageKey);
+      if (!raw) return;
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") return;
+      if (releaseGateRunsLimitInput && stored.limit !== undefined && stored.limit !== null) {
+        const parsed = Number(stored.limit);
+        const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(400, Math.round(parsed))) : 200;
+        releaseGateRunsLimitInput.value = String(safe);
+      }
+      if (releaseGateRunsAllowedFilter && typeof stored.allowed === "string") {
+        const allowed = ["all", "allowed", "blocked"].includes(stored.allowed) ? stored.allowed : "all";
+        releaseGateRunsAllowedFilter.value = allowed;
+      }
+      if (releaseGateRunsSourceFilter && typeof stored.source === "string") {
+        releaseGateRunsSourceFilter.value = stored.source;
+      }
+      if (releaseGateRunsFailedItemFilter && typeof stored.failed_item === "string") {
+        releaseGateRunsFailedItemFilter.value = stored.failed_item;
+      }
+    } catch (err) {}
   }
 
   async function loadWatchdogsStatus() {
@@ -1180,6 +1217,7 @@
     } catch (err) {}
   }
 
+  loadReleaseGateRunsFiltersFromStorage();
   loadStatus();
 
   modules.forEach(async function (entry) {
