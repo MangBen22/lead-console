@@ -1759,6 +1759,33 @@ function deployment_release_gate_quick_digest_snapshot($count, $summary, $sustai
     return implode("\n", $lines);
 }
 
+function deployment_release_gate_runs_quickstats_snapshot($query)
+{
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $quickQuery = is_array($query) ? $query : [];
+    $quickQuery['limit'] = 400;
+    $filter = deployment_release_gate_runs_apply_filters($runs, $quickQuery);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+    $summary = deployment_release_gate_runs_summary($items);
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
+    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($query, 12);
+    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
+    $quickDigest = deployment_release_gate_quick_digest_snapshot(count($items), $summary, $sustainedState, $sustainedTimeline);
+    return [
+        'count' => count($items),
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'summary' => $summary,
+        'sustained_state' => $sustainedState,
+        'sustained_timeline' => $sustainedTimeline,
+        'sustained_transition_limit' => $transitionLimit,
+        'quick_digest' => $quickDigest,
+    ];
+}
+
 function deployment_release_gate_runs_summary($runs)
 {
     if (!is_array($runs)) {
@@ -3497,7 +3524,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.03-release-gate-severe-ratio-preset',
+        'phase' => '2.04-release-gate-quickstats-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4825,7 +4852,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.03-release-gate-severe-ratio-preset',
+        'phase' => '2.04-release-gate-quickstats-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5159,30 +5186,27 @@ if ($action === 'deployment.release.gate.runs.meta') {
 }
 
 if ($action === 'deployment.release.gate.runs.quickstats') {
-    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
-    if (!is_array($runs)) {
-        $runs = [];
-    }
-    $quickQuery = is_array($_GET) ? $_GET : [];
-    $quickQuery['limit'] = 400;
-    $filter = deployment_release_gate_runs_apply_filters($runs, $quickQuery);
-    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
-    $summary = deployment_release_gate_runs_summary($items);
-    $state = app_read_json_file(deployment_release_gate_state_path(), []);
-    $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
-    $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 12);
-    $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
-    $quickDigest = deployment_release_gate_quick_digest_snapshot(count($items), $summary, $sustainedState, $sustainedTimeline);
+    $quickstats = deployment_release_gate_runs_quickstats_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($items),
-        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
-        'summary' => $summary,
-        'sustained_state' => $sustainedState,
-        'sustained_timeline' => $sustainedTimeline,
-        'sustained_transition_limit' => $transitionLimit,
-        'quick_digest' => $quickDigest,
+        'count' => (int) ($quickstats['count'] ?? 0),
+        'applied_filters' => isset($quickstats['applied_filters']) && is_array($quickstats['applied_filters']) ? $quickstats['applied_filters'] : [],
+        'summary' => isset($quickstats['summary']) && is_array($quickstats['summary']) ? $quickstats['summary'] : [],
+        'sustained_state' => isset($quickstats['sustained_state']) && is_array($quickstats['sustained_state']) ? $quickstats['sustained_state'] : [],
+        'sustained_timeline' => isset($quickstats['sustained_timeline']) && is_array($quickstats['sustained_timeline']) ? $quickstats['sustained_timeline'] : [],
+        'sustained_transition_limit' => isset($quickstats['sustained_transition_limit']) ? (int) $quickstats['sustained_transition_limit'] : 12,
+        'quick_digest' => (string) ($quickstats['quick_digest'] ?? ''),
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.runs.quickstats.export') {
+    $quickstats = deployment_release_gate_runs_quickstats_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'filename' => 'release-gate-quickstats-' . gmdate('Ymd-His') . '.json',
+        'quickstats' => $quickstats,
+        'exported_at' => gmdate('c'),
     ]);
 }
 

@@ -32,6 +32,7 @@
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
   const refreshReleaseGateRunsMetaBtn = document.getElementById("refreshReleaseGateRunsMetaBtn");
   const refreshReleaseGateQuickstatsBtn = document.getElementById("refreshReleaseGateQuickstatsBtn");
+  const downloadReleaseGateQuickstatsBtn = document.getElementById("downloadReleaseGateQuickstatsBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
   const downloadReleaseGateBlockerReportBtn = document.getElementById("downloadReleaseGateBlockerReportBtn");
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
@@ -809,6 +810,13 @@
     const params = collectReleaseGateRunsFilters();
     const data = await apiGetWithParams("deployment.release.gate.runs.export", params);
     const filename = data && data.filename ? String(data.filename) : ("release-gate-runs-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
+  async function downloadReleaseGateQuickstats() {
+    const params = collectReleaseGateRunsFilters();
+    const data = await apiGetWithParams("deployment.release.gate.runs.quickstats.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("release-gate-quickstats-" + Date.now() + ".json");
     downloadJsonFile(filename, data);
   }
 
@@ -2843,6 +2851,12 @@
   if (downloadReleaseGateRunsBtn) {
     downloadReleaseGateRunsBtn.addEventListener("click", async function () {
       await downloadReleaseGateRuns();
+    });
+  }
+
+  if (downloadReleaseGateQuickstatsBtn) {
+    downloadReleaseGateQuickstatsBtn.addEventListener("click", async function () {
+      await downloadReleaseGateQuickstats();
     });
   }
 
