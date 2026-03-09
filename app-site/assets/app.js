@@ -33,6 +33,8 @@
   const refreshReleaseGateRunsMetaBtn = document.getElementById("refreshReleaseGateRunsMetaBtn");
   const refreshReleaseGateQuickstatsBtn = document.getElementById("refreshReleaseGateQuickstatsBtn");
   const downloadReleaseGateQuickstatsBtn = document.getElementById("downloadReleaseGateQuickstatsBtn");
+  const refreshReleaseGateOpsSnapshotBtn = document.getElementById("refreshReleaseGateOpsSnapshotBtn");
+  const downloadReleaseGateOpsSnapshotBtn = document.getElementById("downloadReleaseGateOpsSnapshotBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
   const downloadReleaseGateBlockerReportBtn = document.getElementById("downloadReleaseGateBlockerReportBtn");
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
@@ -124,6 +126,7 @@
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateQuickstatsView = document.getElementById("releaseGateQuickstatsView");
+  const releaseGateOpsSnapshotView = document.getElementById("releaseGateOpsSnapshotView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
@@ -764,6 +767,7 @@
       }
       await loadReleaseGateRunsMeta(params);
       await loadReleaseGateQuickstats(params);
+      await loadReleaseGateOpsSnapshot(params);
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
       if (releaseGateRunSummaryView) {
@@ -780,6 +784,9 @@
       }
       if (releaseGateQuickstatsView) {
         releaseGateQuickstatsView.textContent = "Failed to load gate quickstats.";
+      }
+      if (releaseGateOpsSnapshotView) {
+        releaseGateOpsSnapshotView.textContent = "Failed to load gate operations snapshot.";
       }
     }
   }
@@ -806,6 +813,17 @@
     }
   }
 
+  async function loadReleaseGateOpsSnapshot(existingParams) {
+    if (!releaseGateOpsSnapshotView) return;
+    const params = existingParams && typeof existingParams === "object" ? existingParams : collectReleaseGateRunsFilters();
+    try {
+      const data = await apiGetWithParams("deployment.release.gate.operations.snapshot", params);
+      releaseGateOpsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseGateOpsSnapshotView.textContent = "Failed to load gate operations snapshot.";
+    }
+  }
+
   async function downloadReleaseGateRuns() {
     const params = collectReleaseGateRunsFilters();
     const data = await apiGetWithParams("deployment.release.gate.runs.export", params);
@@ -817,6 +835,13 @@
     const params = collectReleaseGateRunsFilters();
     const data = await apiGetWithParams("deployment.release.gate.runs.quickstats.export", params);
     const filename = data && data.filename ? String(data.filename) : ("release-gate-quickstats-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
+  async function downloadReleaseGateOpsSnapshot() {
+    const params = collectReleaseGateRunsFilters();
+    const data = await apiGetWithParams("deployment.release.gate.operations.snapshot.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("release-gate-operations-snapshot-" + Date.now() + ".json");
     downloadJsonFile(filename, data);
   }
 
@@ -2848,6 +2873,12 @@
     });
   }
 
+  if (refreshReleaseGateOpsSnapshotBtn) {
+    refreshReleaseGateOpsSnapshotBtn.addEventListener("click", async function () {
+      await loadReleaseGateOpsSnapshot();
+    });
+  }
+
   if (downloadReleaseGateRunsBtn) {
     downloadReleaseGateRunsBtn.addEventListener("click", async function () {
       await downloadReleaseGateRuns();
@@ -2857,6 +2888,12 @@
   if (downloadReleaseGateQuickstatsBtn) {
     downloadReleaseGateQuickstatsBtn.addEventListener("click", async function () {
       await downloadReleaseGateQuickstats();
+    });
+  }
+
+  if (downloadReleaseGateOpsSnapshotBtn) {
+    downloadReleaseGateOpsSnapshotBtn.addEventListener("click", async function () {
+      await downloadReleaseGateOpsSnapshot();
     });
   }
 

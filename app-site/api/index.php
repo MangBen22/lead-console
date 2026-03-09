@@ -3603,7 +3603,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.05-release-gate-operations-snapshot',
+        'phase' => '2.06-release-gate-operations-snapshot-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4931,7 +4931,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.05-release-gate-operations-snapshot',
+        'phase' => '2.06-release-gate-operations-snapshot-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5234,6 +5234,21 @@ if ($action === 'deployment.release.gate.operations.snapshot') {
         'quickstats' => $quickstats,
         'meta' => $meta,
         'generated_at' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.operations.snapshot.export') {
+    $quickstats = deployment_release_gate_runs_quickstats_snapshot($_GET);
+    $meta = deployment_release_gate_runs_meta_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'filename' => 'release-gate-operations-snapshot-' . gmdate('Ymd-His') . '.json',
+        'snapshot' => [
+            'quickstats' => $quickstats,
+            'meta' => $meta,
+            'generated_at' => gmdate('c'),
+        ],
+        'exported_at' => gmdate('c'),
     ]);
 }
 
