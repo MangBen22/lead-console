@@ -1745,6 +1745,9 @@ function deployment_release_gate_runs_summary($runs)
         'blocked_runs' => 0,
         'status_changed_runs' => 0,
         'alert_sent_runs' => 0,
+        'sustained_active_runs' => 0,
+        'sustained_clear_runs' => 0,
+        'sustained_alert_sent_runs' => 0,
         'baseline_match_blocked_runs' => 0,
         'baseline_check_blocked_runs' => 0,
         'signoff_integrity_watch_blocked_runs' => 0,
@@ -1776,6 +1779,14 @@ function deployment_release_gate_runs_summary($runs)
         if (!empty($row['alert_sent'])) {
             $summary['alert_sent_runs']++;
         }
+        if (!empty($row['sustained_blocked_active'])) {
+            $summary['sustained_active_runs']++;
+        } else {
+            $summary['sustained_clear_runs']++;
+        }
+        if (!empty($row['sustained_blocked_alert_sent'])) {
+            $summary['sustained_alert_sent_runs']++;
+        }
         $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
         if (in_array('watchdogs_policy_baseline_match', $failedItems, true)) {
             $summary['baseline_match_blocked_runs']++;
@@ -1805,6 +1816,9 @@ function deployment_release_gate_runs_summary($runs)
     $blocked = (int) ($summary['blocked_runs'] ?? 0);
     $summary['blocked_ratio_percent'] = round(($blocked / $total) * 100, 2);
     $summary['allowed_ratio_percent'] = round((((int) ($summary['allowed_runs'] ?? 0)) / $total) * 100, 2);
+    $summary['status_changed_ratio_percent'] = round((((int) ($summary['status_changed_runs'] ?? 0)) / $total) * 100, 2);
+    $summary['sustained_active_ratio_percent'] = round((((int) ($summary['sustained_active_runs'] ?? 0)) / $total) * 100, 2);
+    $summary['sustained_alert_sent_ratio_percent'] = round((((int) ($summary['sustained_alert_sent_runs'] ?? 0)) / $total) * 100, 2);
     $denominator = max(1, $blocked);
     $summary['baseline_match_blocked_share_percent'] = round((((int) ($summary['baseline_match_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
     $summary['baseline_check_blocked_share_percent'] = round((((int) ($summary['baseline_check_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
@@ -3352,7 +3366,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.85-release-gate-alert-change-presets',
+        'phase' => '1.86-release-gate-sustained-summary-ratios',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4680,7 +4694,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.85-release-gate-alert-change-presets',
+        'phase' => '1.86-release-gate-sustained-summary-ratios',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

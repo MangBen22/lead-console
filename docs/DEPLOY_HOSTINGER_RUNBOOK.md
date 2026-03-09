@@ -112,6 +112,7 @@
 59. Use Gate runs `sustained_alert` filter to isolate windows that emitted sustained-blocked alerts versus windows that remained quiet.
 60. Use Gate runs `status_change` filter to separate transition runs (`changed`) from stable-state runs (`stable`) during troubleshooting.
 61. Use presets `Sustained Alerted` and `Status Changed` for fast access to alert-driven windows and gate flip events.
+62. Use Gate runs summary sustained counters/ratios (`sustained_active_runs`, `sustained_alert_sent_runs`, `status_changed_ratio_percent`) for quick severity scoring.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

@@ -593,8 +593,15 @@
     const baselineMatchBlocked = Number(s.baseline_match_blocked_runs || 0);
     const baselineCheckBlocked = Number(s.baseline_check_blocked_runs || 0);
     const signoffWatchBlocked = Number(s.signoff_integrity_watch_blocked_runs || 0);
+    const sustainedActiveRuns = Number(s.sustained_active_runs || 0);
+    const sustainedClearRuns = Number(s.sustained_clear_runs || 0);
+    const sustainedAlertSentRuns = Number(s.sustained_alert_sent_runs || 0);
+    const statusChangedRuns = Number(s.status_changed_runs || 0);
     const blockedRatio = Number(s.blocked_ratio_percent || 0);
     const allowedRatio = Number(s.allowed_ratio_percent || 0);
+    const sustainedActiveRatio = Number(s.sustained_active_ratio_percent || 0);
+    const sustainedAlertSentRatio = Number(s.sustained_alert_sent_ratio_percent || 0);
+    const statusChangedRatio = Number(s.status_changed_ratio_percent || 0);
     const baselineMatchShare = Number(s.baseline_match_blocked_share_percent || 0);
     const baselineCheckShare = Number(s.baseline_check_blocked_share_percent || 0);
     const signoffShare = Number(s.signoff_integrity_watch_blocked_share_percent || 0);
@@ -617,6 +624,13 @@
     lines.push("Blocked share: baseline_match=" + String(baselineMatchShare) + "%"
       + ", baseline_check=" + String(baselineCheckShare) + "%"
       + ", signoff_watch=" + String(signoffShare) + "%");
+    lines.push("Sustained counters: active=" + String(sustainedActiveRuns)
+      + ", clear=" + String(sustainedClearRuns)
+      + ", alert_sent=" + String(sustainedAlertSentRuns)
+      + ", status_changed=" + String(statusChangedRuns));
+    lines.push("Sustained ratios: active=" + String(sustainedActiveRatio) + "%"
+      + ", alert_sent=" + String(sustainedAlertSentRatio) + "%"
+      + ", status_changed=" + String(statusChangedRatio) + "%");
     lines.push("Sustained blocked trend: " + formatSustainedStateDigest(sustainedState));
     lines.push("Sustained transitions: " + formatSustainedTimelineDigest(sustainedTimeline));
     if (topFailedEntries.length > 0) {
