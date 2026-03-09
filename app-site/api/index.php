@@ -123,6 +123,20 @@ function crm_smtp_sites_snapshot()
     ];
 }
 
+function crm_email_templates_fetch($site)
+{
+    $res = app_bridge_request($site, 'GET', 'bridge/email-templates');
+    $data = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['email_templates']) && is_array($res['data']['email_templates']))
+        ? $res['data']['email_templates']
+        : ['templates' => [], 'placeholders' => []];
+    return [
+        'ok' => !empty($res['ok']),
+        'status' => (int) ($res['status'] ?? 0),
+        'error' => (string) ($res['error'] ?? ''),
+        'email_templates' => $data,
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -3962,7 +3976,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.31-crm-smtp-bridge-ops',
+        'phase' => '2.32-crm-email-template-ops',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6531,6 +6545,7 @@ $rateLimitedWriteActions = [
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
+    'crm.email_templates.save',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -6573,6 +6588,7 @@ $deploymentGuardedActions = [
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
+    'crm.email_templates.save',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -6605,7 +6621,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.31-crm-smtp-bridge-ops',
+        'phase' => '2.32-crm-email-template-ops',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8753,11 +8769,69 @@ if ($action === 'crm.smtp.confirm') {
     ], !empty($res['ok']) ? 200 : 502);
 }
 
+if ($action === 'crm.email_templates.get') {
+    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
+    $site = $siteId !== '' ? site_by_id($siteId) : null;
+    if (!is_array($site)) {
+        $sites = all_sites();
+        $site = isset($sites[0]) && is_array($sites[0]) ? $sites[0] : null;
+    }
+    if (!is_array($site)) {
+        out_json(['ok' => true, 'site' => null, 'templates' => ['templates' => [], 'placeholders' => []], 'message' => 'No bridge site configured.']);
+    }
+    $snapshot = crm_email_templates_fetch($site);
+    out_json([
+        'ok' => !empty($snapshot['ok']),
+        'site' => [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'base_url' => (string) ($site['base_url'] ?? ''),
+        ],
+        'templates' => $snapshot['email_templates'],
+        'bridge_status' => $snapshot['status'],
+        'bridge_error' => $snapshot['error'],
+    ], !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.email_templates.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || !isset($data['templates']) || !is_array($data['templates'])) {
+        out_json(['ok' => false, 'error' => 'site_id and templates are required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $res = app_bridge_request($site, 'POST', 'bridge/email-templates', ['templates' => $data['templates']]);
+    audit_event('crm', 'email_templates.save', [
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'template_count' => count((array) ($data['templates'] ?? [])),
+        'ok' => !empty($res['ok']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => !empty($res['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'response' => $res,
+    ], !empty($res['ok']) ? 200 : 502);
+}
+
 if ($action === 'crm.summary') {
     $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
     $smtpSnapshot = crm_smtp_sites_snapshot();
     $smtpConnected = ((int) ($smtpSnapshot['summary']['connected_sites'] ?? 0)) > 0;
     $smtpBySite = $smtpSnapshot['sites'];
+    $templateSitesConfigured = 0;
+    foreach (all_sites() as $site) {
+        $snapshot = crm_email_templates_fetch($site);
+        if (!empty($snapshot['ok']) && !empty($snapshot['email_templates']['templates'])) {
+            $templateSitesConfigured++;
+        }
+    }
 
     $logs = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
     $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
@@ -8772,6 +8846,7 @@ if ($action === 'crm.summary') {
             'failed_deliveries' => count(app_read_json_file(retry_queue_path(), [])),
             'smtp_pending_confirmation_sites' => (int) ($smtpSnapshot['summary']['pending_confirmation_sites'] ?? 0),
             'smtp_confirmed_sites' => (int) ($smtpSnapshot['summary']['confirmed_sites'] ?? 0),
+            'email_template_sites' => $templateSitesConfigured,
         ],
         'last_sync' => $lastSync,
         'smtp_sites' => $smtpBySite,

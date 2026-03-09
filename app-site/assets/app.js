@@ -222,6 +222,11 @@
   const crmSmtpForm = document.getElementById("crmSmtpForm");
   const crmSmtpSummary = document.getElementById("crmSmtpSummary");
   const crmSmtpResult = document.getElementById("crmSmtpResult");
+  const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
+  const loadCrmEmailTemplateBtn = document.getElementById("loadCrmEmailTemplateBtn");
+  const saveCrmEmailTemplateBtn = document.getElementById("saveCrmEmailTemplateBtn");
+  const crmEmailTemplatesSummary = document.getElementById("crmEmailTemplatesSummary");
+  const crmEmailTemplatesResult = document.getElementById("crmEmailTemplatesResult");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
@@ -2224,6 +2229,21 @@
     }
   }
 
+  async function loadCrmEmailTemplatesSummary() {
+    if (!crmEmailTemplatesSummary) return;
+    try {
+      const siteId = document.getElementById("crmEmailTemplateSiteId");
+      const data = await apiGetWithParams("crm.email_templates.get", {
+        site_id: siteId && siteId.value ? siteId.value.trim() : "",
+      });
+      crmEmailTemplatesSummary.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      crmEmailTemplatesSummary.textContent = "Failed to load CRM email templates.";
+      return null;
+    }
+  }
+
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
@@ -2538,6 +2558,7 @@
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadCrmSmtpSummary();
+    await loadCrmEmailTemplatesSummary();
     await loadSocialConnectors();
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
@@ -2791,6 +2812,71 @@
         await runCrmSmtpAction("crm.smtp.confirm", { site_id, to_email: toEmailInput(), received: 0 });
       });
     }
+  }
+
+  const fillCrmEmailTemplateFields = function (data) {
+    if (!data || !data.templates || !data.templates.templates) return;
+    const templateKey = document.getElementById("crmEmailTemplateKey");
+    const subject = document.getElementById("crmEmailTemplateSubject");
+    const body = document.getElementById("crmEmailTemplateBody");
+    const key = templateKey && templateKey.value ? templateKey.value : "reset";
+    const template = data.templates.templates[key];
+    if (!template) return;
+    if (subject) subject.value = template.subject || "";
+    if (body) body.value = template.body || "";
+  };
+
+  if (refreshCrmEmailTemplatesBtn) {
+    refreshCrmEmailTemplatesBtn.addEventListener("click", async function () {
+      const data = await loadCrmEmailTemplatesSummary();
+      fillCrmEmailTemplateFields(data);
+    });
+  }
+
+  if (loadCrmEmailTemplateBtn) {
+    loadCrmEmailTemplateBtn.addEventListener("click", async function () {
+      const data = await loadCrmEmailTemplatesSummary();
+      fillCrmEmailTemplateFields(data);
+    });
+  }
+
+  const crmEmailTemplateKey = document.getElementById("crmEmailTemplateKey");
+  if (crmEmailTemplateKey) {
+    crmEmailTemplateKey.addEventListener("change", async function () {
+      const data = await loadCrmEmailTemplatesSummary();
+      fillCrmEmailTemplateFields(data);
+    });
+  }
+
+  if (saveCrmEmailTemplateBtn) {
+    saveCrmEmailTemplateBtn.addEventListener("click", async function () {
+      const siteId = document.getElementById("crmEmailTemplateSiteId");
+      const templateKey = document.getElementById("crmEmailTemplateKey");
+      const subject = document.getElementById("crmEmailTemplateSubject");
+      const body = document.getElementById("crmEmailTemplateBody");
+      const site_id = siteId && siteId.value ? siteId.value.trim() : "";
+      const key = templateKey && templateKey.value ? templateKey.value : "";
+      if (!site_id || !key) {
+        if (crmEmailTemplatesResult) crmEmailTemplatesResult.textContent = "Enter template site ID and choose a template key.";
+        return;
+      }
+      const templates = {};
+      templates[key] = {
+        subject: subject ? subject.value : "",
+        body: body ? body.value : "",
+      };
+      const result = await apiPost("crm.email_templates.save", { site_id, templates });
+      if (crmEmailTemplatesResult) {
+        crmEmailTemplatesResult.textContent = JSON.stringify(result, null, 2);
+      }
+      const data = await loadCrmEmailTemplatesSummary();
+      fillCrmEmailTemplateFields(data);
+      const crmData = await apiGet("crm.summary");
+      const crmPanel = document.getElementById("modCrm");
+      if (crmPanel) {
+        crmPanel.textContent = JSON.stringify(crmData, null, 2);
+      }
+    });
   }
 
   if (socialConnectorForm) {
