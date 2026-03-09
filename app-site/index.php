@@ -593,6 +593,12 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </label>
                     <label>Gate source filter<input id="releaseGateRunsSourceFilter" type="text" placeholder="Optional source (e.g. scheduler_tick_run)" /></label>
                     <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
+                    <label>Failed item mode
+                        <select id="releaseGateRunsFailedItemMode">
+                            <option value="exact">exact</option>
+                            <option value="contains">contains</option>
+                        </select>
+                    </label>
                     <label>Reason count min<input id="releaseGateRunsReasonMinInput" type="number" min="0" max="50" placeholder="Optional min" /></label>
                     <label>Reason count max<input id="releaseGateRunsReasonMaxInput" type="number" min="0" max="50" placeholder="Optional max" /></label>
                     <label>Recent ratio min %<input id="releaseGateRunsRecentRatioMinInput" type="number" min="0" max="100" step="0.1" placeholder="Optional min ratio" /></label>

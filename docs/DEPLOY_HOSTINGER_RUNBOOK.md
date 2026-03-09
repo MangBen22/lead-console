@@ -118,6 +118,7 @@
 65. Use `recent_ratio_min` to isolate runs where recent blocked trend severity crosses your investigation threshold.
 66. Use `transition_to` filter to isolate gate flips specifically toward `to_blocked` or `to_allowed`.
 67. Use `Scheduler Group` and `Manual Group` presets for one-click source-group segmentation.
+68. Use `failed_item_mode=contains` when you need partial-text failed-item matching, otherwise keep `exact` for strict checks.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

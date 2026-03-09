@@ -129,6 +129,7 @@
   const releaseGateRunsSourceGroupFilter = document.getElementById("releaseGateRunsSourceGroupFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
+  const releaseGateRunsFailedItemMode = document.getElementById("releaseGateRunsFailedItemMode");
   const releaseGateRunsReasonMinInput = document.getElementById("releaseGateRunsReasonMinInput");
   const releaseGateRunsReasonMaxInput = document.getElementById("releaseGateRunsReasonMaxInput");
   const releaseGateRunsRecentRatioMinInput = document.getElementById("releaseGateRunsRecentRatioMinInput");
@@ -535,6 +536,9 @@
     const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
       ? releaseGateRunsFailedItemFilter.value.trim()
       : "";
+    const failedItemMode = releaseGateRunsFailedItemMode && releaseGateRunsFailedItemMode.value
+      ? releaseGateRunsFailedItemMode.value
+      : "exact";
     const reasonMinRaw = releaseGateRunsReasonMinInput && releaseGateRunsReasonMinInput.value !== ""
       ? Number(releaseGateRunsReasonMinInput.value)
       : null;
@@ -564,6 +568,7 @@
       source_group: sourceGroup,
       source: source,
       failed_item: failedItem,
+      failed_item_mode: failedItemMode,
       reason_count_min: reasonMin,
       reason_count_max: reasonMax,
       recent_ratio_min: recentRatioMin,
@@ -649,6 +654,7 @@
       + ", source_group=" + String(f.source_group || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
+      + ", failed_item_mode=" + String(f.failed_item_mode || "exact")
       + ", reason_count_min=" + (f.reason_count_min === null || f.reason_count_min === undefined ? "(any)" : String(f.reason_count_min))
       + ", reason_count_max=" + (f.reason_count_max === null || f.reason_count_max === undefined ? "(any)" : String(f.reason_count_max))
       + ", recent_ratio_min=" + (f.recent_ratio_min === null || f.recent_ratio_min === undefined ? "(any)" : String(f.recent_ratio_min))
@@ -780,6 +786,9 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
+    }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
     }
@@ -846,6 +855,10 @@
       if (releaseGateRunsFailedItemFilter && typeof stored.failed_item === "string") {
         releaseGateRunsFailedItemFilter.value = stored.failed_item;
       }
+      if (releaseGateRunsFailedItemMode && typeof stored.failed_item_mode === "string") {
+        const mode = ["exact", "contains"].includes(stored.failed_item_mode) ? stored.failed_item_mode : "exact";
+        releaseGateRunsFailedItemMode.value = mode;
+      }
       if (releaseGateRunsReasonMinInput && stored.reason_count_min !== undefined && stored.reason_count_min !== null) {
         const parsed = Number(stored.reason_count_min);
         if (Number.isFinite(parsed)) {
@@ -893,6 +906,9 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = failedItem || "";
+    }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
     }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
@@ -942,6 +958,9 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
+    }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
     }
@@ -986,6 +1005,9 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
     }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
@@ -1032,6 +1054,9 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
+    }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
     }
@@ -1077,6 +1102,9 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
+    }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
     }
@@ -1121,6 +1149,9 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsFailedItemMode) {
+      releaseGateRunsFailedItemMode.value = "exact";
     }
     if (releaseGateRunsReasonMinInput) {
       releaseGateRunsReasonMinInput.value = "";
