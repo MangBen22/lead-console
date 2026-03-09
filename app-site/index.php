@@ -190,6 +190,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="automationSettingsView">Loading...</pre>
                 <h3>Scheduler Status</h3>
                 <pre id="schedulerStatusView">Loading...</pre>
+                <h3>Scheduler Gate Summary</h3>
+                <pre id="schedulerGateSummaryView">Loading...</pre>
                 <h3>Cron Helper</h3>
                 <pre id="cronHelpView">Loading...</pre>
             </section>

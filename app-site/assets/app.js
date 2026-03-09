@@ -11,6 +11,7 @@
   const automationSettingsForm = document.getElementById("automationSettingsForm");
   const automationSettingsView = document.getElementById("automationSettingsView");
   const schedulerStatusView = document.getElementById("schedulerStatusView");
+  const schedulerGateSummaryView = document.getElementById("schedulerGateSummaryView");
   const cronHelpView = document.getElementById("cronHelpView");
   const notificationSettingsForm = document.getElementById("notificationSettingsForm");
   const notificationSettingsView = document.getElementById("notificationSettingsView");
@@ -346,8 +347,15 @@
     try {
       const data = await apiGet("automation.scheduler.status");
       schedulerStatusView.textContent = JSON.stringify(data, null, 2);
+      if (schedulerGateSummaryView) {
+        const summary = data && data.release_gate_watch_summary ? data.release_gate_watch_summary : {};
+        schedulerGateSummaryView.textContent = JSON.stringify({ ok: true, release_gate_watch_summary: summary }, null, 2);
+      }
     } catch (err) {
       schedulerStatusView.textContent = "Failed to load scheduler status.";
+      if (schedulerGateSummaryView) {
+        schedulerGateSummaryView.textContent = "Failed to load scheduler gate summary.";
+      }
     }
   }
 
