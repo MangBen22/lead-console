@@ -1891,6 +1891,63 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
     $runs = array_slice($runs, 0, 400);
     app_write_json_file(deployment_release_gate_runs_path(), $runs);
 
+    $recentWindowRuns = array_slice($runs, 0, 20);
+    $recentSummary = deployment_release_gate_runs_summary($recentWindowRuns);
+    $recentBlockedRatio = (float) ($recentSummary['blocked_ratio_percent'] ?? 0.0);
+    $recentWindowTotal = (int) ($recentSummary['total_runs'] ?? 0);
+    $sustainedBlockedActive = ($recentWindowTotal >= 10 && $recentBlockedRatio >= 70.0) ? 1 : 0;
+    $prevSustainedBlockedActive = !empty($state['sustained_blocked_active']) ? 1 : 0;
+    $sustainedBlockedChanged = ($sustainedBlockedActive !== $prevSustainedBlockedActive) ? 1 : 0;
+    $sustainedBlockedAlertSent = 0;
+    $lastSustainedAlertAt = isset($state['sustained_blocked_last_alert_at']) ? (string) $state['sustained_blocked_last_alert_at'] : '';
+    $lastSustainedAlertTs = $lastSustainedAlertAt !== '' ? strtotime($lastSustainedAlertAt) : false;
+    $sustainedCooldownActive = ($lastSustainedAlertTs !== false) ? ((time() - $lastSustainedAlertTs) < (30 * 60)) : false;
+
+    if ($sustainedBlockedChanged === 1) {
+        if ($sustainedBlockedActive === 1) {
+            push_notification('warning', 'Release gate blocked trend is sustained over recent runs.', [
+                'source' => (string) $source,
+                'recent_window_runs' => $recentWindowTotal,
+                'recent_blocked_ratio_percent' => $recentBlockedRatio,
+                'blocker_digest' => $blockerDigest,
+            ]);
+        } else {
+            push_notification('success', 'Release gate sustained blocked trend cleared.', [
+                'source' => (string) $source,
+                'recent_window_runs' => $recentWindowTotal,
+                'recent_blocked_ratio_percent' => $recentBlockedRatio,
+            ]);
+        }
+        $sustainedBlockedAlertSent = 1;
+    } elseif ($sustainedBlockedActive === 1 && !$sustainedCooldownActive) {
+        push_notification('warning', 'Release gate remains in sustained blocked trend.', [
+            'source' => (string) $source,
+            'recent_window_runs' => $recentWindowTotal,
+            'recent_blocked_ratio_percent' => $recentBlockedRatio,
+            'blocker_digest' => $blockerDigest,
+        ]);
+        $sustainedBlockedAlertSent = 1;
+    }
+    if ($sustainedBlockedChanged === 1 || $sustainedBlockedAlertSent === 1) {
+        audit_event('deployment', 'release.gate.watch.sustained_blocked', [
+            'source' => (string) $source,
+            'active' => $sustainedBlockedActive,
+            'changed' => $sustainedBlockedChanged,
+            'recent_window_runs' => $recentWindowTotal,
+            'recent_blocked_ratio_percent' => $recentBlockedRatio,
+            'alert_sent' => $sustainedBlockedAlertSent,
+        ]);
+    }
+
+    $run['recent_blocked_ratio_percent'] = $recentBlockedRatio;
+    $run['recent_window_runs'] = $recentWindowTotal;
+    $run['sustained_blocked_active'] = $sustainedBlockedActive;
+    $run['sustained_blocked_alert_sent'] = $sustainedBlockedAlertSent;
+    if (!empty($runs) && is_array($runs[0])) {
+        $runs[0] = $run;
+        app_write_json_file(deployment_release_gate_runs_path(), $runs);
+    }
+
     $nextState = [
         'last_checked_at' => $now,
         'last_allowed' => $allowed,
@@ -1902,6 +1959,12 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
         'last_alert_at' => $alertSent === 1 ? $now : (string) ($state['last_alert_at'] ?? ''),
         'last_alert_sent' => $alertSent,
         'last_baseline_blockers_active' => $baselineBlockersActive,
+        'sustained_blocked_active' => $sustainedBlockedActive,
+        'sustained_blocked_recent_ratio_percent' => $recentBlockedRatio,
+        'sustained_blocked_recent_window_runs' => $recentWindowTotal,
+        'sustained_blocked_last_alert_at' => $sustainedBlockedAlertSent === 1 ? $now : (string) ($state['sustained_blocked_last_alert_at'] ?? ''),
+        'sustained_blocked_last_alert_sent' => $sustainedBlockedAlertSent,
+        'sustained_blocked_last_changed_at' => $sustainedBlockedChanged === 1 ? $now : (string) ($state['sustained_blocked_last_changed_at'] ?? ''),
         'last_blocker_flags' => [
             'baseline_match_blocked' => $baselineMatchBlocked,
             'baseline_check_blocked' => $baselineCheckBlocked,
@@ -3159,7 +3222,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.74-release-gate-source-presets',
+        'phase' => '1.75-release-gate-sustained-blocked-alert',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4487,7 +4550,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.74-release-gate-source-presets',
+        'phase' => '1.75-release-gate-sustained-blocked-alert',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
