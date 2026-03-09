@@ -91,6 +91,7 @@
 38. Use `gate watch summary` panel in Go-Live for quick blocker analytics without scrolling through full runs payloads.
 39. Check scheduler status `release_gate_watch_summary` to confirm blocker trends during unattended automation windows.
 40. Use Gate Runs filters (`limit`, `status`, `source`, `failed item`) to isolate specific blocker windows and operator actions.
+41. Use `Download Gate Runs` after applying filters to archive focused blocker evidence for incident and cutover records.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

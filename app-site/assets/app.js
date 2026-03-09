@@ -29,6 +29,7 @@
   const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
   const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
+  const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -496,6 +497,13 @@
         releaseGateRunSummaryView.textContent = "Failed to load release gate run summary.";
       }
     }
+  }
+
+  async function downloadReleaseGateRuns() {
+    const params = collectReleaseGateRunsFilters();
+    const data = await apiGetWithParams("deployment.release.gate.runs.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("release-gate-runs-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
   }
 
   function resetReleaseGateRunsFilters() {
@@ -1918,6 +1926,12 @@
     clearReleaseGateRunsFilterBtn.addEventListener("click", async function () {
       resetReleaseGateRunsFilters();
       await loadReleaseGateRuns();
+    });
+  }
+
+  if (downloadReleaseGateRunsBtn) {
+    downloadReleaseGateRunsBtn.addEventListener("click", async function () {
+      await downloadReleaseGateRuns();
     });
   }
 

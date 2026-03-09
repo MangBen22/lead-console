@@ -1710,6 +1710,66 @@ function deployment_release_gate_runs_summary($runs)
     return $summary;
 }
 
+function deployment_release_gate_runs_apply_filters($runs, $query)
+{
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 200;
+    $limit = max(1, min(400, $limit));
+    $allowedFilter = strtolower(trim((string) ($query['allowed'] ?? 'all')));
+    if (!in_array($allowedFilter, ['all', 'allowed', 'blocked'], true)) {
+        $allowedFilter = 'all';
+    }
+    $sourceFilter = trim((string) ($query['source'] ?? ''));
+    $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
+    $failedItemFilter = strtolower($failedItemFilterRaw);
+
+    $filtered = [];
+    foreach ($runs as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $allowed = !empty($row['allowed']) ? 1 : 0;
+        if ($allowedFilter === 'allowed' && $allowed !== 1) {
+            continue;
+        }
+        if ($allowedFilter === 'blocked' && $allowed !== 0) {
+            continue;
+        }
+        if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
+            continue;
+        }
+        if ($failedItemFilter !== '') {
+            $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
+            $matched = false;
+            foreach ($failedItems as $item) {
+                $candidate = strtolower(trim((string) $item));
+                if ($candidate !== '' && hash_equals($candidate, $failedItemFilter)) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $row;
+    }
+
+    return [
+        'items' => array_slice($filtered, 0, $limit),
+        'filtered_total_count' => count($filtered),
+        'total_count' => count($runs),
+        'applied_filters' => [
+            'limit' => $limit,
+            'allowed' => $allowedFilter,
+            'source' => $sourceFilter,
+            'failed_item' => $failedItemFilterRaw,
+        ],
+    ];
+}
+
 function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $gate = deployment_release_gate_snapshot($freshnessMinutes);
@@ -3081,7 +3141,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.64-release-gate-runs-filters',
+        'phase' => '1.65-release-gate-runs-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4409,7 +4469,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.64-release-gate-runs-filters',
+        'phase' => '1.65-release-gate-runs-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4638,66 +4698,41 @@ if ($action === 'deployment.release.gate.runs') {
     if (!is_array($runs)) {
         $runs = [];
     }
-    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 200;
-    $limit = max(1, min(400, $limit));
-    $allowedFilter = strtolower(trim((string) ($_GET['allowed'] ?? 'all')));
-    if (!in_array($allowedFilter, ['all', 'allowed', 'blocked'], true)) {
-        $allowedFilter = 'all';
-    }
-    $sourceFilter = trim((string) ($_GET['source'] ?? ''));
-    $failedItemFilterRaw = trim((string) ($_GET['failed_item'] ?? ''));
-    $failedItemFilter = strtolower($failedItemFilterRaw);
-
-    $filtered = [];
-    foreach ($runs as $row) {
-        if (!is_array($row)) {
-            continue;
-        }
-        $allowed = !empty($row['allowed']) ? 1 : 0;
-        if ($allowedFilter === 'allowed' && $allowed !== 1) {
-            continue;
-        }
-        if ($allowedFilter === 'blocked' && $allowed !== 0) {
-            continue;
-        }
-        if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
-            continue;
-        }
-        if ($failedItemFilter !== '') {
-            $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
-            $matched = false;
-            foreach ($failedItems as $item) {
-                $candidate = strtolower(trim((string) $item));
-                if ($candidate !== '' && hash_equals($candidate, $failedItemFilter)) {
-                    $matched = true;
-                    break;
-                }
-            }
-            if (!$matched) {
-                continue;
-            }
-        }
-        $filtered[] = $row;
-    }
-    $filteredTotal = count($filtered);
-    $items = array_slice($filtered, 0, $limit);
+    $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
     $state = app_read_json_file(deployment_release_gate_state_path(), []);
     $summary = deployment_release_gate_runs_summary($items);
     out_json([
         'ok' => true,
         'count' => count($items),
-        'filtered_total_count' => $filteredTotal,
-        'total_count' => count($runs),
+        'filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'total_count' => (int) ($filter['total_count'] ?? count($runs)),
         'items' => $items,
         'summary' => $summary,
-        'applied_filters' => [
-            'limit' => $limit,
-            'allowed' => $allowedFilter,
-            'source' => $sourceFilter,
-            'failed_item' => $failedItemFilterRaw,
-        ],
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'state' => is_array($state) ? $state : [],
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.runs.export') {
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+    $summary = deployment_release_gate_runs_summary($items);
+    out_json([
+        'ok' => true,
+        'filename' => 'release-gate-runs-' . gmdate('Ymd-His') . '.json',
+        'count' => count($items),
+        'filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'total_count' => (int) ($filter['total_count'] ?? count($runs)),
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'summary' => $summary,
+        'items' => $items,
+        'exported_at' => gmdate('c'),
     ]);
 }
 
