@@ -1825,6 +1825,10 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     if (!in_array($allowedFilter, ['all', 'allowed', 'blocked'], true)) {
         $allowedFilter = 'all';
     }
+    $sustainedFilter = strtolower(trim((string) ($query['sustained'] ?? 'all')));
+    if (!in_array($sustainedFilter, ['all', 'active', 'clear'], true)) {
+        $sustainedFilter = 'all';
+    }
     $sourceFilter = trim((string) ($query['source'] ?? ''));
     $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
     $failedItemFilter = strtolower($failedItemFilterRaw);
@@ -1840,6 +1844,13 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             continue;
         }
         if ($allowedFilter === 'blocked' && $allowed !== 0) {
+            continue;
+        }
+        $sustainedActive = !empty($row['sustained_blocked_active']) ? 1 : 0;
+        if ($sustainedFilter === 'active' && $sustainedActive !== 1) {
+            continue;
+        }
+        if ($sustainedFilter === 'clear' && $sustainedActive !== 0) {
             continue;
         }
         if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
@@ -1871,6 +1882,7 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'limit' => $limit,
             'window' => $window,
             'allowed' => $allowedFilter,
+            'sustained' => $sustainedFilter,
             'source' => $sourceFilter,
             'failed_item' => $failedItemFilterRaw,
         ],
@@ -3316,7 +3328,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.79-release-gate-transition-limit',
+        'phase' => '1.80-release-gate-sustained-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4644,7 +4656,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.79-release-gate-transition-limit',
+        'phase' => '1.80-release-gate-sustained-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

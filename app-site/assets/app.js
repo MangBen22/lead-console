@@ -115,6 +115,7 @@
   const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
   const releaseGateRunsWindowInput = document.getElementById("releaseGateRunsWindowInput");
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
+  const releaseGateRunsSustainedFilter = document.getElementById("releaseGateRunsSustainedFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
@@ -499,6 +500,9 @@
     const allowed = releaseGateRunsAllowedFilter && releaseGateRunsAllowedFilter.value
       ? releaseGateRunsAllowedFilter.value
       : "all";
+    const sustained = releaseGateRunsSustainedFilter && releaseGateRunsSustainedFilter.value
+      ? releaseGateRunsSustainedFilter.value
+      : "all";
     const source = releaseGateRunsSourceFilter && releaseGateRunsSourceFilter.value
       ? releaseGateRunsSourceFilter.value.trim()
       : "";
@@ -513,6 +517,7 @@
       limit: safeLimit,
       window: safeWindow,
       allowed: allowed,
+      sustained: sustained,
       source: source,
       failed_item: failedItem,
       transition_limit: transitionLimit,
@@ -583,6 +588,7 @@
     const lines = [];
     lines.push("Release Gate Runs Digest");
     lines.push("Filters: limit=" + String(f.limit || 0) + ", window=" + String(f.window || 0) + ", allowed=" + String(f.allowed || "all")
+      + ", sustained=" + String(f.sustained || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
       + ", transition_limit=" + String(f.transition_limit || 12));
@@ -672,6 +678,9 @@
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = "all";
     }
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = "all";
+    }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
@@ -709,6 +718,10 @@
         const allowed = ["all", "allowed", "blocked"].includes(stored.allowed) ? stored.allowed : "all";
         releaseGateRunsAllowedFilter.value = allowed;
       }
+      if (releaseGateRunsSustainedFilter && typeof stored.sustained === "string") {
+        const sustained = ["all", "active", "clear"].includes(stored.sustained) ? stored.sustained : "all";
+        releaseGateRunsSustainedFilter.value = sustained;
+      }
       if (releaseGateRunsSourceFilter && typeof stored.source === "string") {
         releaseGateRunsSourceFilter.value = stored.source;
       }
@@ -726,6 +739,9 @@
   function applyReleaseGateRunsPreset(failedItem) {
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = "blocked";
+    }
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = "all";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = failedItem || "";
@@ -747,6 +763,9 @@
   function applyReleaseGateRunsSourcePreset(source) {
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = "blocked";
+    }
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = "all";
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = source || "";

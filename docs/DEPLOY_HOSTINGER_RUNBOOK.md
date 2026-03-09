@@ -106,6 +106,7 @@
 53. Use `Download Gate Runs` exports and Gate Runs digest to review `sustained_state` alongside blocker analytics during escalation or launch review.
 54. Review `sustained_timeline` / `release_gate_sustained_timeline` transition history to verify when prolonged blocking activated or cleared before cutover decisions.
 55. Adjust `transition_limit` in Gate Runs filters when you need shorter/longer sustained-state transition history in on-screen and exported outputs.
+56. Use Gate runs `sustained` filter (`active` / `clear`) to isolate prolonged-block windows versus recovered windows during postmortem review.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
