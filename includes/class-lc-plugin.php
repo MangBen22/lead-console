@@ -1246,6 +1246,12 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_update_health'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/ops-action', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_ops_action'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1481,6 +1487,83 @@ class LC_Plugin
             ],
             'time' => current_time('mysql'),
         ]);
+    }
+
+    public function rest_bridge_ops_action($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+
+        $action_type = sanitize_text_field((string) ($payload['action_type'] ?? ''));
+        $plugin_file = sanitize_text_field((string) ($payload['plugin_file'] ?? ''));
+        $desired_state = sanitize_text_field((string) ($payload['desired_state'] ?? ''));
+        $run_mode = sanitize_text_field((string) ($payload['run_mode'] ?? 'dry_run'));
+
+        if (!function_exists('is_plugin_active')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        if ($action_type === 'update_check') {
+            return $this->rest_bridge_update_health($request);
+        }
+
+        if ($action_type === 'plugin_toggle') {
+            $active = ($plugin_file !== '' && function_exists('is_plugin_active')) ? is_plugin_active($plugin_file) : false;
+            $response = [
+                'ok' => true,
+                'action_type' => $action_type,
+                'plugin_file' => $plugin_file,
+                'desired_state' => $desired_state,
+                'run_mode' => $run_mode,
+                'previous_state' => $active ? 'active' : 'inactive',
+                'executed' => false,
+                'simulated' => ($run_mode !== 'live'),
+            ];
+
+            if ($plugin_file === '') {
+                $response['ok'] = false;
+                $response['message'] = 'plugin_file is required.';
+                return rest_ensure_response($response);
+            }
+
+            if ($run_mode !== 'live') {
+                $response['message'] = 'Dry run plugin toggle simulated.';
+                $this->log_system_event('bridge', 'info', 'Bridge ops action simulated.', $response);
+                return rest_ensure_response($response);
+            }
+
+            if ($desired_state === 'deactivate' && $active) {
+                deactivate_plugins($plugin_file, true);
+                $response['executed'] = true;
+            } elseif ($desired_state === 'activate' && !$active) {
+                $activation = activate_plugin($plugin_file, '', false, true);
+                if (is_wp_error($activation)) {
+                    $response['ok'] = false;
+                    $response['message'] = $activation->get_error_message();
+                    $this->log_system_event('bridge', 'error', 'Bridge ops action failed.', $response);
+                    return rest_ensure_response($response);
+                }
+                $response['executed'] = true;
+            }
+
+            $response['current_state'] = is_plugin_active($plugin_file) ? 'active' : 'inactive';
+            $response['message'] = 'Plugin toggle processed.';
+            $this->log_system_event('bridge', 'info', 'Bridge ops action processed.', $response);
+            return rest_ensure_response($response);
+        }
+
+        $response = [
+            'ok' => true,
+            'action_type' => $action_type,
+            'run_mode' => $run_mode,
+            'executed' => false,
+            'simulated' => 1,
+            'message' => 'Action acknowledged but not implemented for live execution yet.',
+        ];
+        $this->log_system_event('bridge', 'info', 'Bridge ops action acknowledged.', $response);
+        return rest_ensure_response($response);
     }
 
     public function get_smtp_health_status()

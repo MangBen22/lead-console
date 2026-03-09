@@ -234,6 +234,7 @@
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
   const refreshWebopsActionsBtn = document.getElementById("refreshWebopsActionsBtn");
+  const runWebopsActionsBtn = document.getElementById("runWebopsActionsBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
@@ -246,6 +247,7 @@
   const webopsIncidentForm = document.getElementById("webopsIncidentForm");
   const webopsActionsQueue = document.getElementById("webopsActionsQueue");
   const webopsActionForm = document.getElementById("webopsActionForm");
+  const webopsActionsLog = document.getElementById("webopsActionsLog");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -2304,6 +2306,16 @@
     }
   }
 
+  async function loadWebopsActionsLog() {
+    if (!webopsActionsLog) return;
+    try {
+      const data = await apiGet("webops.actions.log");
+      webopsActionsLog.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsActionsLog.textContent = "Failed to load WebOps action log.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -2370,6 +2382,7 @@
     await loadWebopsMonitors();
     await loadWebopsIncidents();
     await loadWebopsActionsQueue();
+    await loadWebopsActionsLog();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -2796,6 +2809,22 @@
     });
   }
 
+  if (runWebopsActionsBtn) {
+    runWebopsActionsBtn.addEventListener("click", async function () {
+      const result = await apiPost("webops.actions.run", {});
+      if (webopsResult) {
+        webopsResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadWebopsActionsQueue();
+      await loadWebopsActionsLog();
+      const data = await apiGet("webops.summary");
+      const panel = document.getElementById("modWebops");
+      if (panel) {
+        panel.textContent = JSON.stringify(data, null, 2);
+      }
+    });
+  }
+
   if (webopsMonitorForm) {
     webopsMonitorForm.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -2921,6 +2950,7 @@
           webopsResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadWebopsActionsQueue();
+        await loadWebopsActionsLog();
         const data = await apiGet("webops.summary");
         const panel = document.getElementById("modWebops");
         if (panel) {

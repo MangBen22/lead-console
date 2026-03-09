@@ -590,6 +590,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h2>WebOps Action Queue</h2>
                 <div class="actions">
                     <button id="refreshWebopsActionsBtn" type="button">Refresh WebOps Actions</button>
+                    <button id="runWebopsActionsBtn" type="button">Run WebOps Actions</button>
                 </div>
                 <pre id="webopsActionsQueue">Loading...</pre>
                 <form id="webopsActionForm" class="inline-form">
@@ -627,6 +628,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </div>
                     <button id="enqueueWebopsActionBtn" type="button">Queue WebOps Action</button>
                 </form>
+                <h3>WebOps Action Log</h3>
+                <pre id="webopsActionsLog">Loading...</pre>
             </section>
 
             <section class="api-status">
