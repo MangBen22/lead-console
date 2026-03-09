@@ -214,6 +214,11 @@ function social_schedule_queue_path()
     return app_storage_path('social_schedule_queue.json');
 }
 
+function social_activity_feed_path()
+{
+    return app_storage_path('social_activity_feed.json');
+}
+
 function social_platform_catalog()
 {
     return [
@@ -535,6 +540,7 @@ function module_storage_map()
         'social_sync_log' => social_sync_log_path(),
         'social_retry_queue' => social_retry_queue_path(),
         'social_schedule_queue' => social_schedule_queue_path(),
+        'social_activity_feed' => social_activity_feed_path(),
         'webops_monitors' => webops_monitors_path(),
         'webops_log' => webops_log_path(),
         'webops_retry_queue' => webops_retry_queue_path(),
@@ -3765,7 +3771,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.09-social-schedule-queue',
+        'phase' => '2.10-social-activity-feed',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4650,6 +4656,20 @@ function append_social_sync_log($item)
     app_write_json_file(social_sync_log_path(), $rows);
 }
 
+function record_social_activity($type, $message, $meta = [])
+{
+    $rows = app_read_json_file(social_activity_feed_path(), []);
+    array_unshift($rows, [
+        'activity_id' => 'social_activity_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'type' => (string) $type,
+        'message' => (string) $message,
+        'meta' => is_array($meta) ? $meta : [],
+        'created_at' => gmdate('c'),
+    ]);
+    $rows = array_slice($rows, 0, 300);
+    app_write_json_file(social_activity_feed_path(), $rows);
+}
+
 function social_connector_readiness($connector, $drafts)
 {
     $decorated = decorate_social_connector($connector);
@@ -5141,7 +5161,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.09-social-schedule-queue',
+        'phase' => '2.10-social-activity-feed',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7250,6 +7270,8 @@ if ($action === 'social.summary') {
     }
     $logs = app_read_json_file(social_sync_log_path(), []);
     $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
+    $activity = app_read_json_file(social_activity_feed_path(), []);
+    $lastActivity = isset($activity[0]) && is_array($activity[0]) ? $activity[0] : null;
     $retryCount = count(app_read_json_file(social_retry_queue_path(), []));
     $scheduledCount = 0;
     foreach (app_read_json_file(social_schedule_queue_path(), []) as $row) {
@@ -7268,6 +7290,7 @@ if ($action === 'social.summary') {
             'unread_conversations' => $retryCount,
         ],
         'last_sync' => $lastSync,
+        'last_activity' => $lastActivity,
     ]);
 }
 
@@ -7368,6 +7391,15 @@ if ($action === 'social.schedule.list') {
     ]);
 }
 
+if ($action === 'social.activity.list') {
+    $rows = app_read_json_file(social_activity_feed_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+    ]);
+}
+
 if ($action === 'social.schedule.save') {
     app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -7411,6 +7443,7 @@ if ($action === 'social.schedule.save') {
     });
     app_write_json_file(social_schedule_queue_path(), array_slice($rows, 0, 500));
     audit_event('social', 'schedule.save', ['schedule_id' => (string) $item['schedule_id'], 'connector_count' => count($item['connector_ids'])]);
+    record_social_activity('schedule_saved', 'Scheduled social post saved.', ['schedule_id' => (string) $item['schedule_id'], 'connector_count' => count($item['connector_ids'])]);
     out_json(['ok' => true, 'item' => $item]);
 }
 
@@ -7432,6 +7465,7 @@ if ($action === 'social.schedule.delete') {
     }));
     app_write_json_file(social_schedule_queue_path(), $rows);
     audit_event('social', 'schedule.delete', ['schedule_id' => $scheduleId]);
+    record_social_activity('schedule_deleted', 'Scheduled social post deleted.', ['schedule_id' => $scheduleId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -7550,6 +7584,7 @@ if ($action === 'social.schedule.run') {
     }
     app_write_json_file(social_schedule_queue_path(), array_slice($updatedRows, 0, 500));
     audit_event('social', 'schedule.run', ['processed' => $processed, 'sent' => $sent]);
+    record_social_activity('schedule_run', 'Scheduled social queue processed.', ['processed' => $processed, 'sent' => $sent, 'failed' => max(0, $processed - $sent)]);
     out_json([
         'ok' => true,
         'processed' => $processed,
@@ -7770,6 +7805,7 @@ if ($action === 'social.connectors.save') {
     $rows[] = $item;
     app_write_json_file(social_connectors_path(), $rows);
     audit_event('social', 'connectors.save', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider'], 'capability_count' => count($item['capabilities'])]);
+    record_social_activity('connector_saved', 'Social connector saved.', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider']]);
     out_json(['ok' => true, 'item' => decorate_social_connector($item)]);
 }
 
@@ -7791,6 +7827,7 @@ if ($action === 'social.connectors.delete') {
     }));
     app_write_json_file(social_connectors_path(), $rows);
     audit_event('social', 'connectors.delete', ['connector_id' => $connectorId]);
+    record_social_activity('connector_deleted', 'Social connector deleted.', ['connector_id' => $connectorId]);
     out_json([
         'ok' => true,
         'deleted' => $before - count($rows),
@@ -7823,6 +7860,7 @@ if ($action === 'social.connectors.test') {
         'url' => 'https://example.com',
     ]];
     $result = execute_social_connector_sync($connector, $sampleDrafts);
+    record_social_activity('connector_tested', 'Social connector test executed.', ['connector_id' => (string) ($connector['connector_id'] ?? ''), 'provider' => (string) ($connector['provider'] ?? '')]);
     out_json([
         'ok' => true,
         'connector_id' => (string) ($connector['connector_id'] ?? ''),
@@ -7882,6 +7920,7 @@ if ($action === 'social.push.sync') {
     ];
     append_social_sync_log($logItem);
     audit_event('social', 'push.sync', ['sync_id' => $syncId, 'connector_count' => count($activeConnectors), 'draft_total' => count($drafts)]);
+    record_social_activity('push_sync', 'Social push sync queued.', ['sync_id' => $syncId, 'connector_count' => count($activeConnectors), 'draft_total' => count($drafts)]);
     out_json([
         'ok' => true,
         'sync' => $logItem,
@@ -7942,6 +7981,7 @@ if ($action === 'social.retry.run') {
         $remaining[] = $item;
     }
     app_write_json_file(social_retry_queue_path(), $remaining);
+    record_social_activity('retry_run', 'Social retry queue processed.', ['processed' => $processed, 'succeeded' => $succeeded, 'remaining' => count($remaining)]);
     out_json([
         'ok' => true,
         'processed' => $processed,
