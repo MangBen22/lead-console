@@ -39,6 +39,8 @@
   const applyGatePresetManualBlockedBtn = document.getElementById("applyGatePresetManualBlockedBtn");
   const applyGatePresetSustainedActiveBtn = document.getElementById("applyGatePresetSustainedActiveBtn");
   const applyGatePresetSustainedClearBtn = document.getElementById("applyGatePresetSustainedClearBtn");
+  const applyGatePresetSustainedAlertedBtn = document.getElementById("applyGatePresetSustainedAlertedBtn");
+  const applyGatePresetStatusChangedBtn = document.getElementById("applyGatePresetStatusChangedBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -850,6 +852,66 @@
     }
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = allowed || "all";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
+    }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
+    }
+  }
+
+  function applyReleaseGateRunsSustainedAlertPreset() {
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = "blocked";
+    }
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = "active";
+    }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "sent";
+    }
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "all";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
+    }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
+    }
+  }
+
+  function applyReleaseGateRunsStatusChangedPreset() {
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "changed";
+    }
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = "all";
+    }
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = "all";
+    }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "all";
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
@@ -2334,6 +2396,20 @@
   if (applyGatePresetSustainedClearBtn) {
     applyGatePresetSustainedClearBtn.addEventListener("click", async function () {
       applyReleaseGateRunsSustainedPreset("clear", "all");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetSustainedAlertedBtn) {
+    applyGatePresetSustainedAlertedBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsSustainedAlertPreset();
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetStatusChangedBtn) {
+    applyGatePresetStatusChangedBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsStatusChangedPreset();
       await loadReleaseGateRuns();
     });
   }
