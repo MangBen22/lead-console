@@ -24,6 +24,7 @@
   const downloadDeployReportBtn = document.getElementById("downloadDeployReportBtn");
   const refreshGoLiveStatusBtn = document.getElementById("refreshGoLiveStatusBtn");
   const refreshReleaseGateBtn = document.getElementById("refreshReleaseGateBtn");
+  const saveReleaseGateSettingsBtn = document.getElementById("saveReleaseGateSettingsBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -58,6 +59,10 @@
   const preflightView = document.getElementById("preflightView");
   const goLiveStatusView = document.getElementById("goLiveStatusView");
   const releaseGateFreshnessInput = document.getElementById("releaseGateFreshnessInput");
+  const releaseGateRequireReadinessInput = document.getElementById("releaseGateRequireReadinessInput");
+  const releaseGateRequirePublicSmokeInput = document.getElementById("releaseGateRequirePublicSmokeInput");
+  const releaseGateRequireAuthSmokeInput = document.getElementById("releaseGateRequireAuthSmokeInput");
+  const releaseGateSettingsView = document.getElementById("releaseGateSettingsView");
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
@@ -330,6 +335,29 @@
       goLiveStatusView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       goLiveStatusView.textContent = "Failed to load go-live status.";
+    }
+  }
+
+  async function loadReleaseGateSettings() {
+    if (!releaseGateSettingsView) return;
+    try {
+      const data = await apiGet("deployment.release.gate.settings.get");
+      releaseGateSettingsView.textContent = JSON.stringify(data, null, 2);
+      const settings = data && data.settings ? data.settings : {};
+      if (releaseGateFreshnessInput) {
+        releaseGateFreshnessInput.value = String(settings.freshness_minutes || 30);
+      }
+      if (releaseGateRequireReadinessInput) {
+        releaseGateRequireReadinessInput.checked = Number(settings.require_readiness) === 1;
+      }
+      if (releaseGateRequirePublicSmokeInput) {
+        releaseGateRequirePublicSmokeInput.checked = Number(settings.require_public_smoke) === 1;
+      }
+      if (releaseGateRequireAuthSmokeInput) {
+        releaseGateRequireAuthSmokeInput.checked = Number(settings.require_auth_smoke) === 1;
+      }
+    } catch (err) {
+      releaseGateSettingsView.textContent = "Failed to load release gate settings.";
     }
   }
 
@@ -725,6 +753,7 @@
     await loadCronHelp();
     await loadNotificationSettings();
     await loadAuditLog();
+    await loadReleaseGateSettings();
     await loadGoLiveStatus();
     await loadReleaseGate();
     await loadReleaseLog();
@@ -1226,6 +1255,30 @@
     refreshReleaseGateBtn.addEventListener("click", async function () {
       await loadReleaseGate();
       await loadGoLiveStatus();
+    });
+  }
+
+  if (saveReleaseGateSettingsBtn) {
+    saveReleaseGateSettingsBtn.addEventListener("click", async function () {
+      const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+        ? Number(releaseGateFreshnessInput.value)
+        : 30;
+      const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+      const payload = {
+        freshness_minutes: safeFreshness,
+        require_readiness: releaseGateRequireReadinessInput && releaseGateRequireReadinessInput.checked ? 1 : 0,
+        require_public_smoke: releaseGateRequirePublicSmokeInput && releaseGateRequirePublicSmokeInput.checked ? 1 : 0,
+        require_auth_smoke: releaseGateRequireAuthSmokeInput && releaseGateRequireAuthSmokeInput.checked ? 1 : 0,
+      };
+      const result = await apiPost("deployment.release.gate.settings.save", payload);
+      if (releaseGateSettingsView) {
+        releaseGateSettingsView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadReleaseGateSettings();
+      await loadReleaseGate();
+      await loadGoLiveStatus();
+      await loadAuditLog();
+      await loadStatus();
     });
   }
 

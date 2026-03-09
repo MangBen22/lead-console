@@ -443,6 +443,10 @@ function default_deployment_guard()
         'last_install_check' => ['status' => '', 'time' => ''],
         'last_preflight' => ['status' => '', 'time' => ''],
         'last_verify' => ['status' => '', 'time' => ''],
+        'release_gate_freshness_minutes' => 30,
+        'release_gate_require_readiness' => 1,
+        'release_gate_require_public_smoke' => 1,
+        'release_gate_require_auth_smoke' => 1,
         'updated_at' => gmdate('c'),
     ];
 }
@@ -1098,9 +1102,15 @@ function deployment_handoff_bundle_snapshot()
     ];
 }
 
-function deployment_release_gate_snapshot($freshnessMinutes = 30)
+function deployment_release_gate_snapshot($freshnessMinutes = null)
 {
-    $window = max(5, min(1440, (int) $freshnessMinutes));
+    $guardCfg = get_deployment_guard();
+    $defaultWindow = isset($guardCfg['release_gate_freshness_minutes']) ? (int) $guardCfg['release_gate_freshness_minutes'] : 30;
+    $windowInput = ($freshnessMinutes === null) ? $defaultWindow : (int) $freshnessMinutes;
+    $window = max(5, min(1440, $windowInput));
+    $requireReadiness = !empty($guardCfg['release_gate_require_readiness']) ? 1 : 0;
+    $requirePublic = !empty($guardCfg['release_gate_require_public_smoke']) ? 1 : 0;
+    $requireAuth = !empty($guardCfg['release_gate_require_auth_smoke']) ? 1 : 0;
     $readiness = deployment_cutover_readiness_snapshot();
     $history = deployment_smoke_history_snapshot();
     $now = time();
@@ -1140,19 +1150,22 @@ function deployment_release_gate_snapshot($freshnessMinutes = 30)
     $checks = [];
     $checks[] = [
         'item' => 'readiness_ready',
-        'ok' => (string) ($readiness['status'] ?? 'review_required') === 'ready',
+        'required' => $requireReadiness,
+        'ok' => !$requireReadiness || ((string) ($readiness['status'] ?? 'review_required') === 'ready'),
         'message' => 'Readiness status: ' . (string) ($readiness['status'] ?? 'review_required'),
     ];
     $checks[] = [
         'item' => 'public_smoke_pass_fresh',
-        'ok' => is_array($latestPublicPass) && $publicAge !== null && $publicAge <= $window,
+        'required' => $requirePublic,
+        'ok' => !$requirePublic || (is_array($latestPublicPass) && $publicAge !== null && $publicAge <= $window),
         'message' => is_array($latestPublicPass)
             ? ('Latest passing public smoke age: ' . (int) $publicAge . ' minute(s).')
             : 'No passing public smoke run found.',
     ];
     $checks[] = [
         'item' => 'auth_smoke_pass_fresh',
-        'ok' => is_array($latestAuthPass) && $authAge !== null && $authAge <= $window,
+        'required' => $requireAuth,
+        'ok' => !$requireAuth || (is_array($latestAuthPass) && $authAge !== null && $authAge <= $window),
         'message' => is_array($latestAuthPass)
             ? ('Latest passing auth smoke age: ' . (int) $authAge . ' minute(s).')
             : 'No passing auth smoke run found.',
@@ -1169,6 +1182,11 @@ function deployment_release_gate_snapshot($freshnessMinutes = 30)
         'generated_at' => gmdate('c'),
         'allowed' => empty($reasons),
         'freshness_window_minutes' => $window,
+        'settings' => [
+            'require_readiness' => $requireReadiness,
+            'require_public_smoke' => $requirePublic,
+            'require_auth_smoke' => $requireAuth,
+        ],
         'reasons' => $reasons,
         'checks' => $checks,
         'latest_public_pass' => $latestPublicPass,
@@ -2688,6 +2706,7 @@ $rateLimitedWriteActions = [
     'deployment.incident.sla.check',
     'deployment.smoke.report',
     'deployment.smoke.suite',
+    'deployment.release.gate.settings.save',
     'deployment.verify',
     'backup.import',
 ];
@@ -2734,7 +2753,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.29-release-gate-freshness',
+        'phase' => '1.30-release-gate-settings',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -2825,7 +2844,7 @@ if ($action === 'deployment.handoff.bundle') {
 if ($action === 'deployment.go_live_status') {
     $bundle = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
-    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
     $gate = deployment_release_gate_snapshot($freshness);
     $status = (string) ($bundle['status'] ?? 'review_required');
     if (empty($gate['allowed'])) {
@@ -2848,13 +2867,67 @@ if ($action === 'deployment.go_live_status') {
 }
 
 if ($action === 'deployment.release.gate') {
-    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
     $gate = deployment_release_gate_snapshot($freshness);
     out_json([
         'ok' => true,
         'gate' => $gate,
         'time' => gmdate('c'),
     ], !empty($gate['allowed']) ? 200 : 409);
+}
+
+if ($action === 'deployment.release.gate.settings.get') {
+    $guard = get_deployment_guard();
+    $settings = [
+        'freshness_minutes' => max(5, min(1440, (int) ($guard['release_gate_freshness_minutes'] ?? 30))),
+        'require_readiness' => !empty($guard['release_gate_require_readiness']) ? 1 : 0,
+        'require_public_smoke' => !empty($guard['release_gate_require_public_smoke']) ? 1 : 0,
+        'require_auth_smoke' => !empty($guard['release_gate_require_auth_smoke']) ? 1 : 0,
+    ];
+    out_json([
+        'ok' => true,
+        'settings' => $settings,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.settings.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $settings = [
+        'release_gate_freshness_minutes' => max(5, min(1440, (int) ($data['freshness_minutes'] ?? 30))),
+        'release_gate_require_readiness' => !empty($data['require_readiness']) ? 1 : 0,
+        'release_gate_require_public_smoke' => !empty($data['require_public_smoke']) ? 1 : 0,
+        'release_gate_require_auth_smoke' => !empty($data['require_auth_smoke']) ? 1 : 0,
+    ];
+    $saved = save_deployment_guard($settings);
+    push_notification('info', 'Release gate settings updated.', [
+        'freshness_minutes' => (int) ($saved['release_gate_freshness_minutes'] ?? 30),
+    ]);
+    audit_event('deployment', 'release.gate.settings.save', [
+        'freshness_minutes' => (int) ($saved['release_gate_freshness_minutes'] ?? 30),
+        'require_readiness' => !empty($saved['release_gate_require_readiness']) ? 1 : 0,
+        'require_public_smoke' => !empty($saved['release_gate_require_public_smoke']) ? 1 : 0,
+        'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'settings' => [
+            'freshness_minutes' => (int) ($saved['release_gate_freshness_minutes'] ?? 30),
+            'require_readiness' => !empty($saved['release_gate_require_readiness']) ? 1 : 0,
+            'require_public_smoke' => !empty($saved['release_gate_require_public_smoke']) ? 1 : 0,
+            'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
+        ],
+        'gate' => deployment_release_gate_snapshot(null),
+        'time' => gmdate('c'),
+    ]);
 }
 
 if ($action === 'deployment.release.log') {
@@ -2931,7 +3004,7 @@ if ($action === 'deployment.release.candidate') {
         $data = [];
     }
     $note = trim((string) ($data['note'] ?? ''));
-    $freshness = isset($data['freshness_minutes']) ? (int) $data['freshness_minutes'] : 30;
+    $freshness = isset($data['freshness_minutes']) ? (int) $data['freshness_minutes'] : null;
     $snap = deployment_release_candidate_snapshot($note, $freshness);
     $candidate = $snap['candidate'];
     $bundle = $snap['bundle'];

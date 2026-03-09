@@ -522,11 +522,16 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             <section class="api-status">
                 <h2>Go-Live Status</h2>
                 <label>Release gate freshness window (minutes)<input id="releaseGateFreshnessInput" type="number" min="5" max="1440" value="30" /></label>
+                <label><input id="releaseGateRequireReadinessInput" type="checkbox" value="1" checked /> Require cutover readiness = ready</label>
+                <label><input id="releaseGateRequirePublicSmokeInput" type="checkbox" value="1" checked /> Require recent passing public smoke</label>
+                <label><input id="releaseGateRequireAuthSmokeInput" type="checkbox" value="1" checked /> Require recent passing auth smoke</label>
                 <div class="actions">
                     <button id="refreshGoLiveStatusBtn" type="button">Refresh Go-Live Status</button>
                     <button id="refreshReleaseGateBtn" type="button">Refresh Release Gate</button>
+                    <button id="saveReleaseGateSettingsBtn" type="button">Save Release Gate Settings</button>
                 </div>
                 <pre id="goLiveStatusView">Loading...</pre>
+                <pre id="releaseGateSettingsView">Loading release gate settings...</pre>
                 <pre id="releaseGateView">Loading release gate...</pre>
             </section>
 
