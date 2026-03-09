@@ -107,6 +107,7 @@
 54. Review `sustained_timeline` / `release_gate_sustained_timeline` transition history to verify when prolonged blocking activated or cleared before cutover decisions.
 55. Adjust `transition_limit` in Gate Runs filters when you need shorter/longer sustained-state transition history in on-screen and exported outputs.
 56. Use Gate runs `sustained` filter (`active` / `clear`) to isolate prolonged-block windows versus recovered windows during postmortem review.
+57. Use presets `Sustained Active` and `Sustained Clear` for one-click filtering of prolonged-block windows and recovery windows.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

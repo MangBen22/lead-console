@@ -37,6 +37,8 @@
   const applyGatePresetSignoffWatchBtn = document.getElementById("applyGatePresetSignoffWatchBtn");
   const applyGatePresetSchedulerBlockedBtn = document.getElementById("applyGatePresetSchedulerBlockedBtn");
   const applyGatePresetManualBlockedBtn = document.getElementById("applyGatePresetManualBlockedBtn");
+  const applyGatePresetSustainedActiveBtn = document.getElementById("applyGatePresetSustainedActiveBtn");
+  const applyGatePresetSustainedClearBtn = document.getElementById("applyGatePresetSustainedClearBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -769,6 +771,30 @@
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = source || "";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
+    }
+    if (releaseGateRunsTransitionLimitInput) {
+      releaseGateRunsTransitionLimitInput.value = "12";
+    }
+  }
+
+  function applyReleaseGateRunsSustainedPreset(sustained, allowed) {
+    if (releaseGateRunsSustainedFilter) {
+      releaseGateRunsSustainedFilter.value = sustained || "all";
+    }
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = allowed || "all";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = "";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
@@ -2236,6 +2262,20 @@
   if (applyGatePresetManualBlockedBtn) {
     applyGatePresetManualBlockedBtn.addEventListener("click", async function () {
       applyReleaseGateRunsSourcePreset("dashboard_manual");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetSustainedActiveBtn) {
+    applyGatePresetSustainedActiveBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsSustainedPreset("active", "blocked");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetSustainedClearBtn) {
+    applyGatePresetSustainedClearBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsSustainedPreset("clear", "all");
       await loadReleaseGateRuns();
     });
   }
