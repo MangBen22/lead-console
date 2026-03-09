@@ -587,6 +587,49 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>WebOps Action Queue</h2>
+                <div class="actions">
+                    <button id="refreshWebopsActionsBtn" type="button">Refresh WebOps Actions</button>
+                </div>
+                <pre id="webopsActionsQueue">Loading...</pre>
+                <form id="webopsActionForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="webopsActionSiteId">Bridge Site ID</label>
+                        <input id="webopsActionSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsActionType">Action Type</label>
+                        <select id="webopsActionType">
+                            <option value="plugin_toggle">plugin_toggle</option>
+                            <option value="update_check">update_check</option>
+                            <option value="maintenance_mode">maintenance_mode</option>
+                            <option value="rollback_prepare">rollback_prepare</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsActionPluginFile">Plugin File (for plugin_toggle)</label>
+                        <input id="webopsActionPluginFile" type="text" placeholder="hello-dolly/hello.php">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsActionDesiredState">Desired State</label>
+                        <select id="webopsActionDesiredState">
+                            <option value="deactivate">deactivate</option>
+                            <option value="activate">activate</option>
+                            <option value="check">check</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsActionRunMode">Run Mode</label>
+                        <select id="webopsActionRunMode">
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <button id="enqueueWebopsActionBtn" type="button">Queue WebOps Action</button>
+                </form>
+            </section>
+
+            <section class="api-status">
                 <h2>SEO Projects</h2>
                 <pre id="seoProjects">Loading...</pre>
                 <form id="seoProjectForm" class="inline-form">

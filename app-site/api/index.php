@@ -400,6 +400,11 @@ function webops_incidents_path()
     return app_storage_path('webops_incidents.json');
 }
 
+function webops_actions_queue_path()
+{
+    return app_storage_path('webops_actions_queue.json');
+}
+
 function webops_monitor_catalog()
 {
     return [
@@ -655,6 +660,7 @@ function module_storage_map()
         'webops_log' => webops_log_path(),
         'webops_retry_queue' => webops_retry_queue_path(),
         'webops_incidents' => webops_incidents_path(),
+        'webops_actions_queue' => webops_actions_queue_path(),
         'seo_projects' => seo_projects_path(),
         'seo_audits' => seo_audits_path(),
         'seo_extension_events' => seo_extension_events_path(),
@@ -3882,7 +3888,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.13-webops-incident-registry',
+        'phase' => '2.14-webops-action-queue',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5508,7 +5514,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.13-webops-incident-registry',
+        'phase' => '2.14-webops-action-queue',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7658,6 +7664,7 @@ if ($action === 'webops.summary') {
     $logs = app_read_json_file(webops_log_path(), []);
     $lastRun = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
     $retryCount = count(app_read_json_file(webops_retry_queue_path(), []));
+    $queuedActions = count(app_read_json_file(webops_actions_queue_path(), []));
     $incidentRows = app_read_json_file(webops_incidents_path(), []);
     $openIncidents = 0;
     foreach ($incidentRows as $incidentRow) {
@@ -7681,6 +7688,7 @@ if ($action === 'webops.summary') {
             'sites_monitored' => count($active),
             'active_incidents' => $openIncidents,
             'retry_backlog' => $retryCount,
+            'queued_actions' => $queuedActions,
             'uptime_percent' => 100,
         ],
         'last_run' => $lastRun,
@@ -8595,6 +8603,41 @@ if ($action === 'webops.incidents.resolve') {
     audit_event('webops', 'incidents.resolve', ['incident_id' => $incidentId]);
     push_notification('info', 'WebOps incident manually resolved.', ['incident_id' => $incidentId]);
     out_json(['ok' => true, 'incident' => $updated]);
+}
+
+if ($action === 'webops.actions.list') {
+    $rows = app_read_json_file(webops_actions_queue_path(), []);
+    out_json(['ok' => true, 'count' => count($rows), 'items' => $rows]);
+}
+
+if ($action === 'webops.actions.enqueue') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['action_type'])) {
+        out_json(['ok' => false, 'error' => 'action_type is required.'], 400);
+    }
+    $item = [
+        'action_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['action_id'] ?? uniqid('webops_action_', false))),
+        'site_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['site_id'] ?? '')),
+        'action_type' => preg_replace('/[^a-z0-9_\-]/i', '', strtolower((string) ($data['action_type'] ?? ''))),
+        'plugin_file' => trim((string) ($data['plugin_file'] ?? '')),
+        'desired_state' => preg_replace('/[^a-z_]/i', '', strtolower((string) ($data['desired_state'] ?? ''))),
+        'run_mode' => in_array((string) ($data['run_mode'] ?? 'dry_run'), ['dry_run', 'live'], true) ? (string) ($data['run_mode'] ?? 'dry_run') : 'dry_run',
+        'status' => 'queued',
+        'created_at' => gmdate('c'),
+        'updated_at' => gmdate('c'),
+    ];
+    $rows = app_read_json_file(webops_actions_queue_path(), []);
+    array_unshift($rows, $item);
+    $rows = array_slice($rows, 0, 300);
+    app_write_json_file(webops_actions_queue_path(), $rows);
+    audit_event('webops', 'actions.enqueue', ['action_id' => (string) $item['action_id'], 'action_type' => (string) $item['action_type'], 'site_id' => (string) $item['site_id']]);
+    push_notification('info', 'WebOps action queued: ' . (string) $item['action_type'] . '.', ['action_id' => (string) $item['action_id'], 'site_id' => (string) $item['site_id']]);
+    out_json(['ok' => true, 'item' => $item]);
 }
 
 if ($action === 'webops.retry.list') {

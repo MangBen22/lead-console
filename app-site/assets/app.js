@@ -233,6 +233,7 @@
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
+  const refreshWebopsActionsBtn = document.getElementById("refreshWebopsActionsBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
@@ -243,6 +244,8 @@
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
   const webopsIncidents = document.getElementById("webopsIncidents");
   const webopsIncidentForm = document.getElementById("webopsIncidentForm");
+  const webopsActionsQueue = document.getElementById("webopsActionsQueue");
+  const webopsActionForm = document.getElementById("webopsActionForm");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -2291,6 +2294,16 @@
     }
   }
 
+  async function loadWebopsActionsQueue() {
+    if (!webopsActionsQueue) return;
+    try {
+      const data = await apiGet("webops.actions.list");
+      webopsActionsQueue.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsActionsQueue.textContent = "Failed to load WebOps actions.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -2356,6 +2369,7 @@
     await loadWebopsTypes();
     await loadWebopsMonitors();
     await loadWebopsIncidents();
+    await loadWebopsActionsQueue();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -2776,6 +2790,12 @@
     });
   }
 
+  if (refreshWebopsActionsBtn) {
+    refreshWebopsActionsBtn.addEventListener("click", async function () {
+      await loadWebopsActionsQueue();
+    });
+  }
+
   if (webopsMonitorForm) {
     webopsMonitorForm.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -2868,6 +2888,39 @@
           webopsResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadWebopsIncidents();
+        const data = await apiGet("webops.summary");
+        const panel = document.getElementById("modWebops");
+        if (panel) {
+          panel.textContent = JSON.stringify(data, null, 2);
+        }
+      });
+    }
+  }
+
+  if (webopsActionForm) {
+    webopsActionForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const enqueueWebopsActionBtn = document.getElementById("enqueueWebopsActionBtn");
+    if (enqueueWebopsActionBtn) {
+      enqueueWebopsActionBtn.addEventListener("click", async function () {
+        const siteId = document.getElementById("webopsActionSiteId");
+        const actionType = document.getElementById("webopsActionType");
+        const pluginFile = document.getElementById("webopsActionPluginFile");
+        const desiredState = document.getElementById("webopsActionDesiredState");
+        const runMode = document.getElementById("webopsActionRunMode");
+        const payload = {
+          site_id: siteId ? siteId.value.trim() : "",
+          action_type: actionType ? actionType.value : "",
+          plugin_file: pluginFile ? pluginFile.value.trim() : "",
+          desired_state: desiredState ? desiredState.value : "",
+          run_mode: runMode ? runMode.value : "dry_run",
+        };
+        const result = await apiPost("webops.actions.enqueue", payload);
+        if (webopsResult) {
+          webopsResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadWebopsActionsQueue();
         const data = await apiGet("webops.summary");
         const panel = document.getElementById("modWebops");
         if (panel) {
