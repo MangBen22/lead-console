@@ -100,6 +100,7 @@
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
+  const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
@@ -455,8 +456,15 @@
     try {
       const data = await apiGet("deployment.release.gate.runs");
       releaseGateRunsView.textContent = JSON.stringify(data, null, 2);
+      if (releaseGateRunSummaryView) {
+        const summary = data && data.summary ? data.summary : {};
+        releaseGateRunSummaryView.textContent = JSON.stringify({ ok: true, summary: summary }, null, 2);
+      }
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
+      if (releaseGateRunSummaryView) {
+        releaseGateRunSummaryView.textContent = "Failed to load release gate run summary.";
+      }
     }
   }
 
