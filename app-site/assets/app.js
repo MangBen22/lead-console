@@ -41,6 +41,8 @@
   const saveWatchdogsPolicyBaselineBtn = document.getElementById("saveWatchdogsPolicyBaselineBtn");
   const refreshWatchdogsPolicyBaselineBtn = document.getElementById("refreshWatchdogsPolicyBaselineBtn");
   const clearWatchdogsPolicyBaselineBtn = document.getElementById("clearWatchdogsPolicyBaselineBtn");
+  const runWatchdogsPolicyBaselineCheckBtn = document.getElementById("runWatchdogsPolicyBaselineCheckBtn");
+  const refreshWatchdogsPolicyBaselineRunsBtn = document.getElementById("refreshWatchdogsPolicyBaselineRunsBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -110,6 +112,7 @@
   const watchdogsPolicyView = document.getElementById("watchdogsPolicyView");
   const watchdogsPolicyPreviewView = document.getElementById("watchdogsPolicyPreviewView");
   const watchdogsPolicyBaselineView = document.getElementById("watchdogsPolicyBaselineView");
+  const watchdogsPolicyBaselineCheckView = document.getElementById("watchdogsPolicyBaselineCheckView");
   const watchdogsPolicyHistoryView = document.getElementById("watchdogsPolicyHistoryView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
@@ -581,6 +584,31 @@
       watchdogsPolicyBaselineView.textContent = JSON.stringify(result, null, 2);
     }
     await loadWatchdogsPolicyBaseline();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function loadWatchdogsPolicyBaselineRuns() {
+    if (!watchdogsPolicyBaselineCheckView) return;
+    try {
+      const data = await apiGet("deployment.watchdogs.policy.baseline.runs");
+      watchdogsPolicyBaselineCheckView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      watchdogsPolicyBaselineCheckView.textContent = "Failed to load watchdogs policy baseline checks.";
+    }
+  }
+
+  async function runWatchdogsPolicyBaselineCheck() {
+    const result = await apiPost("deployment.watchdogs.policy.baseline.check", {
+      source: "dashboard_manual",
+    });
+    if (watchdogsPolicyBaselineCheckView) {
+      watchdogsPolicyBaselineCheckView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadWatchdogsPolicyBaselineRuns();
+    await loadWatchdogsPolicyBaseline();
+    await loadSchedulerStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -1257,6 +1285,7 @@
     await loadWatchdogsPolicy();
     await loadWatchdogsPolicyHistory();
     await loadWatchdogsPolicyBaseline();
+    await loadWatchdogsPolicyBaselineRuns();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1911,6 +1940,19 @@
   if (clearWatchdogsPolicyBaselineBtn) {
     clearWatchdogsPolicyBaselineBtn.addEventListener("click", async function () {
       await clearWatchdogsPolicyBaseline();
+    });
+  }
+
+  if (runWatchdogsPolicyBaselineCheckBtn) {
+    runWatchdogsPolicyBaselineCheckBtn.addEventListener("click", async function () {
+      await runWatchdogsPolicyBaselineCheck();
+    });
+  }
+
+  if (refreshWatchdogsPolicyBaselineRunsBtn) {
+    refreshWatchdogsPolicyBaselineRunsBtn.addEventListener("click", async function () {
+      await loadWatchdogsPolicyBaselineRuns();
+      await loadWatchdogsPolicyBaseline();
     });
   }
 

@@ -329,6 +329,16 @@ function deployment_watchdogs_policy_baseline_path()
     return app_storage_path('deployment_watchdogs_policy_baseline.json');
 }
 
+function deployment_watchdogs_policy_baseline_state_path()
+{
+    return app_storage_path('deployment_watchdogs_policy_baseline_state.json');
+}
+
+function deployment_watchdogs_policy_baseline_runs_path()
+{
+    return app_storage_path('deployment_watchdogs_policy_baseline_runs.json');
+}
+
 function deployment_cutover_signoffs_path()
 {
     return app_storage_path('deployment_cutover_signoffs.json');
@@ -381,6 +391,8 @@ function module_storage_map()
         'deployment_watchdogs_runs' => deployment_watchdogs_runs_path(),
         'deployment_watchdogs_policy_history' => deployment_watchdogs_policy_history_path(),
         'deployment_watchdogs_policy_baseline' => deployment_watchdogs_policy_baseline_path(),
+        'deployment_watchdogs_policy_baseline_state' => deployment_watchdogs_policy_baseline_state_path(),
+        'deployment_watchdogs_policy_baseline_runs' => deployment_watchdogs_policy_baseline_runs_path(),
         'deployment_cutover_signoffs' => deployment_cutover_signoffs_path(),
     ];
 }
@@ -637,6 +649,110 @@ function deployment_watchdogs_policy_baseline_snapshot($baseline = null)
         'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
         'changed_count' => (int) ($delta['changed_count'] ?? 0),
         'has_changes' => !empty($delta['has_changes']) ? 1 : 0,
+    ];
+}
+
+function deployment_watchdogs_policy_baseline_check_snapshot($source = 'manual')
+{
+    $src = trim((string) $source);
+    if ($src === '') {
+        $src = 'manual';
+    }
+    $snapshot = deployment_watchdogs_policy_baseline_snapshot();
+    $hasBaseline = !empty($snapshot['has_baseline']) ? 1 : 0;
+    $hasChanges = !empty($snapshot['has_changes']) ? 1 : 0;
+    $changedCount = (int) ($snapshot['changed_count'] ?? 0);
+    $status = $hasBaseline ? ($hasChanges ? 'drift' : 'ok') : 'missing_baseline';
+
+    $state = app_read_json_file(deployment_watchdogs_policy_baseline_state_path(), []);
+    if (!is_array($state)) {
+        $state = [];
+    }
+    $prevStatus = strtolower(trim((string) ($state['last_status'] ?? '')));
+    $statusChanged = ($prevStatus !== '' && $prevStatus !== $status) ? 1 : 0;
+    $lastAlertAt = isset($state['last_alert_at']) ? (string) $state['last_alert_at'] : '';
+    $lastAlertTs = $lastAlertAt !== '' ? strtotime($lastAlertAt) : false;
+    $cooldownMinutes = 30;
+    $cooldownActive = ($lastAlertTs !== false) ? ((time() - $lastAlertTs) < ($cooldownMinutes * 60)) : false;
+
+    $alertSent = 0;
+    if ($statusChanged === 1) {
+        $alertType = 'info';
+        $alertMessage = 'Watchdogs policy baseline check status changed to OK.';
+        if ($status === 'drift') {
+            $alertType = 'warning';
+            $alertMessage = 'Watchdogs policy baseline check status changed to DRIFT.';
+        } elseif ($status === 'missing_baseline') {
+            $alertType = 'warning';
+            $alertMessage = 'Watchdogs policy baseline check status changed to MISSING BASELINE.';
+        }
+        push_notification($alertType, $alertMessage, [
+            'source' => $src,
+            'status' => $status,
+            'has_baseline' => $hasBaseline,
+            'has_changes' => $hasChanges,
+            'changed_count' => $changedCount,
+        ]);
+        $alertSent = 1;
+    } elseif ($status === 'drift' && !$cooldownActive) {
+        push_notification('warning', 'Watchdogs policy baseline drift remains active.', [
+            'source' => $src,
+            'status' => $status,
+            'has_baseline' => $hasBaseline,
+            'has_changes' => $hasChanges,
+            'changed_count' => $changedCount,
+        ]);
+        $alertSent = 1;
+    }
+
+    $run = [
+        'run_id' => 'watchdogs_policy_baseline_check_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => $src,
+        'status' => $status,
+        'status_changed' => $statusChanged,
+        'alert_sent' => $alertSent,
+        'has_baseline' => $hasBaseline,
+        'has_changes' => $hasChanges,
+        'changed_count' => $changedCount,
+        'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
+    ];
+    $runs = app_read_json_file(deployment_watchdogs_policy_baseline_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 400);
+    app_write_json_file(deployment_watchdogs_policy_baseline_runs_path(), $runs);
+
+    $now = gmdate('c');
+    $nextState = [
+        'last_checked_at' => $now,
+        'last_status' => $status,
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => $src,
+        'last_alert_at' => ($alertSent === 1) ? $now : (string) ($state['last_alert_at'] ?? ''),
+        'last_alert_sent' => $alertSent,
+        'has_baseline' => $hasBaseline,
+        'has_changes' => $hasChanges,
+        'changed_count' => $changedCount,
+    ];
+    app_write_json_file(deployment_watchdogs_policy_baseline_state_path(), $nextState);
+
+    audit_event('deployment', 'watchdogs.policy.baseline.check', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'source' => $src,
+        'status' => $status,
+        'has_baseline' => $hasBaseline,
+        'has_changes' => $hasChanges,
+        'changed_count' => $changedCount,
+        'alert_sent' => $alertSent,
+    ]);
+
+    return [
+        'run' => $run,
+        'state' => $nextState,
+        'snapshot' => $snapshot,
     ];
 }
 
@@ -2761,6 +2877,8 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $watchdogsState = app_read_json_file(deployment_watchdogs_state_path(), []);
     $watchdogsRuns = app_read_json_file(deployment_watchdogs_runs_path(), []);
     $watchdogsPolicyBaseline = deployment_watchdogs_policy_baseline_snapshot();
+    $watchdogsPolicyBaselineState = app_read_json_file(deployment_watchdogs_policy_baseline_state_path(), []);
+    $watchdogsPolicyBaselineRuns = app_read_json_file(deployment_watchdogs_policy_baseline_runs_path(), []);
     $smokeHistory = deployment_smoke_history_snapshot();
     $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
     $releaseLog = app_read_json_file(deployment_release_log_path(), []);
@@ -2785,7 +2903,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.56-watchdogs-baseline-drift-alerting',
+        'phase' => '1.57-watchdogs-policy-baseline-check-runs',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2813,6 +2931,10 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
             'runs' => array_slice(is_array($watchdogsRuns) ? $watchdogsRuns : [], 0, 200),
         ],
         'watchdogs_policy_baseline' => $watchdogsPolicyBaseline,
+        'watchdogs_policy_baseline_check' => [
+            'state' => is_array($watchdogsPolicyBaselineState) ? $watchdogsPolicyBaselineState : [],
+            'runs' => array_slice(is_array($watchdogsPolicyBaselineRuns) ? $watchdogsPolicyBaselineRuns : [], 0, 200),
+        ],
         'smoke_history' => $smokeHistory,
         'pipeline_runs' => array_slice(is_array($pipelineRuns) ? $pipelineRuns : [], 0, 100),
         'release_log' => array_slice(is_array($releaseLog) ? $releaseLog : [], 0, 100),
@@ -4059,6 +4181,7 @@ $rateLimitedWriteActions = [
     'deployment.watchdogs.policy.restore',
     'deployment.watchdogs.policy.baseline.set',
     'deployment.watchdogs.policy.baseline.clear',
+    'deployment.watchdogs.policy.baseline.check',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -4107,7 +4230,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.56-watchdogs-baseline-drift-alerting',
+        'phase' => '1.57-watchdogs-policy-baseline-check-runs',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4553,6 +4676,43 @@ if ($action === 'deployment.watchdogs.policy.baseline.clear') {
         'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
         'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
         'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.baseline.runs') {
+    $runs = app_read_json_file(deployment_watchdogs_policy_baseline_runs_path(), []);
+    $state = app_read_json_file(deployment_watchdogs_policy_baseline_state_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    if (!is_array($state)) {
+        $state = [];
+    }
+    out_json([
+        'ok' => true,
+        'count' => count($runs),
+        'items' => $runs,
+        'state' => $state,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.baseline.check') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $source = isset($data['source']) ? (string) $data['source'] : 'dashboard_manual';
+    $result = deployment_watchdogs_policy_baseline_check_snapshot($source);
+    out_json([
+        'ok' => true,
+        'check' => $result,
         'time' => gmdate('c'),
     ]);
 }
@@ -6712,6 +6872,8 @@ if ($action === 'automation.scheduler.status') {
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsCheckState = app_read_json_file(deployment_watchdogs_state_path(), []);
     $watchdogsCheckRuns = app_read_json_file(deployment_watchdogs_runs_path(), []);
+    $watchdogsPolicyBaselineState = app_read_json_file(deployment_watchdogs_policy_baseline_state_path(), []);
+    $watchdogsPolicyBaselineRuns = app_read_json_file(deployment_watchdogs_policy_baseline_runs_path(), []);
     $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
     $lastSignoffIntegrityRun = [];
     if (is_array($signoffIntegrityRuns) && !empty($signoffIntegrityRuns[0]) && is_array($signoffIntegrityRuns[0])) {
@@ -6720,6 +6882,10 @@ if ($action === 'automation.scheduler.status') {
     $lastWatchdogsCheckRun = [];
     if (is_array($watchdogsCheckRuns) && !empty($watchdogsCheckRuns[0]) && is_array($watchdogsCheckRuns[0])) {
         $lastWatchdogsCheckRun = $watchdogsCheckRuns[0];
+    }
+    $lastWatchdogsPolicyBaselineRun = [];
+    if (is_array($watchdogsPolicyBaselineRuns) && !empty($watchdogsPolicyBaselineRuns[0]) && is_array($watchdogsPolicyBaselineRuns[0])) {
+        $lastWatchdogsPolicyBaselineRun = $watchdogsPolicyBaselineRuns[0];
     }
     out_json([
         'ok' => true,
@@ -6734,6 +6900,8 @@ if ($action === 'automation.scheduler.status') {
         'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'watchdogs_check_state' => is_array($watchdogsCheckState) ? $watchdogsCheckState : [],
         'watchdogs_check_last_run' => $lastWatchdogsCheckRun,
+        'watchdogs_policy_baseline_check_state' => is_array($watchdogsPolicyBaselineState) ? $watchdogsPolicyBaselineState : [],
+        'watchdogs_policy_baseline_check_last_run' => $lastWatchdogsPolicyBaselineRun,
         'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         'time' => gmdate('c'),
     ]);
@@ -6795,6 +6963,7 @@ if ($action === 'automation.scheduler.tick') {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_disabled', null);
         $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_disabled');
         $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_disabled', null);
+        $watchdogsPolicyBaselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('scheduler_tick_disabled');
         $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
         out_json([
             'ok' => true,
@@ -6803,6 +6972,7 @@ if ($action === 'automation.scheduler.tick') {
             'release_gate_watch' => $watch,
             'signoff_integrity_watch' => $signoffWatch,
             'watchdogs_check' => $watchdogsCheck,
+            'watchdogs_policy_baseline_check' => $watchdogsPolicyBaselineCheck,
             'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         ]);
     }
@@ -6813,6 +6983,7 @@ if ($action === 'automation.scheduler.tick') {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_interval_skip', null);
         $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_interval_skip');
         $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_interval_skip', null);
+        $watchdogsPolicyBaselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('scheduler_tick_interval_skip');
         $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
         out_json([
             'ok' => true,
@@ -6822,6 +6993,7 @@ if ($action === 'automation.scheduler.tick') {
             'release_gate_watch' => $watch,
             'signoff_integrity_watch' => $signoffWatch,
             'watchdogs_check' => $watchdogsCheck,
+            'watchdogs_policy_baseline_check' => $watchdogsPolicyBaselineCheck,
             'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         ]);
     }
@@ -6829,6 +7001,7 @@ if ($action === 'automation.scheduler.tick') {
     $watch = deployment_release_gate_watch_snapshot('scheduler_tick_run', null);
     $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_run');
     $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_run', null);
+    $watchdogsPolicyBaselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('scheduler_tick_run');
     $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
@@ -6839,6 +7012,7 @@ if ($action === 'automation.scheduler.tick') {
         'release_gate_watch' => $watch,
         'signoff_integrity_watch' => $signoffWatch,
         'watchdogs_check' => $watchdogsCheck,
+        'watchdogs_policy_baseline_check' => $watchdogsPolicyBaselineCheck,
         'watchdogs_incident_summary' => $watchdogsIncidentSummary,
     ]);
 }
