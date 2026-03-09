@@ -568,6 +568,25 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>WebOps Incidents</h2>
+                <div class="actions">
+                    <button id="refreshWebopsIncidentsBtn" type="button">Refresh WebOps Incidents</button>
+                </div>
+                <pre id="webopsIncidents">Loading...</pre>
+                <form id="webopsIncidentForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="webopsIncidentId">Incident ID</label>
+                        <input id="webopsIncidentId" type="text" placeholder="webops_incident_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="webopsIncidentNote">Resolution note</label>
+                        <textarea id="webopsIncidentNote" rows="3" placeholder="Why was this incident resolved?"></textarea>
+                    </div>
+                    <button id="resolveWebopsIncidentBtn" type="button">Resolve Incident</button>
+                </form>
+            </section>
+
+            <section class="api-status">
                 <h2>SEO Projects</h2>
                 <pre id="seoProjects">Loading...</pre>
                 <form id="seoProjectForm" class="inline-form">

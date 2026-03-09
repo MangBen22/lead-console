@@ -232,6 +232,7 @@
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
+  const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
@@ -240,6 +241,8 @@
   const webopsMonitors = document.getElementById("webopsMonitors");
   const webopsTypes = document.getElementById("webopsTypes");
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
+  const webopsIncidents = document.getElementById("webopsIncidents");
+  const webopsIncidentForm = document.getElementById("webopsIncidentForm");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -2278,6 +2281,16 @@
     }
   }
 
+  async function loadWebopsIncidents() {
+    if (!webopsIncidents) return;
+    try {
+      const data = await apiGet("webops.incidents.list");
+      webopsIncidents.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsIncidents.textContent = "Failed to load WebOps incidents.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -2342,6 +2355,7 @@
     await loadSocialRetryQueue();
     await loadWebopsTypes();
     await loadWebopsMonitors();
+    await loadWebopsIncidents();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -2756,6 +2770,12 @@
     });
   }
 
+  if (refreshWebopsIncidentsBtn) {
+    refreshWebopsIncidentsBtn.addEventListener("click", async function () {
+      await loadWebopsIncidents();
+    });
+  }
+
   if (webopsMonitorForm) {
     webopsMonitorForm.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -2821,6 +2841,38 @@
         if (webopsResult) {
           webopsResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadWebopsIncidents();
+      });
+    }
+  }
+
+  if (webopsIncidentForm) {
+    webopsIncidentForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const resolveWebopsIncidentBtn = document.getElementById("resolveWebopsIncidentBtn");
+    if (resolveWebopsIncidentBtn) {
+      resolveWebopsIncidentBtn.addEventListener("click", async function () {
+        const incidentId = document.getElementById("webopsIncidentId");
+        const note = document.getElementById("webopsIncidentNote");
+        const id = incidentId && incidentId.value ? incidentId.value.trim() : "";
+        if (!id) {
+          if (webopsResult) webopsResult.textContent = "Enter Incident ID to resolve.";
+          return;
+        }
+        const result = await apiPost("webops.incidents.resolve", {
+          incident_id: id,
+          note: note ? note.value.trim() : "",
+        });
+        if (webopsResult) {
+          webopsResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadWebopsIncidents();
+        const data = await apiGet("webops.summary");
+        const panel = document.getElementById("modWebops");
+        if (panel) {
+          panel.textContent = JSON.stringify(data, null, 2);
+        }
       });
     }
   }
@@ -2833,6 +2885,7 @@
       }
       await loadWebopsLog();
       await loadWebopsRetryQueue();
+      await loadWebopsIncidents();
       const data = await apiGet("webops.summary");
       const panel = document.getElementById("modWebops");
       if (panel) {
@@ -2848,6 +2901,7 @@
         webopsResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadWebopsRetryQueue();
+      await loadWebopsIncidents();
       const data = await apiGet("webops.summary");
       const panel = document.getElementById("modWebops");
       if (panel) {

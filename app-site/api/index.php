@@ -395,6 +395,11 @@ function webops_retry_queue_path()
     return app_storage_path('webops_retry_queue.json');
 }
 
+function webops_incidents_path()
+{
+    return app_storage_path('webops_incidents.json');
+}
+
 function webops_monitor_catalog()
 {
     return [
@@ -649,6 +654,7 @@ function module_storage_map()
         'webops_monitors' => webops_monitors_path(),
         'webops_log' => webops_log_path(),
         'webops_retry_queue' => webops_retry_queue_path(),
+        'webops_incidents' => webops_incidents_path(),
         'seo_projects' => seo_projects_path(),
         'seo_audits' => seo_audits_path(),
         'seo_extension_events' => seo_extension_events_path(),
@@ -3876,7 +3882,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.12-webops-monitor-catalog',
+        'phase' => '2.13-webops-incident-registry',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4630,6 +4636,71 @@ function enqueue_webops_retry_item($item)
     array_unshift($queue, $item);
     $queue = array_slice($queue, 0, 500);
     app_write_json_file(webops_retry_queue_path(), $queue);
+}
+
+function webops_record_incident($monitor, $result, $source = 'run')
+{
+    $rows = app_read_json_file(webops_incidents_path(), []);
+    $monitorId = (string) ($monitor['monitor_id'] ?? $result['monitor_id'] ?? '');
+    $severity = (string) ($result['severity'] ?? 'warning');
+    $ok = !empty($result['ok']);
+    $updatedIncident = null;
+
+    foreach ($rows as $index => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['monitor_id'] ?? '') !== $monitorId || (string) ($row['status'] ?? '') !== 'open') {
+            continue;
+        }
+        if ($ok) {
+            $row['status'] = 'resolved';
+            $row['resolved_at'] = gmdate('c');
+            $row['updated_at'] = gmdate('c');
+            $row['resolution_source'] = $source;
+            $row['resolution_message'] = (string) ($result['message'] ?? '');
+            $rows[$index] = $row;
+            $updatedIncident = $row;
+            push_notification('info', 'WebOps incident resolved for monitor ' . $monitorId . '.', ['monitor_id' => $monitorId, 'incident_id' => (string) ($row['incident_id'] ?? '')]);
+        } else {
+            $row['severity'] = $severity;
+            $row['message'] = (string) ($result['message'] ?? '');
+            $row['error_code'] = (string) ($result['error_code'] ?? '');
+            $row['occurrences'] = (int) ($row['occurrences'] ?? 0) + 1;
+            $row['last_seen_at'] = gmdate('c');
+            $row['updated_at'] = gmdate('c');
+            $row['source'] = $source;
+            $rows[$index] = $row;
+            $updatedIncident = $row;
+        }
+        app_write_json_file(webops_incidents_path(), $rows);
+        return $updatedIncident;
+    }
+
+    if ($ok) {
+        return null;
+    }
+
+    $incident = [
+        'incident_id' => 'webops_incident_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'monitor_id' => $monitorId,
+        'monitor_name' => (string) ($monitor['name'] ?? ''),
+        'type' => (string) ($monitor['type'] ?? $result['type'] ?? ''),
+        'severity' => $severity,
+        'status' => 'open',
+        'message' => (string) ($result['message'] ?? ''),
+        'error_code' => (string) ($result['error_code'] ?? ''),
+        'occurrences' => 1,
+        'source' => $source,
+        'created_at' => gmdate('c'),
+        'last_seen_at' => gmdate('c'),
+        'updated_at' => gmdate('c'),
+    ];
+    array_unshift($rows, $incident);
+    $rows = array_slice($rows, 0, 500);
+    app_write_json_file(webops_incidents_path(), $rows);
+    push_notification('critical', 'WebOps incident opened for monitor ' . $monitorId . '.', ['monitor_id' => $monitorId, 'incident_id' => (string) ($incident['incident_id'] ?? '')]);
+    return $incident;
 }
 
 function execute_webops_monitor($monitor)
@@ -5437,7 +5508,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.12-webops-monitor-catalog',
+        'phase' => '2.13-webops-incident-registry',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7587,6 +7658,13 @@ if ($action === 'webops.summary') {
     $logs = app_read_json_file(webops_log_path(), []);
     $lastRun = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
     $retryCount = count(app_read_json_file(webops_retry_queue_path(), []));
+    $incidentRows = app_read_json_file(webops_incidents_path(), []);
+    $openIncidents = 0;
+    foreach ($incidentRows as $incidentRow) {
+        if (is_array($incidentRow) && strtolower((string) ($incidentRow['status'] ?? 'open')) === 'open') {
+            $openIncidents++;
+        }
+    }
     $critical = 0;
     if (is_array($lastRun) && isset($lastRun['results']) && is_array($lastRun['results'])) {
         foreach ($lastRun['results'] as $row) {
@@ -7601,7 +7679,8 @@ if ($action === 'webops.summary') {
         'status' => 'active',
         'metrics' => [
             'sites_monitored' => count($active),
-            'active_incidents' => $critical + $retryCount,
+            'active_incidents' => $openIncidents,
+            'retry_backlog' => $retryCount,
             'uptime_percent' => 100,
         ],
         'last_run' => $lastRun,
@@ -8416,6 +8495,7 @@ if ($action === 'webops.monitors.test') {
         out_json(['ok' => false, 'error' => 'Monitor not found.'], 404);
     }
     $result = execute_webops_monitor($monitor);
+    webops_record_incident($monitor, $result, 'test');
     out_json([
         'ok' => true,
         'monitor_id' => (string) ($monitor['monitor_id'] ?? ''),
@@ -8441,6 +8521,7 @@ if ($action === 'webops.run') {
     $critical = 0;
     foreach ($active as $monitor) {
         $res = execute_webops_monitor($monitor);
+        webops_record_incident($monitor, $res, 'run');
         $results[] = $res;
         if (($res['severity'] ?? '') === 'critical') {
             $critical++;
@@ -8476,6 +8557,46 @@ if ($action === 'webops.log') {
     out_json(['ok' => true, 'count' => count($logs), 'items' => $logs]);
 }
 
+if ($action === 'webops.incidents.list') {
+    $rows = app_read_json_file(webops_incidents_path(), []);
+    out_json(['ok' => true, 'count' => count($rows), 'items' => $rows]);
+}
+
+if ($action === 'webops.incidents.resolve') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['incident_id'])) {
+        out_json(['ok' => false, 'error' => 'incident_id is required.'], 400);
+    }
+    $incidentId = (string) $data['incident_id'];
+    $rows = app_read_json_file(webops_incidents_path(), []);
+    $updated = null;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row) || (string) ($row['incident_id'] ?? '') !== $incidentId) {
+            continue;
+        }
+        $row['status'] = 'resolved';
+        $row['resolved_at'] = gmdate('c');
+        $row['updated_at'] = gmdate('c');
+        $row['resolution_source'] = 'manual';
+        $row['resolution_note'] = trim((string) ($data['note'] ?? ''));
+        $rows[$index] = $row;
+        $updated = $row;
+        break;
+    }
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Incident not found.'], 404);
+    }
+    app_write_json_file(webops_incidents_path(), $rows);
+    audit_event('webops', 'incidents.resolve', ['incident_id' => $incidentId]);
+    push_notification('info', 'WebOps incident manually resolved.', ['incident_id' => $incidentId]);
+    out_json(['ok' => true, 'incident' => $updated]);
+}
+
 if ($action === 'webops.retry.list') {
     $queue = app_read_json_file(webops_retry_queue_path(), []);
     out_json(['ok' => true, 'count' => count($queue), 'items' => $queue]);
@@ -8504,6 +8625,7 @@ if ($action === 'webops.retry.run') {
             continue;
         }
         $res = execute_webops_monitor($monitor);
+        webops_record_incident($monitor, $res, 'retry');
         if (!empty($res['ok'])) {
             $succeeded++;
             continue;
