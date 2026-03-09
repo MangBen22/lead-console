@@ -3472,7 +3472,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.97-release-gate-quickstats-endpoint',
+        'phase' => '1.98-release-gate-meta-breakdowns',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4800,7 +4800,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.97-release-gate-quickstats-endpoint',
+        'phase' => '1.98-release-gate-meta-breakdowns',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5069,12 +5069,29 @@ if ($action === 'deployment.release.gate.runs.meta') {
 
     $sourceCounts = [];
     $failedCounts = [];
+    $sourceGroupCounts = ['scheduler' => 0, 'manual' => 0];
+    $statusChangeCounts = ['changed' => 0, 'stable' => 0];
+    $transitionToCounts = ['to_blocked' => 0, 'to_allowed' => 0];
     foreach ($items as $row) {
         if (!is_array($row)) {
             continue;
         }
-        $source = trim((string) ($row['source'] ?? ''));
-        if ($source === '') {
+        $sourceRaw = trim((string) ($row['source'] ?? ''));
+        $sourceLower = strtolower($sourceRaw);
+        $isScheduler = (strpos($sourceLower, 'scheduler_') === 0);
+        $sourceGroupCounts[$isScheduler ? 'scheduler' : 'manual']++;
+        $statusChanged = !empty($row['status_changed']) ? 1 : 0;
+        $statusChangeCounts[$statusChanged === 1 ? 'changed' : 'stable']++;
+        if ($statusChanged === 1) {
+            $allowed = !empty($row['allowed']) ? 1 : 0;
+            if ($allowed === 1) {
+                $transitionToCounts['to_allowed']++;
+            } else {
+                $transitionToCounts['to_blocked']++;
+            }
+        }
+        $source = $sourceRaw;
+        if ($sourceRaw === '') {
             $source = '(unknown)';
         }
         if (!isset($sourceCounts[$source])) {
@@ -5107,6 +5124,9 @@ if ($action === 'deployment.release.gate.runs.meta') {
         'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'source_options' => array_slice($sourceCounts, 0, 50, true),
         'failed_item_options' => array_slice($failedCounts, 0, 50, true),
+        'source_group_counts' => $sourceGroupCounts,
+        'status_change_counts' => $statusChangeCounts,
+        'transition_to_counts' => $transitionToCounts,
         'source_group_options' => ['all', 'scheduler', 'manual'],
         'failed_item_mode_options' => ['exact', 'contains'],
         'time' => gmdate('c'),
