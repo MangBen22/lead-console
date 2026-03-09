@@ -324,6 +324,11 @@ function deployment_watchdogs_policy_history_path()
     return app_storage_path('deployment_watchdogs_policy_history.json');
 }
 
+function deployment_watchdogs_policy_baseline_path()
+{
+    return app_storage_path('deployment_watchdogs_policy_baseline.json');
+}
+
 function deployment_cutover_signoffs_path()
 {
     return app_storage_path('deployment_cutover_signoffs.json');
@@ -375,6 +380,7 @@ function module_storage_map()
         'deployment_watchdogs_state' => deployment_watchdogs_state_path(),
         'deployment_watchdogs_runs' => deployment_watchdogs_runs_path(),
         'deployment_watchdogs_policy_history' => deployment_watchdogs_policy_history_path(),
+        'deployment_watchdogs_policy_baseline' => deployment_watchdogs_policy_baseline_path(),
         'deployment_cutover_signoffs' => deployment_cutover_signoffs_path(),
     ];
 }
@@ -597,6 +603,39 @@ function deployment_watchdogs_policy_diff_summary($current, $candidate)
         'changes' => $changes,
         'changed_count' => $changedCount,
         'has_changes' => ($changedCount > 0) ? 1 : 0,
+    ];
+}
+
+function deployment_watchdogs_policy_baseline_snapshot($baseline = null)
+{
+    $row = is_array($baseline) ? $baseline : app_read_json_file(deployment_watchdogs_policy_baseline_path(), []);
+    $current = deployment_watchdogs_policy_settings_from_guard();
+    if (!is_array($row) || !isset($row['settings']) || !is_array($row['settings'])) {
+        return [
+            'has_baseline' => 0,
+            'baseline' => null,
+            'current' => $current,
+            'delta' => [],
+            'changed_count' => 0,
+            'has_changes' => 0,
+        ];
+    }
+    $baselineSettings = deployment_watchdogs_policy_settings_from_guard($row['settings']);
+    $delta = deployment_watchdogs_policy_diff_summary($baselineSettings, $current);
+    return [
+        'has_baseline' => 1,
+        'baseline' => [
+            'settings' => $baselineSettings,
+            'set_at' => (string) ($row['set_at'] ?? ''),
+            'source' => (string) ($row['source'] ?? ''),
+            'history_id' => (string) ($row['history_id'] ?? ''),
+            'mode' => (string) ($row['mode'] ?? ''),
+            'actor' => isset($row['actor']) && is_array($row['actor']) ? $row['actor'] : [],
+        ],
+        'current' => isset($delta['candidate']) && is_array($delta['candidate']) ? $delta['candidate'] : $current,
+        'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
+        'changed_count' => (int) ($delta['changed_count'] ?? 0),
+        'has_changes' => !empty($delta['has_changes']) ? 1 : 0,
     ];
 }
 
@@ -2655,6 +2694,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsState = app_read_json_file(deployment_watchdogs_state_path(), []);
     $watchdogsRuns = app_read_json_file(deployment_watchdogs_runs_path(), []);
+    $watchdogsPolicyBaseline = deployment_watchdogs_policy_baseline_snapshot();
     $smokeHistory = deployment_smoke_history_snapshot();
     $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
     $releaseLog = app_read_json_file(deployment_release_log_path(), []);
@@ -2679,7 +2719,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.53-watchdogs-policy-restore-preview',
+        'phase' => '1.54-watchdogs-policy-baseline-drift',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2706,6 +2746,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
             'state' => is_array($watchdogsState) ? $watchdogsState : [],
             'runs' => array_slice(is_array($watchdogsRuns) ? $watchdogsRuns : [], 0, 200),
         ],
+        'watchdogs_policy_baseline' => $watchdogsPolicyBaseline,
         'smoke_history' => $smokeHistory,
         'pipeline_runs' => array_slice(is_array($pipelineRuns) ? $pipelineRuns : [], 0, 100),
         'release_log' => array_slice(is_array($releaseLog) ? $releaseLog : [], 0, 100),
@@ -3950,6 +3991,8 @@ $rateLimitedWriteActions = [
     'deployment.watchdogs.incident.reopen',
     'deployment.watchdogs.policy.save',
     'deployment.watchdogs.policy.restore',
+    'deployment.watchdogs.policy.baseline.set',
+    'deployment.watchdogs.policy.baseline.clear',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3998,7 +4041,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.53-watchdogs-policy-restore-preview',
+        'phase' => '1.54-watchdogs-policy-baseline-drift',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4326,6 +4369,120 @@ if ($action === 'deployment.watchdogs.policy.preview') {
         'delta' => $delta['changes'],
         'changed_count' => (int) ($delta['changed_count'] ?? 0),
         'has_changes' => !empty($delta['has_changes']) ? 1 : 0,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.baseline.get') {
+    $snapshot = deployment_watchdogs_policy_baseline_snapshot();
+    out_json([
+        'ok' => true,
+        'has_baseline' => !empty($snapshot['has_baseline']) ? 1 : 0,
+        'baseline' => $snapshot['baseline'],
+        'current' => isset($snapshot['current']) && is_array($snapshot['current']) ? $snapshot['current'] : deployment_watchdogs_policy_settings_from_guard(),
+        'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
+        'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
+        'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.baseline.set') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $historyId = trim((string) ($data['history_id'] ?? ''));
+    $mode = strtolower(trim((string) ($data['mode'] ?? 'previous')));
+    if (!in_array($mode, ['previous', 'current'], true)) {
+        $mode = 'previous';
+    }
+    $baselineSettings = deployment_watchdogs_policy_settings_from_guard();
+    $resolvedHistoryId = '';
+    if ($historyId !== '') {
+        $rows = deployment_watchdogs_policy_history_rows();
+        if (empty($rows)) {
+            out_json(['ok' => false, 'error' => 'No watchdog policy history available.'], 404);
+        }
+        $target = deployment_watchdogs_policy_history_select($rows, $historyId);
+        if (!is_array($target)) {
+            out_json(['ok' => false, 'error' => 'History entry not found.'], 404);
+        }
+        $candidateRaw = isset($target[$mode]) && is_array($target[$mode]) ? $target[$mode] : [];
+        $baselineSettings = deployment_watchdogs_policy_settings_from_guard($candidateRaw);
+        $resolvedHistoryId = (string) ($target['history_id'] ?? '');
+    }
+    $source = isset($data['source']) ? (string) $data['source'] : 'dashboard_baseline';
+    $user = app_current_user();
+    $payload = [
+        'settings' => $baselineSettings,
+        'set_at' => gmdate('c'),
+        'source' => $source,
+        'history_id' => $resolvedHistoryId,
+        'mode' => ($resolvedHistoryId !== '') ? $mode : '',
+        'actor' => [
+            'email' => isset($user['email']) ? (string) $user['email'] : '',
+            'role' => isset($user['role']) ? (string) $user['role'] : '',
+        ],
+    ];
+    app_write_json_file(deployment_watchdogs_policy_baseline_path(), $payload);
+    $snapshot = deployment_watchdogs_policy_baseline_snapshot($payload);
+    audit_event('deployment', 'watchdogs.policy.baseline.set', [
+        'source' => $source,
+        'history_id' => $resolvedHistoryId,
+        'mode' => ($resolvedHistoryId !== '') ? $mode : '',
+        'baseline' => $baselineSettings,
+    ]);
+    push_notification('info', 'Watchdogs policy baseline saved.', [
+        'source' => $source,
+        'history_id' => $resolvedHistoryId,
+        'mode' => ($resolvedHistoryId !== '') ? $mode : '',
+        'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'has_baseline' => !empty($snapshot['has_baseline']) ? 1 : 0,
+        'baseline' => $snapshot['baseline'],
+        'current' => isset($snapshot['current']) && is_array($snapshot['current']) ? $snapshot['current'] : deployment_watchdogs_policy_settings_from_guard(),
+        'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
+        'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
+        'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.baseline.clear') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $source = isset($data['source']) ? (string) $data['source'] : 'dashboard_baseline_clear';
+    app_write_json_file(deployment_watchdogs_policy_baseline_path(), []);
+    $snapshot = deployment_watchdogs_policy_baseline_snapshot([]);
+    audit_event('deployment', 'watchdogs.policy.baseline.clear', [
+        'source' => $source,
+    ]);
+    push_notification('warning', 'Watchdogs policy baseline cleared.', [
+        'source' => $source,
+    ]);
+    out_json([
+        'ok' => true,
+        'has_baseline' => !empty($snapshot['has_baseline']) ? 1 : 0,
+        'baseline' => $snapshot['baseline'],
+        'current' => isset($snapshot['current']) && is_array($snapshot['current']) ? $snapshot['current'] : deployment_watchdogs_policy_settings_from_guard(),
+        'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
+        'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
+        'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
         'time' => gmdate('c'),
     ]);
 }

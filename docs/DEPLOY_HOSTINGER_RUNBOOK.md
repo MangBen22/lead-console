@@ -80,6 +80,7 @@
 27. Review `Refresh Watchdogs Policy History` before launch to confirm threshold changes and actor/source audit trail.
 28. If needed, use `Restore Watchdogs Policy` (with optional history ID + mode) to roll back thresholds quickly and log the restore action.
 29. Use `Preview Restore Diff` before restore actions to confirm threshold deltas and avoid no-op restores.
+30. Save a `Policy Baseline` and verify `Refresh Baseline Drift` returns `has_changes=0` before cutover approval.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
