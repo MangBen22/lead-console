@@ -117,6 +117,7 @@
 64. Use `reason_count_min` / `reason_count_max` to focus only high-noise or low-noise gate runs during analysis.
 65. Use `recent_ratio_min` to isolate runs where recent blocked trend severity crosses your investigation threshold.
 66. Use `transition_to` filter to isolate gate flips specifically toward `to_blocked` or `to_allowed`.
+67. Use `Scheduler Group` and `Manual Group` presets for one-click source-group segmentation.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
