@@ -1406,6 +1406,120 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
     ];
 }
 
+function deployment_watchdogs_status_snapshot($freshnessMinutes = null)
+{
+    $guardCfg = get_deployment_guard();
+    $defaultWindow = isset($guardCfg['release_gate_freshness_minutes']) ? (int) $guardCfg['release_gate_freshness_minutes'] : 30;
+    $windowInput = ($freshnessMinutes === null) ? $defaultWindow : (int) $freshnessMinutes;
+    $window = max(5, min(1440, $windowInput));
+    $nowTs = time();
+
+    $gateState = app_read_json_file(deployment_release_gate_state_path(), []);
+    if (!is_array($gateState)) {
+        $gateState = [];
+    }
+    $signoffWatchState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    if (!is_array($signoffWatchState)) {
+        $signoffWatchState = [];
+    }
+
+    $gateCheckedAt = (string) ($gateState['last_checked_at'] ?? '');
+    $signoffCheckedAt = (string) ($signoffWatchState['last_checked_at'] ?? '');
+    $gateAge = null;
+    $signoffAge = null;
+    if ($gateCheckedAt !== '') {
+        $ts = strtotime($gateCheckedAt);
+        if ($ts !== false) {
+            $gateAge = max(0, (int) floor(($nowTs - $ts) / 60));
+        }
+    }
+    if ($signoffCheckedAt !== '') {
+        $ts = strtotime($signoffCheckedAt);
+        if ($ts !== false) {
+            $signoffAge = max(0, (int) floor(($nowTs - $ts) / 60));
+        }
+    }
+
+    $gateAllowed = array_key_exists('last_allowed', $gateState) ? (!empty($gateState['last_allowed']) ? 1 : 0) : null;
+    $signoffStatus = strtolower(trim((string) ($signoffWatchState['last_status'] ?? 'unknown')));
+    if ($signoffStatus === '') {
+        $signoffStatus = 'unknown';
+    }
+
+    $gateAllowedSeverity = ($gateAllowed === 0) ? 'critical' : 'warning';
+    $signoffStatusSeverity = ($signoffStatus === 'invalid') ? 'critical' : 'warning';
+    $checks = [
+        [
+            'item' => 'release_gate_watch_recent',
+            'ok' => ($gateAge !== null) && ($gateAge <= $window),
+            'severity' => 'warning',
+            'message' => ($gateAge !== null)
+                ? ('Release gate watch age: ' . (int) $gateAge . ' minute(s).')
+                : 'Release gate watch has not run yet.',
+        ],
+        [
+            'item' => 'release_gate_watch_allowed',
+            'ok' => $gateAllowed === 1,
+            'severity' => $gateAllowedSeverity,
+            'message' => $gateAllowed === null
+                ? 'Release gate watch allowed state is unknown.'
+                : ('Release gate current allowed state: ' . ($gateAllowed === 1 ? 'ALLOWED' : 'BLOCKED') . '.'),
+        ],
+        [
+            'item' => 'signoff_integrity_watch_recent',
+            'ok' => ($signoffAge !== null) && ($signoffAge <= $window),
+            'severity' => 'warning',
+            'message' => ($signoffAge !== null)
+                ? ('Signoff integrity watch age: ' . (int) $signoffAge . ' minute(s).')
+                : 'Signoff integrity watch has not run yet.',
+        ],
+        [
+            'item' => 'signoff_integrity_watch_valid',
+            'ok' => $signoffStatus === 'valid',
+            'severity' => $signoffStatusSeverity,
+            'message' => 'Signoff integrity watch status: ' . strtoupper($signoffStatus) . '.',
+        ],
+    ];
+
+    $criticalFailed = 0;
+    $warningFailed = 0;
+    foreach ($checks as $check) {
+        if (!empty($check['ok'])) {
+            continue;
+        }
+        if ((string) ($check['severity'] ?? 'warning') === 'critical') {
+            $criticalFailed++;
+        } else {
+            $warningFailed++;
+        }
+    }
+
+    $status = 'ok';
+    if ($criticalFailed > 0) {
+        $status = 'critical';
+    } elseif ($warningFailed > 0) {
+        $status = 'warning';
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'status' => $status,
+        'freshness_window_minutes' => $window,
+        'summary' => [
+            'critical_failed' => $criticalFailed,
+            'warning_failed' => $warningFailed,
+            'check_count' => count($checks),
+            'gate_watch_age_minutes' => $gateAge,
+            'signoff_watch_age_minutes' => $signoffAge,
+            'gate_allowed' => $gateAllowed,
+            'signoff_watch_status' => $signoffStatus,
+        ],
+        'checks' => $checks,
+        'release_gate_watch_state' => $gateState,
+        'signoff_integrity_watch_state' => $signoffWatchState,
+    ];
+}
+
 function deployment_artifact_manifest_snapshot()
 {
     $root = dirname(__DIR__, 2);
@@ -2140,7 +2254,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.39-release-gate-signoff-watch-policy',
+        'phase' => '1.40-deployment-watchdogs-status',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3437,7 +3551,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.39-release-gate-signoff-watch-policy',
+        'phase' => '1.40-deployment-watchdogs-status',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -3663,6 +3777,16 @@ if ($action === 'deployment.release.gate.runs') {
         'state' => is_array($state) ? $state : [],
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'deployment.watchdogs.status') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
+    $watchdogs = deployment_watchdogs_status_snapshot($freshness);
+    out_json([
+        'ok' => true,
+        'watchdogs' => $watchdogs,
+        'time' => gmdate('c'),
+    ], ((string) ($watchdogs['status'] ?? 'ok') === 'critical') ? 409 : 200);
 }
 
 if ($action === 'deployment.release.log') {

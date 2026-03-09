@@ -27,6 +27,7 @@
   const saveReleaseGateSettingsBtn = document.getElementById("saveReleaseGateSettingsBtn");
   const runReleaseGateWatchBtn = document.getElementById("runReleaseGateWatchBtn");
   const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
+  const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -82,6 +83,7 @@
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
+  const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -421,6 +423,20 @@
     }
   }
 
+  async function loadWatchdogsStatus() {
+    if (!watchdogsStatusView) return;
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+    try {
+      const data = await apiGetWithParams("deployment.watchdogs.status", { freshness_minutes: safeFreshness });
+      watchdogsStatusView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      watchdogsStatusView.textContent = "Failed to load watchdogs status.";
+    }
+  }
+
   async function runReleaseGateWatch() {
     const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
       ? Number(releaseGateFreshnessInput.value)
@@ -436,6 +452,7 @@
     await loadReleaseGate();
     await loadGoLiveStatus();
     await loadReleaseGateRuns();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -603,6 +620,7 @@
     await verifyLatestCutoverSignoff();
     await loadReleaseGate();
     await loadGoLiveStatus();
+    await loadWatchdogsStatus();
     await loadSchedulerStatus();
     await loadNotifications();
     await loadAuditLog();
@@ -627,6 +645,7 @@
     await loadCutoverReadiness();
     await loadSmokeHistory();
     await loadReleaseGate();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -641,6 +660,7 @@
     await loadCutoverReadiness();
     await loadSmokeHistory();
     await loadReleaseGate();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -662,6 +682,7 @@
     await loadCutoverReadiness();
     await loadReleaseGate();
     await loadGoLiveStatus();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -682,6 +703,7 @@
     await verifyLatestCutoverSignoff();
     await loadReleaseGate();
     await loadGoLiveStatus();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -703,6 +725,7 @@
     await verifyLatestCutoverSignoff();
     await loadReleaseGate();
     await loadGoLiveStatus();
+    await loadWatchdogsStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -964,6 +987,7 @@
     await loadGoLiveStatus();
     await loadReleaseGate();
     await loadReleaseGateRuns();
+    await loadWatchdogsStatus();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1350,6 +1374,7 @@
       await loadReleaseGateRuns();
       await loadReleaseGate();
       await loadGoLiveStatus();
+      await loadWatchdogsStatus();
       await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
     });
@@ -1464,6 +1489,7 @@
     refreshGoLiveStatusBtn.addEventListener("click", async function () {
       await loadGoLiveStatus();
       await loadReleaseGate();
+      await loadWatchdogsStatus();
     });
   }
 
@@ -1472,6 +1498,7 @@
       await loadReleaseGate();
       await loadGoLiveStatus();
       await loadReleaseGateRuns();
+      await loadWatchdogsStatus();
     });
   }
 
@@ -1498,6 +1525,7 @@
       await loadReleaseGate();
       await loadGoLiveStatus();
       await loadReleaseGateRuns();
+      await loadWatchdogsStatus();
       await loadAuditLog();
       await loadStatus();
     });
@@ -1512,6 +1540,13 @@
   if (refreshReleaseGateRunsBtn) {
     refreshReleaseGateRunsBtn.addEventListener("click", async function () {
       await loadReleaseGateRuns();
+      await loadWatchdogsStatus();
+    });
+  }
+
+  if (refreshWatchdogsStatusBtn) {
+    refreshWatchdogsStatusBtn.addEventListener("click", async function () {
+      await loadWatchdogsStatus();
     });
   }
 
@@ -1606,6 +1641,7 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadWatchdogsStatus();
       await loadCutoverReadiness();
     });
   }
@@ -1722,6 +1758,7 @@
   if (refreshSignoffIntegrityRunsBtn) {
     refreshSignoffIntegrityRunsBtn.addEventListener("click", async function () {
       await loadCutoverSignoffIntegrityRuns();
+      await loadWatchdogsStatus();
       await loadSchedulerStatus();
     });
   }
@@ -1761,6 +1798,7 @@
       await loadInstallCheck();
       await loadPreflight();
       await loadGoLiveStatus();
+      await loadWatchdogsStatus();
       await loadDeploymentGuard();
       await loadAuditLog();
       await loadNotifications();
@@ -1782,6 +1820,7 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadWatchdogsStatus();
       await loadCutoverReadiness();
     });
   }

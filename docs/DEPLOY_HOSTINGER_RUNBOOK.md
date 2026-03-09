@@ -68,6 +68,7 @@
 18. Confirm scheduler status includes both watch states:
    - `release_gate_watch_state`
    - `signoff_integrity_watch_state`
+19. Click `Refresh Watchdogs` in `Go-Live Status` and confirm `deployment.watchdogs.status` is not `critical` before launch.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
