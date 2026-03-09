@@ -38,6 +38,9 @@
   const runSmokeSuiteBtn = document.getElementById("runSmokeSuiteBtn");
   const downloadSmokeHistoryBtn = document.getElementById("downloadSmokeHistoryBtn");
   const downloadCutoverEvidenceBtn = document.getElementById("downloadCutoverEvidenceBtn");
+  const createCutoverSignoffBtn = document.getElementById("createCutoverSignoffBtn");
+  const refreshCutoverSignoffsBtn = document.getElementById("refreshCutoverSignoffsBtn");
+  const downloadLatestSignoffBtn = document.getElementById("downloadLatestSignoffBtn");
   const recordPublicSmokePassBtn = document.getElementById("recordPublicSmokePassBtn");
   const recordPublicSmokeFailBtn = document.getElementById("recordPublicSmokeFailBtn");
   const recordAuthSmokePassBtn = document.getElementById("recordAuthSmokePassBtn");
@@ -81,9 +84,12 @@
   const cutoverPipelineView = document.getElementById("cutoverPipelineView");
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
   const cutoverSmokeNote = document.getElementById("cutoverSmokeNote");
+  const cutoverSignoffNote = document.getElementById("cutoverSignoffNote");
   const cutoverReadinessView = document.getElementById("cutoverReadinessView");
   const cutoverSmokeHistoryView = document.getElementById("cutoverSmokeHistoryView");
   const cutoverSmokeRecordView = document.getElementById("cutoverSmokeRecordView");
+  const cutoverSignoffResultView = document.getElementById("cutoverSignoffResultView");
+  const cutoverSignoffListView = document.getElementById("cutoverSignoffListView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
@@ -499,6 +505,16 @@
     }
   }
 
+  async function loadCutoverSignoffs() {
+    if (!cutoverSignoffListView) return;
+    try {
+      const data = await apiGet("deployment.cutover.signoff.list");
+      cutoverSignoffListView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      cutoverSignoffListView.textContent = "Failed to load cutover signoffs.";
+    }
+  }
+
   async function recordSmokeRun(smokeType, okValue) {
     const note = cutoverSmokeNote && cutoverSmokeNote.value ? cutoverSmokeNote.value.trim() : "";
     const payload = {
@@ -531,6 +547,21 @@
     await loadCutoverReadiness();
     await loadSmokeHistory();
     await loadReleaseGate();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function createCutoverSignoff() {
+    const note = cutoverSignoffNote && cutoverSignoffNote.value ? cutoverSignoffNote.value.trim() : "";
+    const result = await apiPost("deployment.cutover.signoff.create", { note: note });
+    if (cutoverSignoffResultView) {
+      cutoverSignoffResultView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCutoverSignoffs();
+    await loadCutoverReadiness();
+    await loadReleaseGate();
+    await loadGoLiveStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -796,6 +827,7 @@
     await loadArtifactManifest();
     await loadCutoverReadiness();
     await loadSmokeHistory();
+    await loadCutoverSignoffs();
     await loadCutoverPipelineRuns();
     await loadBypassLog();
     await loadIncidentReports();
@@ -1434,6 +1466,7 @@
     refreshCutoverReadinessBtn.addEventListener("click", async function () {
       await loadCutoverReadiness();
       await loadSmokeHistory();
+      await loadCutoverSignoffs();
     });
   }
 
@@ -1467,6 +1500,33 @@
       downloadJsonFile(bundleId + ".json", data);
       await loadAuditLog();
       await loadStatus();
+    });
+  }
+
+  if (createCutoverSignoffBtn) {
+    createCutoverSignoffBtn.addEventListener("click", async function () {
+      await createCutoverSignoff();
+    });
+  }
+
+  if (refreshCutoverSignoffsBtn) {
+    refreshCutoverSignoffsBtn.addEventListener("click", async function () {
+      await loadCutoverSignoffs();
+    });
+  }
+
+  if (downloadLatestSignoffBtn) {
+    downloadLatestSignoffBtn.addEventListener("click", async function () {
+      const data = await apiGet("deployment.cutover.signoff.latest");
+      if (cutoverSignoffResultView) {
+        cutoverSignoffResultView.textContent = JSON.stringify(data, null, 2);
+      }
+      const latest = data && data.latest ? data.latest : {};
+      const signoff = latest && latest.latest ? latest.latest : null;
+      if (!signoff || !signoff.signoff_id) {
+        return;
+      }
+      downloadJsonFile(String(signoff.signoff_id) + ".json", data);
     });
   }
 

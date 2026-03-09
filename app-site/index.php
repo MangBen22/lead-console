@@ -578,11 +578,15 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <h3>Cutover Readiness</h3>
                 <label>Smoke check note<input id="cutoverSmokeNote" type="text" placeholder="Optional note for smoke check records..." /></label>
+                <label>Signoff note<input id="cutoverSignoffNote" type="text" placeholder="Optional note for cutover signoff record..." /></label>
                 <div class="actions">
                     <button id="refreshCutoverReadinessBtn" type="button">Refresh Readiness</button>
                     <button id="runSmokeSuiteBtn" type="button">Run Full Smoke Suite</button>
                     <button id="downloadSmokeHistoryBtn" type="button">Download Smoke History</button>
                     <button id="downloadCutoverEvidenceBtn" type="button">Download Cutover Evidence</button>
+                    <button id="createCutoverSignoffBtn" type="button">Create Cutover Signoff</button>
+                    <button id="refreshCutoverSignoffsBtn" type="button">Refresh Signoffs</button>
+                    <button id="downloadLatestSignoffBtn" type="button">Download Latest Signoff</button>
                     <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
                     <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
                     <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>
@@ -591,6 +595,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="cutoverReadinessView">Loading readiness...</pre>
                 <pre id="cutoverSmokeHistoryView">Loading smoke history...</pre>
                 <pre id="cutoverSmokeRecordView">No smoke record action yet.</pre>
+                <pre id="cutoverSignoffResultView">No cutover signoff action yet.</pre>
+                <pre id="cutoverSignoffListView">Loading cutover signoffs...</pre>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>

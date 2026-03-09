@@ -299,6 +299,11 @@ function deployment_release_gate_runs_path()
     return app_storage_path('deployment_release_gate_runs.json');
 }
 
+function deployment_cutover_signoffs_path()
+{
+    return app_storage_path('deployment_cutover_signoffs.json');
+}
+
 function deployment_bypass_log_path()
 {
     return app_storage_path('deployment_bypass_log.json');
@@ -340,6 +345,7 @@ function module_storage_map()
         'automation_settings' => automation_settings_path(),
         'deployment_release_gate_state' => deployment_release_gate_state_path(),
         'deployment_release_gate_runs' => deployment_release_gate_runs_path(),
+        'deployment_cutover_signoffs' => deployment_cutover_signoffs_path(),
     ];
 }
 
@@ -2034,6 +2040,8 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $smokeHistory = deployment_smoke_history_snapshot();
     $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
     $releaseLog = app_read_json_file(deployment_release_log_path(), []);
+    $signoffRows = deployment_cutover_signoff_list_snapshot();
+    $latestSignoff = (!empty($signoffRows) && is_array($signoffRows[0])) ? $signoffRows[0] : null;
     $incidentSummary = deployment_incident_summary_snapshot();
     $slaState = app_read_json_file(deployment_incident_sla_state_path(), []);
     $threshold = is_array($slaState) && isset($slaState['last_threshold_minutes'])
@@ -2052,7 +2060,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.32-cutover-evidence-bundle',
+        'phase' => '1.33-cutover-signoff-workflow',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2060,6 +2068,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
             'smoke_total_runs' => (int) (($smokeHistory['summary']['total_runs'] ?? 0)),
             'pipeline_runs' => count($pipelineRuns),
             'release_candidates' => count($releaseLog),
+            'cutover_signoffs' => count($signoffRows),
             'open_incidents' => (int) ($incidentSummary['open_total'] ?? 0),
             'sla_breach_count' => (int) ($incidentSla['breach_count'] ?? 0),
         ],
@@ -2072,6 +2081,10 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
         'smoke_history' => $smokeHistory,
         'pipeline_runs' => array_slice(is_array($pipelineRuns) ? $pipelineRuns : [], 0, 100),
         'release_log' => array_slice(is_array($releaseLog) ? $releaseLog : [], 0, 100),
+        'cutover_signoff' => [
+            'latest' => $latestSignoff,
+            'items' => array_slice(is_array($signoffRows) ? $signoffRows : [], 0, 100),
+        ],
         'incidents' => [
             'summary' => $incidentSummary,
             'sla' => $incidentSla,
@@ -2090,6 +2103,77 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
             'next_due_in_seconds' => $nextDueIn,
             'modules' => isset($automation['modules']) && is_array($automation['modules']) ? $automation['modules'] : [],
         ],
+    ];
+}
+
+function deployment_cutover_signoff_create_snapshot($note = '')
+{
+    $evidence = deployment_cutover_evidence_bundle_snapshot($note);
+    $gate = isset($evidence['release_gate']) && is_array($evidence['release_gate']) ? $evidence['release_gate'] : [];
+    if (empty($gate['allowed'])) {
+        return [
+            'ok' => false,
+            'error' => 'Release gate blocked cutover signoff.',
+            'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+            'evidence_bundle' => $evidence,
+        ];
+    }
+
+    $signoff = [
+        'signoff_id' => 'signoff_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'actor' => current_actor(),
+        'status' => 'approved',
+        'note' => trim((string) $note),
+        'evidence_bundle_id' => (string) ($evidence['bundle_id'] ?? ''),
+        'evidence_sha256' => hash('sha256', json_encode($evidence, JSON_UNESCAPED_SLASHES)),
+        'summary' => [
+            'readiness_status' => (string) ($evidence['summary']['readiness_status'] ?? 'review_required'),
+            'release_gate_allowed' => !empty($evidence['summary']['release_gate_allowed']) ? 1 : 0,
+            'open_incidents' => (int) ($evidence['summary']['open_incidents'] ?? 0),
+            'sla_breach_count' => (int) ($evidence['summary']['sla_breach_count'] ?? 0),
+            'last_pipeline_status' => (string) ($evidence['readiness']['summary']['last_pipeline_status'] ?? ''),
+        ],
+    ];
+
+    $rows = app_read_json_file(deployment_cutover_signoffs_path(), []);
+    array_unshift($rows, $signoff);
+    $rows = array_slice($rows, 0, 300);
+    app_write_json_file(deployment_cutover_signoffs_path(), $rows);
+
+    return [
+        'ok' => true,
+        'signoff' => $signoff,
+        'evidence_bundle' => $evidence,
+    ];
+}
+
+function deployment_cutover_signoff_list_snapshot()
+{
+    $rows = app_read_json_file(deployment_cutover_signoffs_path(), []);
+    return is_array($rows) ? $rows : [];
+}
+
+function deployment_cutover_signoff_latest_snapshot()
+{
+    $rows = deployment_cutover_signoff_list_snapshot();
+    $latest = (!empty($rows) && is_array($rows[0])) ? $rows[0] : null;
+    $guard = get_deployment_guard();
+    $window = max(5, min(1440, (int) ($guard['release_gate_freshness_minutes'] ?? 30)));
+    $age = null;
+    $isFresh = false;
+    if (is_array($latest)) {
+        $createdTs = strtotime((string) ($latest['created_at'] ?? ''));
+        if ($createdTs !== false) {
+            $age = max(0, (int) floor((time() - $createdTs) / 60));
+            $isFresh = $age <= $window;
+        }
+    }
+    return [
+        'latest' => $latest,
+        'freshness_window_minutes' => $window,
+        'age_minutes' => $age,
+        'is_fresh' => $isFresh ? 1 : 0,
     ];
 }
 
@@ -2863,6 +2947,7 @@ $rateLimitedWriteActions = [
     'deployment.incident.sla.check',
     'deployment.smoke.report',
     'deployment.smoke.suite',
+    'deployment.cutover.signoff.create',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3658,6 +3743,70 @@ if ($action === 'deployment.cutover.evidence.bundle') {
     out_json([
         'ok' => true,
         'bundle' => $bundle,
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.create') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $note = isset($data['note']) ? (string) $data['note'] : '';
+    $snap = deployment_cutover_signoff_create_snapshot($note);
+    if (empty($snap['ok'])) {
+        audit_event('deployment', 'cutover.signoff.blocked', [
+            'reasons' => isset($snap['reasons']) && is_array($snap['reasons']) ? $snap['reasons'] : [],
+        ]);
+        push_notification('critical', 'Cutover signoff blocked by release gate.', [
+            'reasons' => isset($snap['reasons']) && is_array($snap['reasons']) ? $snap['reasons'] : [],
+        ]);
+        out_json([
+            'ok' => false,
+            'error' => (string) ($snap['error'] ?? 'Cutover signoff blocked.'),
+            'reasons' => isset($snap['reasons']) && is_array($snap['reasons']) ? $snap['reasons'] : [],
+            'evidence_bundle' => isset($snap['evidence_bundle']) && is_array($snap['evidence_bundle']) ? $snap['evidence_bundle'] : [],
+        ], 409);
+    }
+    $signoff = isset($snap['signoff']) && is_array($snap['signoff']) ? $snap['signoff'] : [];
+    audit_event('deployment', 'cutover.signoff.create', [
+        'signoff_id' => (string) ($signoff['signoff_id'] ?? ''),
+        'evidence_bundle_id' => (string) ($signoff['evidence_bundle_id'] ?? ''),
+        'status' => (string) ($signoff['status'] ?? 'approved'),
+    ]);
+    push_notification('success', 'Cutover signoff created: ' . (string) ($signoff['signoff_id'] ?? ''), [
+        'signoff_id' => (string) ($signoff['signoff_id'] ?? ''),
+        'evidence_bundle_id' => (string) ($signoff['evidence_bundle_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'signoff' => $signoff,
+        'evidence_bundle' => isset($snap['evidence_bundle']) && is_array($snap['evidence_bundle']) ? $snap['evidence_bundle'] : [],
+        'latest' => deployment_cutover_signoff_latest_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.list') {
+    $rows = deployment_cutover_signoff_list_snapshot();
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+        'latest' => deployment_cutover_signoff_latest_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.latest') {
+    out_json([
+        'ok' => true,
+        'latest' => deployment_cutover_signoff_latest_snapshot(),
+        'time' => gmdate('c'),
     ]);
 }
 
