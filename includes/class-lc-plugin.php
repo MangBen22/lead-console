@@ -1217,6 +1217,24 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/smtp-probe', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_smtp_probe'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/smtp-send-test', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_smtp_send_test'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/smtp-confirm', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_smtp_confirm'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/crm-intake', [
             'methods' => 'POST',
             'callback' => [$this, 'rest_bridge_crm_intake'],
@@ -1309,6 +1327,7 @@ class LC_Plugin
     public function rest_bridge_smtp_health($request)
     {
         $status = $this->get_smtp_health_status();
+        $confirmation = $this->get_smtp_test_confirmation();
         $this->log_system_event('bridge', 'info', 'Bridge SMTP health requested.', [
             'connected' => !empty($status['connected']),
             'checked_at' => (string) ($status['checked_at'] ?? ''),
@@ -1317,6 +1336,101 @@ class LC_Plugin
         return rest_ensure_response([
             'ok' => true,
             'smtp_health' => $status,
+            'test_confirmation' => $confirmation,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_smtp_probe($request)
+    {
+        $result = $this->smtp_connection_probe();
+        $status = $this->update_smtp_health_status($result);
+        $this->log_system_event('bridge', !empty($status['connected']) ? 'info' : 'error', 'Bridge SMTP connection probe executed.', [
+            'status' => $status,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'smtp_health' => $status,
+            'test_confirmation' => $this->get_smtp_test_confirmation(),
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_smtp_send_test($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $to_email = sanitize_email((string) ($payload['to_email'] ?? ''));
+        $result = $this->smtp_send_test_email($to_email);
+        if (!empty($result['success'])) {
+            $this->set_smtp_test_confirmation_state([
+                'confirmed' => 0,
+                'pending' => 1,
+                'to_email' => $to_email,
+                'sent_at' => current_time('mysql'),
+                'confirmed_at' => '',
+                'last_result' => 'sent',
+                'last_error_code' => '',
+            ]);
+        } else {
+            $this->update_smtp_health_status([
+                'connected' => false,
+                'message' => 'SMTP send test failed: ' . (string) ($result['message'] ?? 'Unknown send error.'),
+                'checked_at' => current_time('mysql'),
+            ]);
+            $this->set_smtp_test_confirmation_state([
+                'confirmed' => 0,
+                'pending' => 0,
+                'to_email' => $to_email,
+                'sent_at' => current_time('mysql'),
+                'confirmed_at' => '',
+                'last_result' => 'failed',
+                'last_error_code' => (string) ($result['error_code'] ?? 'send_failed'),
+            ]);
+        }
+        $this->log_system_event('bridge', !empty($result['success']) ? 'info' : 'error', 'Bridge SMTP test email executed.', [
+            'to_email' => $to_email,
+            'result' => $result,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => !empty($result['success']),
+            'result' => $result,
+            'smtp_health' => $this->get_smtp_health_status(),
+            'test_confirmation' => $this->get_smtp_test_confirmation(),
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_smtp_confirm($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $received = !empty($payload['received']) ? 1 : 0;
+        $to_email = sanitize_email((string) ($payload['to_email'] ?? ''));
+        $state = $this->set_smtp_test_confirmation_state([
+            'confirmed' => $received,
+            'pending' => 0,
+            'to_email' => $to_email,
+            'confirmed_at' => $received ? current_time('mysql') : '',
+            'last_result' => $received ? 'confirmed_yes' : 'confirmed_no',
+            'last_error_code' => '',
+        ]);
+        $this->log_system_event('bridge', $received ? 'info' : 'warning', 'Bridge SMTP test email confirmation received.', [
+            'received' => $received,
+            'to_email' => $to_email,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'received' => (bool) $received,
+            'test_confirmation' => $state,
+            'smtp_health' => $this->get_smtp_health_status(),
             'time' => current_time('mysql'),
         ]);
     }
@@ -1578,6 +1692,38 @@ class LC_Plugin
             'message' => 'Not checked yet.',
             'checked_at' => '',
         ]);
+    }
+
+    public function get_smtp_test_confirmation()
+    {
+        $state = get_option('lc_smtp_test_confirmed', []);
+        if (!is_array($state)) {
+            $state = [];
+        }
+        return wp_parse_args($state, [
+            'confirmed' => 0,
+            'pending' => 0,
+            'to_email' => '',
+            'sent_at' => '',
+            'confirmed_at' => '',
+            'last_result' => '',
+            'last_error_code' => '',
+        ]);
+    }
+
+    public function set_smtp_test_confirmation_state($state)
+    {
+        $current = $this->get_smtp_test_confirmation();
+        $next = wp_parse_args((array) $state, $current);
+        $next['confirmed'] = !empty($next['confirmed']) ? 1 : 0;
+        $next['pending'] = !empty($next['pending']) ? 1 : 0;
+        $next['to_email'] = sanitize_email((string) ($next['to_email'] ?? ''));
+        $next['sent_at'] = sanitize_text_field((string) ($next['sent_at'] ?? ''));
+        $next['confirmed_at'] = sanitize_text_field((string) ($next['confirmed_at'] ?? ''));
+        $next['last_result'] = sanitize_text_field((string) ($next['last_result'] ?? ''));
+        $next['last_error_code'] = sanitize_text_field((string) ($next['last_error_code'] ?? ''));
+        update_option('lc_smtp_test_confirmed', $next);
+        return $next;
     }
 
     public function run_smtp_health_check_cron()
