@@ -93,6 +93,7 @@
 40. Use Gate Runs filters (`limit`, `status`, `source`, `failed item`) to isolate specific blocker windows and operator actions.
 41. Use `Download Gate Runs` after applying filters to archive focused blocker evidence for incident and cutover records.
 42. Gate Runs filters persist in browser storage; clear them when switching from deep investigations back to broad launch reviews.
+43. Use Gate preset buttons for baseline-match, baseline-check, and signoff-watch blockers to jump directly into common failure categories.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

@@ -30,6 +30,9 @@
   const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
+  const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
+  const applyGatePresetBaselineCheckBtn = document.getElementById("applyGatePresetBaselineCheckBtn");
+  const applyGatePresetSignoffWatchBtn = document.getElementById("applyGatePresetSignoffWatchBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -556,6 +559,21 @@
         releaseGateRunsFailedItemFilter.value = stored.failed_item;
       }
     } catch (err) {}
+  }
+
+  function applyReleaseGateRunsPreset(failedItem) {
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = "blocked";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = failedItem || "";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
   }
 
   async function loadWatchdogsStatus() {
@@ -1970,6 +1988,27 @@
   if (downloadReleaseGateRunsBtn) {
     downloadReleaseGateRunsBtn.addEventListener("click", async function () {
       await downloadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetBaselineMatchBtn) {
+    applyGatePresetBaselineMatchBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsPreset("watchdogs_policy_baseline_match");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetBaselineCheckBtn) {
+    applyGatePresetBaselineCheckBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsPreset("watchdogs_policy_baseline_check_ok_and_fresh");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetSignoffWatchBtn) {
+    applyGatePresetSignoffWatchBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsPreset("cutover_signoff_integrity_watch_valid_and_fresh");
+      await loadReleaseGateRuns();
     });
   }
 

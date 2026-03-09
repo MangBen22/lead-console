@@ -3141,7 +3141,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.66-release-gate-filter-persistence',
+        'phase' => '1.67-release-gate-filter-presets',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4469,7 +4469,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.66-release-gate-filter-persistence',
+        'phase' => '1.67-release-gate-filter-presets',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

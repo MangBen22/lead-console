@@ -561,6 +561,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="clearReleaseGateRunsFilterBtn" type="button">Clear Gate Filters</button>
                     <button id="downloadReleaseGateRunsBtn" type="button">Download Gate Runs</button>
                 </div>
+                <div class="actions">
+                    <button id="applyGatePresetBaselineMatchBtn" type="button">Preset: Baseline Match</button>
+                    <button id="applyGatePresetBaselineCheckBtn" type="button">Preset: Baseline Check</button>
+                    <button id="applyGatePresetSignoffWatchBtn" type="button">Preset: Signoff Watch</button>
+                </div>
                 <label>Watchdogs incident note<input id="watchdogsIncidentNoteInput" type="text" placeholder="Optional note for resolve/reopen watchdog incident actions..." /></label>
                 <label>Auto-incident threshold (critical streak)<input id="watchdogsAutoIncidentThresholdInput" type="number" min="1" max="10" value="2" /></label>
                 <label>Auto-resolve threshold (OK streak)<input id="watchdogsAutoResolveThresholdInput" type="number" min="1" max="10" value="2" /></label>
