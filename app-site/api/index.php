@@ -1829,6 +1829,10 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     if (!in_array($sustainedFilter, ['all', 'active', 'clear'], true)) {
         $sustainedFilter = 'all';
     }
+    $sustainedAlertFilter = strtolower(trim((string) ($query['sustained_alert'] ?? 'all')));
+    if (!in_array($sustainedAlertFilter, ['all', 'sent', 'not_sent'], true)) {
+        $sustainedAlertFilter = 'all';
+    }
     $sourceFilter = trim((string) ($query['source'] ?? ''));
     $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
     $failedItemFilter = strtolower($failedItemFilterRaw);
@@ -1851,6 +1855,13 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             continue;
         }
         if ($sustainedFilter === 'clear' && $sustainedActive !== 0) {
+            continue;
+        }
+        $sustainedAlertSent = !empty($row['sustained_blocked_alert_sent']) ? 1 : 0;
+        if ($sustainedAlertFilter === 'sent' && $sustainedAlertSent !== 1) {
+            continue;
+        }
+        if ($sustainedAlertFilter === 'not_sent' && $sustainedAlertSent !== 0) {
             continue;
         }
         if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
@@ -1883,6 +1894,7 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'window' => $window,
             'allowed' => $allowedFilter,
             'sustained' => $sustainedFilter,
+            'sustained_alert' => $sustainedAlertFilter,
             'source' => $sourceFilter,
             'failed_item' => $failedItemFilterRaw,
         ],
@@ -3328,7 +3340,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.82-release-gate-sustained-panel',
+        'phase' => '1.83-release-gate-sustained-alert-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4656,7 +4668,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.82-release-gate-sustained-panel',
+        'phase' => '1.83-release-gate-sustained-alert-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

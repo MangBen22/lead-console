@@ -119,6 +119,7 @@
   const releaseGateRunsWindowInput = document.getElementById("releaseGateRunsWindowInput");
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
   const releaseGateRunsSustainedFilter = document.getElementById("releaseGateRunsSustainedFilter");
+  const releaseGateRunsSustainedAlertFilter = document.getElementById("releaseGateRunsSustainedAlertFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
@@ -506,6 +507,9 @@
     const sustained = releaseGateRunsSustainedFilter && releaseGateRunsSustainedFilter.value
       ? releaseGateRunsSustainedFilter.value
       : "all";
+    const sustainedAlert = releaseGateRunsSustainedAlertFilter && releaseGateRunsSustainedAlertFilter.value
+      ? releaseGateRunsSustainedAlertFilter.value
+      : "all";
     const source = releaseGateRunsSourceFilter && releaseGateRunsSourceFilter.value
       ? releaseGateRunsSourceFilter.value.trim()
       : "";
@@ -521,6 +525,7 @@
       window: safeWindow,
       allowed: allowed,
       sustained: sustained,
+      sustained_alert: sustainedAlert,
       source: source,
       failed_item: failedItem,
       transition_limit: transitionLimit,
@@ -592,6 +597,7 @@
     lines.push("Release Gate Runs Digest");
     lines.push("Filters: limit=" + String(f.limit || 0) + ", window=" + String(f.window || 0) + ", allowed=" + String(f.allowed || "all")
       + ", sustained=" + String(f.sustained || "all")
+      + ", sustained_alert=" + String(f.sustained_alert || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
       + ", transition_limit=" + String(f.transition_limit || 12));
@@ -697,6 +703,9 @@
     if (releaseGateRunsSustainedFilter) {
       releaseGateRunsSustainedFilter.value = "all";
     }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "all";
+    }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
@@ -738,6 +747,10 @@
         const sustained = ["all", "active", "clear"].includes(stored.sustained) ? stored.sustained : "all";
         releaseGateRunsSustainedFilter.value = sustained;
       }
+      if (releaseGateRunsSustainedAlertFilter && typeof stored.sustained_alert === "string") {
+        const sustainedAlert = ["all", "sent", "not_sent"].includes(stored.sustained_alert) ? stored.sustained_alert : "all";
+        releaseGateRunsSustainedAlertFilter.value = sustainedAlert;
+      }
       if (releaseGateRunsSourceFilter && typeof stored.source === "string") {
         releaseGateRunsSourceFilter.value = stored.source;
       }
@@ -758,6 +771,9 @@
     }
     if (releaseGateRunsSustainedFilter) {
       releaseGateRunsSustainedFilter.value = "all";
+    }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "all";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = failedItem || "";
@@ -783,6 +799,9 @@
     if (releaseGateRunsSustainedFilter) {
       releaseGateRunsSustainedFilter.value = "all";
     }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "all";
+    }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = source || "";
     }
@@ -803,6 +822,9 @@
   function applyReleaseGateRunsSustainedPreset(sustained, allowed) {
     if (releaseGateRunsSustainedFilter) {
       releaseGateRunsSustainedFilter.value = sustained || "all";
+    }
+    if (releaseGateRunsSustainedAlertFilter) {
+      releaseGateRunsSustainedAlertFilter.value = "all";
     }
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = allowed || "all";
