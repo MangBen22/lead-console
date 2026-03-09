@@ -73,6 +73,56 @@ function connector_by_id($connectorId)
     return null;
 }
 
+function crm_smtp_sites_snapshot()
+{
+    $rows = [];
+    $summary = [
+        'site_count' => 0,
+        'connected_sites' => 0,
+        'pending_confirmation_sites' => 0,
+        'confirmed_sites' => 0,
+        'failed_sites' => 0,
+    ];
+    foreach (all_sites() as $site) {
+        $res = app_bridge_request($site, 'GET', 'bridge/smtp-health');
+        $health = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['smtp_health']) && is_array($res['data']['smtp_health']))
+            ? $res['data']['smtp_health']
+            : [];
+        $confirmation = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['test_confirmation']) && is_array($res['data']['test_confirmation']))
+            ? $res['data']['test_confirmation']
+            : [];
+        $connected = !empty($health['connected']);
+        $pending = !empty($confirmation['pending']);
+        $confirmed = !empty($confirmation['confirmed']);
+        $summary['site_count']++;
+        if ($connected) {
+            $summary['connected_sites']++;
+        } else {
+            $summary['failed_sites']++;
+        }
+        if ($pending) {
+            $summary['pending_confirmation_sites']++;
+        }
+        if ($confirmed) {
+            $summary['confirmed_sites']++;
+        }
+        $rows[] = [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'base_url' => (string) ($site['base_url'] ?? ''),
+            'smtp_health' => $health,
+            'test_confirmation' => $confirmation,
+            'bridge_ok' => !empty($res['ok']) ? 1 : 0,
+            'bridge_status' => (int) ($res['status'] ?? 0),
+            'bridge_error' => (string) ($res['error'] ?? ''),
+        ];
+    }
+    return [
+        'summary' => $summary,
+        'sites' => $rows,
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -3912,7 +3962,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.30-seo-regression-automation',
+        'phase' => '2.31-crm-smtp-bridge-ops',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6480,6 +6530,7 @@ $rateLimitedWriteActions = [
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
+    'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -6521,6 +6572,7 @@ $deploymentGuardedActions = [
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
+    'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -6553,7 +6605,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.30-seo-regression-automation',
+        'phase' => '2.31-crm-smtp-bridge-ops',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8610,25 +8662,102 @@ if ($action === 'crm.retry.run') {
     ]);
 }
 
+if ($action === 'crm.smtp.summary') {
+    $snapshot = crm_smtp_sites_snapshot();
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'sites' => $snapshot['sites'],
+    ]);
+}
+
+if ($action === 'crm.smtp.probe') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id'])) {
+        out_json(['ok' => false, 'error' => 'site_id is required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $res = app_bridge_request($site, 'POST', 'bridge/smtp-probe', []);
+    audit_event('crm', 'smtp.probe', ['site_id' => (string) ($site['site_id'] ?? ''), 'ok' => !empty($res['ok']) ? 1 : 0]);
+    out_json([
+        'ok' => !empty($res['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'response' => $res,
+    ], !empty($res['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.smtp.send_test') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || empty($data['to_email'])) {
+        out_json(['ok' => false, 'error' => 'site_id and to_email are required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $toEmail = trim((string) $data['to_email']);
+    $res = app_bridge_request($site, 'POST', 'bridge/smtp-send-test', ['to_email' => $toEmail]);
+    audit_event('crm', 'smtp.send_test', [
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'to_email' => $toEmail,
+        'ok' => !empty($res['ok']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => !empty($res['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'response' => $res,
+    ], !empty($res['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.smtp.confirm') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id'])) {
+        out_json(['ok' => false, 'error' => 'site_id is required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $payload = [
+        'received' => !empty($data['received']) ? 1 : 0,
+        'to_email' => trim((string) ($data['to_email'] ?? '')),
+    ];
+    $res = app_bridge_request($site, 'POST', 'bridge/smtp-confirm', $payload);
+    audit_event('crm', 'smtp.confirm', [
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'received' => !empty($payload['received']) ? 1 : 0,
+        'ok' => !empty($res['ok']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => !empty($res['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'response' => $res,
+    ], !empty($res['ok']) ? 200 : 502);
+}
+
 if ($action === 'crm.summary') {
     $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
-    $smtpConnected = false;
-    $smtpBySite = [];
-    foreach (all_sites() as $site) {
-        $res = app_bridge_request($site, 'GET', 'bridge/smtp-health');
-        $connected = false;
-        if (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['smtp_health']['connected'])) {
-            $connected = !empty($res['data']['smtp_health']['connected']);
-            if ($connected) {
-                $smtpConnected = true;
-            }
-        }
-        $smtpBySite[] = [
-            'site_id' => (string) ($site['site_id'] ?? ''),
-            'label' => (string) ($site['label'] ?? $site['base_url']),
-            'connected' => $connected,
-        ];
-    }
+    $smtpSnapshot = crm_smtp_sites_snapshot();
+    $smtpConnected = ((int) ($smtpSnapshot['summary']['connected_sites'] ?? 0)) > 0;
+    $smtpBySite = $smtpSnapshot['sites'];
 
     $logs = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
     $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
@@ -8641,6 +8770,8 @@ if ($action === 'crm.summary') {
             'active_connectors' => count($connectors),
             'smtp_connected' => $smtpConnected,
             'failed_deliveries' => count(app_read_json_file(retry_queue_path(), [])),
+            'smtp_pending_confirmation_sites' => (int) ($smtpSnapshot['summary']['pending_confirmation_sites'] ?? 0),
+            'smtp_confirmed_sites' => (int) ($smtpSnapshot['summary']['confirmed_sites'] ?? 0),
         ],
         'last_sync' => $lastSync,
         'smtp_sites' => $smtpBySite,

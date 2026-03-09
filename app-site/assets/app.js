@@ -218,6 +218,10 @@
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
+  const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
+  const crmSmtpForm = document.getElementById("crmSmtpForm");
+  const crmSmtpSummary = document.getElementById("crmSmtpSummary");
+  const crmSmtpResult = document.getElementById("crmSmtpResult");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
@@ -2210,6 +2214,16 @@
     }
   }
 
+  async function loadCrmSmtpSummary() {
+    if (!crmSmtpSummary) return;
+    try {
+      const data = await apiGet("crm.smtp.summary");
+      crmSmtpSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmSmtpSummary.textContent = "Failed to load CRM SMTP status.";
+    }
+  }
+
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
@@ -2523,6 +2537,7 @@
     await loadSocialDraftsPreview();
     await loadCrmSyncLog();
     await loadRetryQueue();
+    await loadCrmSmtpSummary();
     await loadSocialConnectors();
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
@@ -2699,6 +2714,83 @@
         crmPanel.textContent = JSON.stringify(crmData, null, 2);
       }
     });
+  }
+
+  if (refreshCrmSmtpBtn) {
+    refreshCrmSmtpBtn.addEventListener("click", async function () {
+      await loadCrmSmtpSummary();
+    });
+  }
+
+  if (crmSmtpForm) {
+    crmSmtpForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const siteIdInput = function () {
+      const el = document.getElementById("crmSmtpSiteId");
+      return el && el.value ? el.value.trim() : "";
+    };
+    const toEmailInput = function () {
+      const el = document.getElementById("crmSmtpToEmail");
+      return el && el.value ? el.value.trim() : "";
+    };
+    const runCrmSmtpAction = async function (action, payload) {
+      const result = await apiPost(action, payload);
+      if (crmSmtpResult) {
+        crmSmtpResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadCrmSmtpSummary();
+      const crmData = await apiGet("crm.summary");
+      const crmPanel = document.getElementById("modCrm");
+      if (crmPanel) {
+        crmPanel.textContent = JSON.stringify(crmData, null, 2);
+      }
+    };
+    const probeCrmSmtpBtn = document.getElementById("probeCrmSmtpBtn");
+    if (probeCrmSmtpBtn) {
+      probeCrmSmtpBtn.addEventListener("click", async function () {
+        const site_id = siteIdInput();
+        if (!site_id) {
+          if (crmSmtpResult) crmSmtpResult.textContent = "Enter Site ID first.";
+          return;
+        }
+        await runCrmSmtpAction("crm.smtp.probe", { site_id });
+      });
+    }
+    const sendCrmSmtpTestBtn = document.getElementById("sendCrmSmtpTestBtn");
+    if (sendCrmSmtpTestBtn) {
+      sendCrmSmtpTestBtn.addEventListener("click", async function () {
+        const site_id = siteIdInput();
+        const to_email = toEmailInput();
+        if (!site_id || !to_email) {
+          if (crmSmtpResult) crmSmtpResult.textContent = "Enter Site ID and test email recipient.";
+          return;
+        }
+        await runCrmSmtpAction("crm.smtp.send_test", { site_id, to_email });
+      });
+    }
+    const confirmCrmSmtpYesBtn = document.getElementById("confirmCrmSmtpYesBtn");
+    if (confirmCrmSmtpYesBtn) {
+      confirmCrmSmtpYesBtn.addEventListener("click", async function () {
+        const site_id = siteIdInput();
+        if (!site_id) {
+          if (crmSmtpResult) crmSmtpResult.textContent = "Enter Site ID first.";
+          return;
+        }
+        await runCrmSmtpAction("crm.smtp.confirm", { site_id, to_email: toEmailInput(), received: 1 });
+      });
+    }
+    const confirmCrmSmtpNoBtn = document.getElementById("confirmCrmSmtpNoBtn");
+    if (confirmCrmSmtpNoBtn) {
+      confirmCrmSmtpNoBtn.addEventListener("click", async function () {
+        const site_id = siteIdInput();
+        if (!site_id) {
+          if (crmSmtpResult) crmSmtpResult.textContent = "Enter Site ID first.";
+          return;
+        }
+        await runCrmSmtpAction("crm.smtp.confirm", { site_id, to_email: toEmailInput(), received: 0 });
+      });
+    }
   }
 
   if (socialConnectorForm) {
