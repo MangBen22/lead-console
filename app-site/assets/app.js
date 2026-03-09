@@ -32,6 +32,7 @@
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
   const refreshWatchdogsIncidentBtn = document.getElementById("refreshWatchdogsIncidentBtn");
   const resolveWatchdogsIncidentBtn = document.getElementById("resolveWatchdogsIncidentBtn");
+  const reopenWatchdogsIncidentBtn = document.getElementById("reopenWatchdogsIncidentBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -470,6 +471,22 @@
 
   async function resolveWatchdogsIncident() {
     const result = await apiPost("deployment.watchdogs.incident.resolve", {});
+    if (watchdogsIncidentView) {
+      watchdogsIncidentView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadWatchdogsOpenIncident();
+    await loadIncidentReports();
+    await loadIncidentSummary();
+    await loadIncidentSla();
+    await loadWatchdogsRuns();
+    await loadWatchdogsStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function reopenWatchdogsIncident() {
+    const result = await apiPost("deployment.watchdogs.incident.reopen", {});
     if (watchdogsIncidentView) {
       watchdogsIncidentView.textContent = JSON.stringify(result, null, 2);
     }
@@ -1649,6 +1666,12 @@
   if (resolveWatchdogsIncidentBtn) {
     resolveWatchdogsIncidentBtn.addEventListener("click", async function () {
       await resolveWatchdogsIncident();
+    });
+  }
+
+  if (reopenWatchdogsIncidentBtn) {
+    reopenWatchdogsIncidentBtn.addEventListener("click", async function () {
+      await reopenWatchdogsIncident();
     });
   }
 

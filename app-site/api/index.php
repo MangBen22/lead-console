@@ -1554,6 +1554,35 @@ function deployment_find_open_watchdogs_incident()
     return null;
 }
 
+function deployment_find_latest_watchdogs_incident($statuses = [])
+{
+    $rows = app_read_json_file(deployment_incident_reports_path(), []);
+    if (!is_array($rows)) {
+        return null;
+    }
+    $statusFilter = [];
+    if (is_array($statuses) && !empty($statuses)) {
+        foreach ($statuses as $status) {
+            $statusFilter[] = strtolower(trim((string) $status));
+        }
+    }
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $origin = strtolower(trim((string) ($row['incident_origin'] ?? '')));
+        if ($origin !== 'watchdogs_check') {
+            continue;
+        }
+        $status = strtolower(trim((string) ($row['incident_status'] ?? 'open')));
+        if (!empty($statusFilter) && !in_array($status, $statusFilter, true)) {
+            continue;
+        }
+        return $row;
+    }
+    return null;
+}
+
 function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $src = trim((string) $source);
@@ -1576,6 +1605,7 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
     $criticalStreak = ($status === 'critical') ? ($prevCriticalStreak + 1) : 0;
     $autoIncidentThreshold = 2;
     $autoIncidentCreated = 0;
+    $autoIncidentReopened = 0;
     $autoIncidentReportId = '';
     $autoIncidentExistingOpenId = '';
     $autoIncidentAction = 'none';
@@ -1621,37 +1651,61 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
             $autoIncidentExistingOpenId = (string) ($openAutoIncident['report_id'] ?? '');
             $autoIncidentAction = 'linked_existing_open';
         } else {
-            $note = 'Auto incident created after repeated critical watchdog checks.';
-            $report = deployment_incident_report_snapshot($note);
-            $report['incident_origin'] = 'watchdogs_check';
-            $report['incident_origin_status'] = $status;
-            $report['incident_origin_run_id'] = $runId;
-            $report['incident_origin_source'] = $src;
-            $report['incident_origin_critical_streak'] = $criticalStreak;
-            $report['incident_origin_watchdogs_summary'] = isset($watchdogs['summary']) && is_array($watchdogs['summary']) ? $watchdogs['summary'] : [];
-            $report['incident_note'] = 'Auto-created after ' . (int) $criticalStreak . ' consecutive critical watchdog checks.';
-            if (!isset($report['summary']) || !is_array($report['summary'])) {
-                $report['summary'] = [];
+            $resolvedAutoIncident = deployment_find_latest_watchdogs_incident(['resolved']);
+            if (is_array($resolvedAutoIncident)) {
+                $resolvedId = (string) ($resolvedAutoIncident['report_id'] ?? '');
+                $reopenNote = 'Auto-reopened after repeated critical watchdog checks.';
+                $updated = update_incident_report_status($resolvedId, 'reopened', $reopenNote);
+                if (is_array($updated)) {
+                    audit_event('deployment', 'incident.report.reopen.watchdogs', [
+                        'report_id' => (string) ($updated['report_id'] ?? $resolvedId),
+                        'run_id' => $runId,
+                        'critical_streak' => $criticalStreak,
+                        'source' => $src,
+                    ]);
+                    push_notification('critical', 'Watchdog incident reopened due to critical status.', [
+                        'report_id' => (string) ($updated['report_id'] ?? $resolvedId),
+                        'run_id' => $runId,
+                        'critical_streak' => $criticalStreak,
+                        'source' => $src,
+                    ]);
+                    $autoIncidentReopened = 1;
+                    $autoIncidentReportId = (string) ($updated['report_id'] ?? $resolvedId);
+                    $autoIncidentAction = 'reopened';
+                }
+            } else {
+                $note = 'Auto incident created after repeated critical watchdog checks.';
+                $report = deployment_incident_report_snapshot($note);
+                $report['incident_origin'] = 'watchdogs_check';
+                $report['incident_origin_status'] = $status;
+                $report['incident_origin_run_id'] = $runId;
+                $report['incident_origin_source'] = $src;
+                $report['incident_origin_critical_streak'] = $criticalStreak;
+                $report['incident_origin_watchdogs_summary'] = isset($watchdogs['summary']) && is_array($watchdogs['summary']) ? $watchdogs['summary'] : [];
+                $report['incident_note'] = 'Auto-created after ' . (int) $criticalStreak . ' consecutive critical watchdog checks.';
+                if (!isset($report['summary']) || !is_array($report['summary'])) {
+                    $report['summary'] = [];
+                }
+                $report['summary']['watchdogs_status'] = $status;
+                $report['summary']['watchdogs_critical_failed'] = (int) ($watchdogs['summary']['critical_failed'] ?? 0);
+                $report['summary']['watchdogs_warning_failed'] = (int) ($watchdogs['summary']['warning_failed'] ?? 0);
+                save_incident_report($report);
+                audit_event('deployment', 'incident.report.auto.watchdogs', [
+                    'report_id' => (string) ($report['report_id'] ?? ''),
+                    'run_id' => $runId,
+                    'critical_streak' => $criticalStreak,
+                    'source' => $src,
+                ]);
+                push_notification('critical', 'Auto incident created from watchdogs critical status.', [
+                    'report_id' => (string) ($report['report_id'] ?? ''),
+                    'run_id' => $runId,
+                    'critical_streak' => $criticalStreak,
+                    'source' => $src,
+                ]);
+                $autoIncidentCreated = 1;
+                $autoIncidentReportId = (string) ($report['report_id'] ?? '');
+                $autoIncidentAction = 'created';
             }
-            $report['summary']['watchdogs_status'] = $status;
-            $report['summary']['watchdogs_critical_failed'] = (int) ($watchdogs['summary']['critical_failed'] ?? 0);
-            $report['summary']['watchdogs_warning_failed'] = (int) ($watchdogs['summary']['warning_failed'] ?? 0);
-            save_incident_report($report);
-            audit_event('deployment', 'incident.report.auto.watchdogs', [
-                'report_id' => (string) ($report['report_id'] ?? ''),
-                'run_id' => $runId,
-                'critical_streak' => $criticalStreak,
-                'source' => $src,
-            ]);
-            push_notification('critical', 'Auto incident created from watchdogs critical status.', [
-                'report_id' => (string) ($report['report_id'] ?? ''),
-                'run_id' => $runId,
-                'critical_streak' => $criticalStreak,
-                'source' => $src,
-            ]);
-            $autoIncidentCreated = 1;
-            $autoIncidentReportId = (string) ($report['report_id'] ?? '');
-            $autoIncidentAction = 'created';
         }
     }
 
@@ -1666,6 +1720,7 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         'auto_incident_threshold' => $autoIncidentThreshold,
         'auto_incident_action' => $autoIncidentAction,
         'auto_incident_created' => $autoIncidentCreated,
+        'auto_incident_reopened' => $autoIncidentReopened,
         'auto_incident_report_id' => $autoIncidentReportId,
         'auto_incident_existing_open_id' => $autoIncidentExistingOpenId,
         'freshness_window_minutes' => (int) ($watchdogs['freshness_window_minutes'] ?? 30),
@@ -1692,7 +1747,8 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         'auto_incident_threshold' => $autoIncidentThreshold,
         'last_auto_incident_report_id' => $autoIncidentReportId !== '' ? $autoIncidentReportId : (string) ($state['last_auto_incident_report_id'] ?? ''),
         'last_auto_incident_action' => $autoIncidentAction,
-        'last_auto_incident_at' => $autoIncidentCreated === 1 ? $now : (string) ($state['last_auto_incident_at'] ?? ''),
+        'last_auto_incident_at' => ($autoIncidentCreated === 1 || $autoIncidentReopened === 1) ? $now : (string) ($state['last_auto_incident_at'] ?? ''),
+        'last_auto_incident_reopened_at' => $autoIncidentReopened === 1 ? $now : (string) ($state['last_auto_incident_reopened_at'] ?? ''),
     ];
     app_write_json_file(deployment_watchdogs_state_path(), $nextState);
 
@@ -2439,7 +2495,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.44-watchdogs-incident-quick-actions',
+        'phase' => '1.45-watchdogs-incident-reopen-policy',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3707,6 +3763,7 @@ $rateLimitedWriteActions = [
     'deployment.cutover.signoff.integrity.watch',
     'deployment.watchdogs.check',
     'deployment.watchdogs.incident.resolve',
+    'deployment.watchdogs.incident.reopen',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3755,7 +3812,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.44-watchdogs-incident-quick-actions',
+        'phase' => '1.45-watchdogs-incident-reopen-policy',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4042,6 +4099,16 @@ if ($action === 'deployment.watchdogs.incident.open') {
     ], is_array($open) ? 200 : 404);
 }
 
+if ($action === 'deployment.watchdogs.incident.latest') {
+    $latest = deployment_find_latest_watchdogs_incident();
+    out_json([
+        'ok' => true,
+        'has_watchdogs_incident' => is_array($latest),
+        'incident' => is_array($latest) ? $latest : null,
+        'time' => gmdate('c'),
+    ], is_array($latest) ? 200 : 404);
+}
+
 if ($action === 'deployment.watchdogs.incident.resolve') {
     app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -4070,6 +4137,54 @@ if ($action === 'deployment.watchdogs.incident.resolve') {
         'origin' => (string) ($updated['incident_origin'] ?? ''),
     ]);
     push_notification('success', 'Watchdog incident resolved: ' . (string) ($updated['report_id'] ?? $reportId), [
+        'report_id' => (string) ($updated['report_id'] ?? $reportId),
+        'origin' => 'watchdogs_check',
+    ]);
+    out_json([
+        'ok' => true,
+        'incident' => $updated,
+        'summary' => deployment_incident_summary_snapshot(),
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.incident.reopen') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $open = deployment_find_open_watchdogs_incident();
+    if (is_array($open)) {
+        out_json([
+            'ok' => false,
+            'error' => 'An open watchdog incident already exists.',
+            'incident' => $open,
+            'time' => gmdate('c'),
+        ], 409);
+    }
+    $resolved = deployment_find_latest_watchdogs_incident(['resolved']);
+    if (!is_array($resolved)) {
+        out_json(['ok' => false, 'error' => 'No resolved watchdog incident found.'], 404);
+    }
+    $reportId = (string) ($resolved['report_id'] ?? '');
+    $note = trim((string) ($data['note'] ?? ''));
+    if ($note === '') {
+        $note = 'Reopened via Go-Live watchdog incident quick action.';
+    }
+    $updated = update_incident_report_status($reportId, 'reopened', $note);
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Failed to reopen watchdog incident.'], 500);
+    }
+    audit_event('deployment', 'watchdogs.incident.reopen', [
+        'report_id' => (string) ($updated['report_id'] ?? $reportId),
+        'origin' => (string) ($updated['incident_origin'] ?? ''),
+    ]);
+    push_notification('warning', 'Watchdog incident reopened: ' . (string) ($updated['report_id'] ?? $reportId), [
         'report_id' => (string) ($updated['report_id'] ?? $reportId),
         'origin' => 'watchdogs_check',
     ]);

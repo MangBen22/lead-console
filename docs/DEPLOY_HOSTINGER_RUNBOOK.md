@@ -72,7 +72,7 @@
 20. Run `Run Full Cutover Check` and confirm pipeline summary includes `watchdogs_status` not `critical`.
 21. Run `Run Watchdogs Check` and `Refresh Watchdogs Runs` to verify watchdog check execution is logged with current status.
 22. If watchdog checks remain `critical`, review `Incident Reports` for auto-created watchdog incidents and resolve root cause before cutover.
-23. Use `Refresh Watchdogs Incident` / `Resolve Watchdogs Incident` quick actions in Go-Live after remediation, then rerun watchdog checks.
+23. Use `Refresh Watchdogs Incident` plus `Resolve/Reopen Watchdogs Incident` quick actions in Go-Live after remediation, then rerun watchdog checks.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
