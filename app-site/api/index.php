@@ -3894,7 +3894,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.17-seo-on-page-baseline',
+        'phase' => '2.18-seo-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4629,6 +4629,70 @@ function seo_count_images_missing_alt($html)
     return $missing;
 }
 
+function seo_check_priority($check)
+{
+    $severity = strtolower((string) ($check['severity'] ?? 'info'));
+    $status = strtolower((string) ($check['status'] ?? 'pass'));
+    if ($severity === 'critical' || $status === 'fail') {
+        return 'critical';
+    }
+    if ($severity === 'warning' || $status === 'warn') {
+        return 'fix_soon';
+    }
+    return 'nice_to_have';
+}
+
+function seo_issue_rollup_from_checks($checks)
+{
+    $summary = [
+        'critical' => 0,
+        'fix_soon' => 0,
+        'nice_to_have' => 0,
+    ];
+    $issues = [];
+    if (!is_array($checks)) {
+        return [
+            'priority_summary' => $summary,
+            'issues' => [],
+        ];
+    }
+
+    foreach ($checks as $check) {
+        if (!is_array($check)) {
+            continue;
+        }
+        $priority = seo_check_priority($check);
+        $summary[$priority]++;
+        $key = (string) ($check['check'] ?? 'unknown');
+        if (!isset($issues[$key])) {
+            $issues[$key] = [
+                'check' => $key,
+                'priority' => $priority,
+                'occurrences' => 0,
+                'statuses' => [],
+                'messages' => [],
+            ];
+        }
+        $issues[$key]['occurrences']++;
+        $status = strtolower((string) ($check['status'] ?? 'unknown'));
+        if ($status !== '' && !in_array($status, $issues[$key]['statuses'], true)) {
+            $issues[$key]['statuses'][] = $status;
+        }
+        $message = trim((string) ($check['message'] ?? ''));
+        if ($message !== '' && !in_array($message, $issues[$key]['messages'], true)) {
+            $issues[$key]['messages'][] = $message;
+        }
+        if ($priority === 'critical' || ($priority === 'fix_soon' && $issues[$key]['priority'] !== 'critical')) {
+            $issues[$key]['priority'] = $priority;
+        }
+    }
+
+    return [
+        'priority_summary' => $summary,
+        'issues' => array_values($issues),
+    ];
+}
+
 function run_seo_audit_for_project($project)
 {
     $domain = trim((string) ($project['domain'] ?? ''));
@@ -4762,6 +4826,7 @@ function run_seo_audit_for_project($project)
     }
 
     $score = max(0, min(100, $score));
+    $rollup = seo_issue_rollup_from_checks($checks);
     return [
         'audit_id' => 'seo_audit_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'project_id' => (string) ($project['project_id'] ?? ''),
@@ -4771,6 +4836,8 @@ function run_seo_audit_for_project($project)
         'critical_issues' => $critical,
         'warnings' => $warnings,
         'page_signals' => $pageSignals,
+        'priority_summary' => $rollup['priority_summary'],
+        'issue_rollup' => $rollup['issues'],
         'checks' => $checks,
         'source' => 'internal_runner',
         'created_at' => gmdate('c'),
@@ -5717,7 +5784,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.17-seo-on-page-baseline',
+        'phase' => '2.18-seo-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7933,6 +8000,86 @@ if ($action === 'seo.summary') {
     ]);
 }
 
+if ($action === 'seo.issues.summary') {
+    $rows = app_read_json_file(seo_audits_path(), []);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    if ($projectId !== '') {
+        $rows = array_values(array_filter($rows, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $prioritySummary = [
+        'critical' => 0,
+        'fix_soon' => 0,
+        'nice_to_have' => 0,
+    ];
+    $issueMap = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $rollup = isset($row['issue_rollup']) && is_array($row['issue_rollup'])
+            ? $row['issue_rollup']
+            : seo_issue_rollup_from_checks(isset($row['checks']) && is_array($row['checks']) ? $row['checks'] : [])['issues'];
+        $priorities = isset($row['priority_summary']) && is_array($row['priority_summary'])
+            ? $row['priority_summary']
+            : seo_issue_rollup_from_checks(isset($row['checks']) && is_array($row['checks']) ? $row['checks'] : [])['priority_summary'];
+        foreach (['critical', 'fix_soon', 'nice_to_have'] as $key) {
+            $prioritySummary[$key] += (int) ($priorities[$key] ?? 0);
+        }
+        foreach ($rollup as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+            $check = (string) ($issue['check'] ?? 'unknown');
+            if (!isset($issueMap[$check])) {
+                $issueMap[$check] = [
+                    'check' => $check,
+                    'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+                    'occurrences' => 0,
+                    'messages' => [],
+                    'statuses' => [],
+                ];
+            }
+            $issueMap[$check]['occurrences'] += (int) ($issue['occurrences'] ?? 0);
+            foreach ((array) ($issue['messages'] ?? []) as $message) {
+                $msg = trim((string) $message);
+                if ($msg !== '' && !in_array($msg, $issueMap[$check]['messages'], true)) {
+                    $issueMap[$check]['messages'][] = $msg;
+                }
+            }
+            foreach ((array) ($issue['statuses'] ?? []) as $status) {
+                $state = trim((string) $status);
+                if ($state !== '' && !in_array($state, $issueMap[$check]['statuses'], true)) {
+                    $issueMap[$check]['statuses'][] = $state;
+                }
+            }
+            $currentPriority = (string) ($issueMap[$check]['priority'] ?? 'nice_to_have');
+            $nextPriority = (string) ($issue['priority'] ?? 'nice_to_have');
+            if ($currentPriority !== 'critical' && ($nextPriority === 'critical' || ($currentPriority === 'nice_to_have' && $nextPriority === 'fix_soon'))) {
+                $issueMap[$check]['priority'] = $nextPriority;
+            }
+        }
+    }
+    $issues = array_values($issueMap);
+    usort($issues, static function ($a, $b) {
+        $rank = ['critical' => 0, 'fix_soon' => 1, 'nice_to_have' => 2];
+        $aRank = $rank[(string) ($a['priority'] ?? 'nice_to_have')] ?? 9;
+        $bRank = $rank[(string) ($b['priority'] ?? 'nice_to_have')] ?? 9;
+        if ($aRank !== $bRank) {
+            return $aRank <=> $bRank;
+        }
+        return (int) ($b['occurrences'] ?? 0) <=> (int) ($a['occurrences'] ?? 0);
+    });
+    out_json([
+        'ok' => true,
+        'audit_count' => count($rows),
+        'priority_summary' => $prioritySummary,
+        'issues' => $issues,
+        'project_id' => $projectId,
+    ]);
+}
+
 if ($action === 'social.platforms.list') {
     $items = social_platform_catalog();
     out_json([
@@ -8361,6 +8508,7 @@ if ($action === 'seo.extension.intake') {
         'source' => 'browser_extension',
         'created_at' => gmdate('c'),
     ];
+    $eventRollup = seo_issue_rollup_from_checks(is_array($event['issues']) ? $event['issues'] : []);
     $events = app_read_json_file(seo_extension_events_path(), []);
     array_unshift($events, $event);
     $events = array_slice($events, 0, 500);
@@ -8374,8 +8522,10 @@ if ($action === 'seo.extension.intake') {
             'project_name' => '',
             'domain' => $event['url'],
             'score' => (int) $event['score'],
-            'critical_issues' => 0,
+            'critical_issues' => (int) ($eventRollup['priority_summary']['critical'] ?? 0),
             'warnings' => is_array($event['issues']) ? count($event['issues']) : 0,
+            'priority_summary' => $eventRollup['priority_summary'],
+            'issue_rollup' => $eventRollup['issues'],
             'checks' => is_array($event['issues']) ? $event['issues'] : [],
             'source' => 'browser_extension',
             'created_at' => gmdate('c'),

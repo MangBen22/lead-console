@@ -672,6 +672,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             <section class="api-status">
                 <h2>SEO Audit Pipeline</h2>
                 <pre id="seoResult">No SEO action yet.</pre>
+                <div class="actions">
+                    <button id="refreshSeoIssuesBtn" type="button">Refresh SEO Issues</button>
+                </div>
+                <h3>Issue Summary</h3>
+                <pre id="seoIssuesSummary">Loading...</pre>
                 <h3>SEO Audits</h3>
                 <pre id="seoAudits">Loading...</pre>
                 <h3>Extension Events</h3>

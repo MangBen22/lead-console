@@ -258,6 +258,8 @@
   const seoProjects = document.getElementById("seoProjects");
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
+  const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
+  const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   let lastNotificationToneKey = "";
@@ -2368,6 +2370,16 @@
     }
   }
 
+  async function loadSeoIssuesSummary() {
+    if (!seoIssuesSummary) return;
+    try {
+      const data = await apiGet("seo.issues.summary");
+      seoIssuesSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoIssuesSummary.textContent = "Failed to load SEO issue summary.";
+    }
+  }
+
   async function loadSeoExtensionEvents() {
     if (!seoExtensionEvents) return;
     try {
@@ -2399,6 +2411,7 @@
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
+    await loadSeoIssuesSummary();
     await loadSeoAudits();
     await loadSeoExtensionEvents();
     await loadNotifications();
@@ -4034,6 +4047,7 @@
           seoResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSeoProjects();
+        await loadSeoIssuesSummary();
       });
     }
 
@@ -4051,6 +4065,7 @@
           seoResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSeoProjects();
+        await loadSeoIssuesSummary();
       });
     }
 
@@ -4067,6 +4082,7 @@
         if (seoResult) {
           seoResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadSeoIssuesSummary();
         await loadSeoAudits();
         const data = await apiGet("seo.summary");
         const panel = document.getElementById("modSeo");
@@ -4075,5 +4091,11 @@
         }
       });
     }
+  }
+
+  if (refreshSeoIssuesBtn) {
+    refreshSeoIssuesBtn.addEventListener("click", async function () {
+      await loadSeoIssuesSummary();
+    });
   }
 })();
