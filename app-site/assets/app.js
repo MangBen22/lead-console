@@ -264,6 +264,7 @@
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
+  const refreshSeoOpportunitiesBtn = document.getElementById("refreshSeoOpportunitiesBtn");
   const refreshSeoUrlHistoryBtn = document.getElementById("refreshSeoUrlHistoryBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
@@ -275,6 +276,7 @@
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
   const seoActionPlanView = document.getElementById("seoActionPlanView");
+  const seoOpportunitiesView = document.getElementById("seoOpportunitiesView");
   const seoUrlHistoryView = document.getElementById("seoUrlHistoryView");
   const seoCompareView = document.getElementById("seoCompareView");
   let lastNotificationToneKey = "";
@@ -2476,6 +2478,19 @@
     }
   }
 
+  async function loadSeoOpportunities() {
+    if (!seoOpportunitiesView) return;
+    try {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.opportunities.summary", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      seoOpportunitiesView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoOpportunitiesView.textContent = "Failed to load SEO opportunities.";
+    }
+  }
+
   async function loadSeoCompare() {
     if (!seoCompareView) return;
     try {
@@ -2518,6 +2533,7 @@
     await loadSeoExtensionSessions();
     await loadSeoProjectSnapshot();
     await loadSeoActionPlan();
+    await loadSeoOpportunities();
     await loadSeoUrlHistory();
     await loadSeoCompare();
     await loadNotifications();
@@ -4158,6 +4174,7 @@
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
+        await loadSeoOpportunities();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4182,6 +4199,7 @@
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
+        await loadSeoOpportunities();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4206,6 +4224,7 @@
         await loadSeoAudits();
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
+        await loadSeoOpportunities();
         await loadSeoUrlHistory();
         await loadSeoCompare();
         const data = await apiGet("seo.summary");
@@ -4263,6 +4282,12 @@
     });
   }
 
+  if (refreshSeoOpportunitiesBtn) {
+    refreshSeoOpportunitiesBtn.addEventListener("click", async function () {
+      await loadSeoOpportunities();
+    });
+  }
+
   if (refreshSeoUrlHistoryBtn) {
     refreshSeoUrlHistoryBtn.addEventListener("click", async function () {
       await loadSeoUrlHistory();
@@ -4295,6 +4320,7 @@
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
+        await loadSeoOpportunities();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4316,6 +4342,7 @@
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
+        await loadSeoOpportunities();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
