@@ -627,6 +627,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="applyGatePresetManualGroupBtn" type="button">Preset: Manual Group</button>
                     <button id="applyGatePresetHighNoiseBtn" type="button">Preset: High Noise</button>
                     <button id="applyGatePresetLowNoiseBtn" type="button">Preset: Low Noise</button>
+                    <button id="applyGatePresetToBlockedBtn" type="button">Preset: To Blocked</button>
+                    <button id="applyGatePresetToAllowedBtn" type="button">Preset: To Allowed</button>
                 </div>
                 <label>Watchdogs incident note<input id="watchdogsIncidentNoteInput" type="text" placeholder="Optional note for resolve/reopen watchdog incident actions..." /></label>
                 <label>Auto-incident threshold (critical streak)<input id="watchdogsAutoIncidentThresholdInput" type="number" min="1" max="10" value="2" /></label>
