@@ -99,6 +99,7 @@
 46. Use `gate watch digest` panel for a quick plain-language summary of blocked trends and top failing checks.
 47. Gate-watch notifications now include `blocker_digest`; use it for quick triage before opening full run payloads.
 48. Use gate summary ratio fields (`blocked_ratio_percent`, blocker share percentages) to prioritize high-impact remediation work.
+49. Use `Gate runs window` to analyze only the most recent N gate watch runs before applying status/source/blocker filters.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

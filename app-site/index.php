@@ -548,6 +548,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <div class="inline-form">
                     <label>Gate runs limit<input id="releaseGateRunsLimitInput" type="number" min="1" max="400" value="200" /></label>
+                    <label>Gate runs window<input id="releaseGateRunsWindowInput" type="number" min="0" max="400" value="0" /></label>
                     <label>Gate status filter
                         <select id="releaseGateRunsAllowedFilter">
                             <option value="all">all</option>

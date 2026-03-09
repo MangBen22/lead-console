@@ -111,6 +111,7 @@
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
   const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
+  const releaseGateRunsWindowInput = document.getElementById("releaseGateRunsWindowInput");
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
@@ -477,6 +478,10 @@
       ? Number(releaseGateRunsLimitInput.value)
       : 200;
     const safeLimit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(400, Math.round(limitRaw))) : 200;
+    const windowRaw = releaseGateRunsWindowInput && releaseGateRunsWindowInput.value
+      ? Number(releaseGateRunsWindowInput.value)
+      : 0;
+    const safeWindow = Number.isFinite(windowRaw) ? Math.max(0, Math.min(400, Math.round(windowRaw))) : 0;
     const allowed = releaseGateRunsAllowedFilter && releaseGateRunsAllowedFilter.value
       ? releaseGateRunsAllowedFilter.value
       : "all";
@@ -488,6 +493,7 @@
       : "";
     const filters = {
       limit: safeLimit,
+      window: safeWindow,
       allowed: allowed,
       source: source,
       failed_item: failedItem,
@@ -518,7 +524,7 @@
     const topFailedEntries = Object.entries(topFailed).slice(0, 5);
     const lines = [];
     lines.push("Release Gate Runs Digest");
-    lines.push("Filters: limit=" + String(f.limit || 0) + ", allowed=" + String(f.allowed || "all")
+    lines.push("Filters: limit=" + String(f.limit || 0) + ", window=" + String(f.window || 0) + ", allowed=" + String(f.allowed || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)"));
     lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
@@ -588,6 +594,9 @@
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
+    }
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = "all";
     }
@@ -616,6 +625,11 @@
         const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(400, Math.round(parsed))) : 200;
         releaseGateRunsLimitInput.value = String(safe);
       }
+      if (releaseGateRunsWindowInput && stored.window !== undefined && stored.window !== null) {
+        const parsed = Number(stored.window);
+        const safe = Number.isFinite(parsed) ? Math.max(0, Math.min(400, Math.round(parsed))) : 0;
+        releaseGateRunsWindowInput.value = String(safe);
+      }
       if (releaseGateRunsAllowedFilter && typeof stored.allowed === "string") {
         const allowed = ["all", "allowed", "blocked"].includes(stored.allowed) ? stored.allowed : "all";
         releaseGateRunsAllowedFilter.value = allowed;
@@ -641,6 +655,9 @@
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
     }
   }
 

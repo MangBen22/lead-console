@@ -1723,6 +1723,8 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     if (!is_array($runs)) {
         $runs = [];
     }
+    $window = isset($query['window']) ? (int) $query['window'] : 0;
+    $window = max(0, min(400, $window));
     $limit = isset($query['limit']) ? (int) $query['limit'] : 200;
     $limit = max(1, min(400, $limit));
     $allowedFilter = strtolower(trim((string) ($query['allowed'] ?? 'all')));
@@ -1733,8 +1735,9 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
     $failedItemFilter = strtolower($failedItemFilterRaw);
 
+    $sourceRows = ($window > 0) ? array_slice($runs, 0, $window) : $runs;
     $filtered = [];
-    foreach ($runs as $row) {
+    foreach ($sourceRows as $row) {
         if (!is_array($row)) {
             continue;
         }
@@ -1768,9 +1771,11 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     return [
         'items' => array_slice($filtered, 0, $limit),
         'filtered_total_count' => count($filtered),
+        'window_total_count' => count($sourceRows),
         'total_count' => count($runs),
         'applied_filters' => [
             'limit' => $limit,
+            'window' => $window,
             'allowed' => $allowedFilter,
             'source' => $sourceFilter,
             'failed_item' => $failedItemFilterRaw,
@@ -3154,7 +3159,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.72-release-gate-summary-ratios',
+        'phase' => '1.73-release-gate-window-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4482,7 +4487,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.72-release-gate-summary-ratios',
+        'phase' => '1.73-release-gate-window-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4719,6 +4724,7 @@ if ($action === 'deployment.release.gate.runs') {
         'ok' => true,
         'count' => count($items),
         'filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'window_total_count' => (int) ($filter['window_total_count'] ?? count($items)),
         'total_count' => (int) ($filter['total_count'] ?? count($runs)),
         'items' => $items,
         'summary' => $summary,
@@ -4741,6 +4747,7 @@ if ($action === 'deployment.release.gate.runs.export') {
         'filename' => 'release-gate-runs-' . gmdate('Ymd-His') . '.json',
         'count' => count($items),
         'filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'window_total_count' => (int) ($filter['window_total_count'] ?? count($items)),
         'total_count' => (int) ($filter['total_count'] ?? count($runs)),
         'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'summary' => $summary,
@@ -4772,6 +4779,7 @@ if ($action === 'deployment.release.gate.blockers.report') {
         'runs_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
         'runs_count' => count($items),
         'runs_filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'runs_window_total_count' => (int) ($filter['window_total_count'] ?? count($items)),
         'runs_total_count' => (int) ($filter['total_count'] ?? count($runs)),
         'runs' => $items,
     ];
