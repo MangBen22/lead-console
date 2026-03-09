@@ -85,6 +85,7 @@
 32. Run `Run Watchdogs Check` and confirm no baseline drift warning notifications are emitted before final launch approval.
 33. Run `Run Baseline Check` and verify scheduler status includes `watchdogs_policy_baseline_check_state` and a recent baseline check run.
 34. Enable release gate option `Require recent watchdogs baseline check` to enforce fresh baseline validation during launch windows.
+35. Policy save/restore and baseline set/clear actions auto-run a baseline check; verify those runs appear in `Refresh Baseline Checks`.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

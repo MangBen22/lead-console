@@ -2939,7 +2939,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.58-release-gate-baseline-check-freshness',
+        'phase' => '1.59-policy-change-baseline-auto-check',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4266,7 +4266,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.58-release-gate-baseline-check-freshness',
+        'phase' => '1.59-policy-change-baseline-auto-check',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4677,6 +4677,7 @@ if ($action === 'deployment.watchdogs.policy.baseline.set') {
         'mode' => ($resolvedHistoryId !== '') ? $mode : '',
         'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
     ]);
+    $baselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('policy_baseline_set');
     out_json([
         'ok' => true,
         'has_baseline' => !empty($snapshot['has_baseline']) ? 1 : 0,
@@ -4685,6 +4686,7 @@ if ($action === 'deployment.watchdogs.policy.baseline.set') {
         'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
         'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
         'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+        'baseline_check' => $baselineCheck,
         'time' => gmdate('c'),
     ]);
 }
@@ -4708,6 +4710,7 @@ if ($action === 'deployment.watchdogs.policy.baseline.clear') {
     push_notification('warning', 'Watchdogs policy baseline cleared.', [
         'source' => $source,
     ]);
+    $baselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('policy_baseline_clear');
     out_json([
         'ok' => true,
         'has_baseline' => !empty($snapshot['has_baseline']) ? 1 : 0,
@@ -4716,6 +4719,7 @@ if ($action === 'deployment.watchdogs.policy.baseline.clear') {
         'delta' => isset($snapshot['delta']) && is_array($snapshot['delta']) ? $snapshot['delta'] : [],
         'changed_count' => (int) ($snapshot['changed_count'] ?? 0),
         'has_changes' => !empty($snapshot['has_changes']) ? 1 : 0,
+        'baseline_check' => $baselineCheck,
         'time' => gmdate('c'),
     ]);
 }
@@ -4784,10 +4788,12 @@ if ($action === 'deployment.watchdogs.policy.save') {
         'source' => (string) ($history['source'] ?? ''),
     ]);
     push_notification('info', 'Watchdogs policy settings updated.', $response);
+    $baselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('policy_save');
     out_json([
         'ok' => true,
         'settings' => $response,
         'history' => $history,
+        'baseline_check' => $baselineCheck,
         'time' => gmdate('c'),
     ]);
 }
@@ -4820,6 +4826,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
     $candidate = deployment_watchdogs_policy_settings_from_guard($candidateRaw);
     $delta = deployment_watchdogs_policy_diff_summary($current, $candidate);
     if (empty($delta['has_changes'])) {
+        $baselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('policy_restore_no_change');
         out_json([
             'ok' => true,
             'no_change' => 1,
@@ -4830,6 +4837,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
                 'mode' => $mode,
             ],
             'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
+            'baseline_check' => $baselineCheck,
             'time' => gmdate('c'),
         ]);
     }
@@ -4855,6 +4863,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
         'restored_from_history_id' => (string) ($target['history_id'] ?? ''),
         'mode' => $mode,
     ]);
+    $baselineCheck = deployment_watchdogs_policy_baseline_check_snapshot('policy_restore');
     out_json([
         'ok' => true,
         'settings' => $response,
@@ -4864,6 +4873,7 @@ if ($action === 'deployment.watchdogs.policy.restore') {
             'mode' => $mode,
         ],
         'delta' => isset($delta['changes']) && is_array($delta['changes']) ? $delta['changes'] : [],
+        'baseline_check' => $baselineCheck,
         'time' => gmdate('c'),
     ]);
 }

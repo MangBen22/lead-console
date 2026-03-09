@@ -573,6 +573,7 @@
       watchdogsPolicyBaselineView.textContent = JSON.stringify(result, null, 2);
     }
     await loadWatchdogsPolicyBaseline();
+    await loadWatchdogsPolicyBaselineRuns();
     await loadWatchdogsPolicy();
     await loadWatchdogsPolicyHistory();
     await loadNotifications();
@@ -588,6 +589,7 @@
       watchdogsPolicyBaselineView.textContent = JSON.stringify(result, null, 2);
     }
     await loadWatchdogsPolicyBaseline();
+    await loadWatchdogsPolicyBaselineRuns();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -677,6 +679,7 @@
     await loadWatchdogsPolicy();
     await loadWatchdogsPolicyHistory();
     await loadWatchdogsPolicyBaseline();
+    await loadWatchdogsPolicyBaselineRuns();
     await loadWatchdogsRuns();
     await loadWatchdogsStatus();
     await loadSchedulerStatus();
@@ -702,6 +705,7 @@
     await loadWatchdogsPolicy();
     await loadWatchdogsPolicyHistory();
     await loadWatchdogsPolicyBaseline();
+    await loadWatchdogsPolicyBaselineRuns();
     await loadWatchdogsRuns();
     await loadWatchdogsStatus();
     await loadSchedulerStatus();
