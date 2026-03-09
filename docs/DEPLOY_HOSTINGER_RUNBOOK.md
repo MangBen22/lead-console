@@ -86,6 +86,7 @@
 33. Run `Run Baseline Check` and verify scheduler status includes `watchdogs_policy_baseline_check_state` and a recent baseline check run.
 34. Enable release gate option `Require recent watchdogs baseline check` to enforce fresh baseline validation during launch windows.
 35. Policy save/restore and baseline set/clear actions auto-run a baseline check; verify those runs appear in `Refresh Baseline Checks`.
+36. In `Refresh Gate Runs`, inspect `failed_items` and `blocker_flags` to quickly identify whether baseline requirements are blocking release.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

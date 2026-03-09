@@ -1621,6 +1621,25 @@ function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = n
     ];
 }
 
+function deployment_release_gate_failed_items($gate)
+{
+    $checks = isset($gate['checks']) && is_array($gate['checks']) ? $gate['checks'] : [];
+    $failed = [];
+    foreach ($checks as $check) {
+        if (!is_array($check)) {
+            continue;
+        }
+        if (!empty($check['ok'])) {
+            continue;
+        }
+        $item = trim((string) ($check['item'] ?? ''));
+        if ($item !== '') {
+            $failed[] = $item;
+        }
+    }
+    return $failed;
+}
+
 function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $gate = deployment_release_gate_snapshot($freshnessMinutes);
@@ -1628,6 +1647,17 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
     if (!is_array($state)) {
         $state = [];
     }
+    $failedItems = deployment_release_gate_failed_items($gate);
+    sort($failedItems);
+    $previousFailedItems = isset($state['last_failed_items']) && is_array($state['last_failed_items']) ? $state['last_failed_items'] : [];
+    sort($previousFailedItems);
+    $failedItemsChanged = ($failedItems !== $previousFailedItems) ? 1 : 0;
+    $baselineMatchBlocked = in_array('watchdogs_policy_baseline_match', $failedItems, true) ? 1 : 0;
+    $baselineCheckBlocked = in_array('watchdogs_policy_baseline_check_ok_and_fresh', $failedItems, true) ? 1 : 0;
+    $signoffIntegrityWatchBlocked = in_array('cutover_signoff_integrity_watch_valid_and_fresh', $failedItems, true) ? 1 : 0;
+    $baselineBlockersActive = ($baselineMatchBlocked || $baselineCheckBlocked) ? 1 : 0;
+    $prevBaselineBlockersActive = !empty($state['last_baseline_blockers_active']) ? 1 : 0;
+    $baselineBlockersChanged = ($baselineBlockersActive !== $prevBaselineBlockersActive) ? 1 : 0;
     $previousAllowed = array_key_exists('last_allowed', $state) ? !empty($state['last_allowed']) : null;
     $allowed = !empty($gate['allowed']) ? 1 : 0;
     $statusChanged = ($previousAllowed !== null) ? (((int) $previousAllowed) !== $allowed) : false;
@@ -1661,6 +1691,33 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
             'source' => (string) $source,
             'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
             'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+            'failed_items' => $failedItems,
+            'blocker_flags' => [
+                'baseline_match_blocked' => $baselineMatchBlocked,
+                'baseline_check_blocked' => $baselineCheckBlocked,
+                'signoff_integrity_watch_blocked' => $signoffIntegrityWatchBlocked,
+            ],
+        ]);
+    }
+
+    if ($allowed === 0 && $baselineBlockersActive === 1 && ($baselineBlockersChanged === 1 || $failedItemsChanged === 1)) {
+        push_notification('warning', 'Release gate blocked by watchdogs policy baseline requirements.', [
+            'source' => (string) $source,
+            'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
+            'failed_items' => $failedItems,
+            'blocker_flags' => [
+                'baseline_match_blocked' => $baselineMatchBlocked,
+                'baseline_check_blocked' => $baselineCheckBlocked,
+            ],
+        ]);
+    }
+    if ($failedItemsChanged === 1) {
+        audit_event('deployment', 'release.gate.watch.blockers', [
+            'source' => (string) $source,
+            'allowed' => $allowed,
+            'failed_items' => $failedItems,
+            'previous_failed_items' => $previousFailedItems,
+            'baseline_blockers_active' => $baselineBlockersActive,
         ]);
     }
 
@@ -1674,6 +1731,13 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
         'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
         'reason_count' => isset($gate['reasons']) && is_array($gate['reasons']) ? count($gate['reasons']) : 0,
         'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+        'failed_items' => $failedItems,
+        'failed_items_changed' => $failedItemsChanged,
+        'blocker_flags' => [
+            'baseline_match_blocked' => $baselineMatchBlocked,
+            'baseline_check_blocked' => $baselineCheckBlocked,
+            'signoff_integrity_watch_blocked' => $signoffIntegrityWatchBlocked,
+        ],
     ];
     $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
     array_unshift($runs, $run);
@@ -1684,10 +1748,17 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
         'last_checked_at' => $now,
         'last_allowed' => $allowed,
         'last_reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
+        'last_failed_items' => $failedItems,
         'last_run_id' => (string) ($run['run_id'] ?? ''),
         'last_source' => (string) $source,
         'last_alert_at' => $alertSent === 1 ? $now : (string) ($state['last_alert_at'] ?? ''),
         'last_alert_sent' => $alertSent,
+        'last_baseline_blockers_active' => $baselineBlockersActive,
+        'last_blocker_flags' => [
+            'baseline_match_blocked' => $baselineMatchBlocked,
+            'baseline_check_blocked' => $baselineCheckBlocked,
+            'signoff_integrity_watch_blocked' => $signoffIntegrityWatchBlocked,
+        ],
     ];
     app_write_json_file(deployment_release_gate_state_path(), $nextState);
 
@@ -2939,7 +3010,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.59-policy-change-baseline-auto-check',
+        'phase' => '1.60-release-gate-blocker-classification',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4266,7 +4337,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.59-policy-change-baseline-auto-check',
+        'phase' => '1.60-release-gate-blocker-classification',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
