@@ -108,6 +108,7 @@
 55. Adjust `transition_limit` in Gate Runs filters when you need shorter/longer sustained-state transition history in on-screen and exported outputs.
 56. Use Gate runs `sustained` filter (`active` / `clear`) to isolate prolonged-block windows versus recovered windows during postmortem review.
 57. Use presets `Sustained Active` and `Sustained Clear` for one-click filtering of prolonged-block windows and recovery windows.
+58. Use the dedicated sustained trend panel in Go-Live to read `sustained_state` and transition digest without parsing full gate payloads.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

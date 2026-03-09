@@ -114,6 +114,7 @@
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
+  const releaseGateSustainedView = document.getElementById("releaseGateSustainedView");
   const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
   const releaseGateRunsWindowInput = document.getElementById("releaseGateRunsWindowInput");
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
@@ -621,12 +622,12 @@
     try {
       const data = await apiGetWithParams("deployment.release.gate.runs", params);
       releaseGateRunsView.textContent = JSON.stringify(data, null, 2);
+      const summary = data && data.summary ? data.summary : {};
+      const sustainedState = data && data.sustained_state ? data.sustained_state : {};
+      const sustainedTimeline = data && data.sustained_timeline ? data.sustained_timeline : {};
+      const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
+      const sustainedTransitionLimit = data && data.sustained_transition_limit ? Number(data.sustained_transition_limit) : Number(params.transition_limit || 12);
       if (releaseGateRunSummaryView) {
-        const summary = data && data.summary ? data.summary : {};
-        const sustainedState = data && data.sustained_state ? data.sustained_state : {};
-        const sustainedTimeline = data && data.sustained_timeline ? data.sustained_timeline : {};
-        const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
-        const sustainedTransitionLimit = data && data.sustained_transition_limit ? Number(data.sustained_transition_limit) : Number(params.transition_limit || 12);
         releaseGateRunSummaryView.textContent = JSON.stringify({
           ok: true,
           applied_filters: appliedFilters,
@@ -635,10 +636,20 @@
           sustained_timeline: sustainedTimeline,
           sustained_transition_limit: sustainedTransitionLimit,
         }, null, 2);
-        if (releaseGateRunDigestView) {
-          const digestFilters = Object.assign({}, appliedFilters, { transition_limit: sustainedTransitionLimit });
-          releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, digestFilters, sustainedState, sustainedTimeline);
-        }
+      }
+      if (releaseGateRunDigestView) {
+        const digestFilters = Object.assign({}, appliedFilters, { transition_limit: sustainedTransitionLimit });
+        releaseGateRunDigestView.textContent = formatReleaseGateRunDigestWithSustained(summary, digestFilters, sustainedState, sustainedTimeline);
+      }
+      if (releaseGateSustainedView) {
+        releaseGateSustainedView.textContent = JSON.stringify({
+          ok: true,
+          sustained_state: sustainedState,
+          sustained_state_digest: formatSustainedStateDigest(sustainedState),
+          sustained_timeline: sustainedTimeline,
+          sustained_timeline_digest: formatSustainedTimelineDigest(sustainedTimeline),
+          sustained_transition_limit: sustainedTransitionLimit,
+        }, null, 2);
       }
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
@@ -647,6 +658,9 @@
       }
       if (releaseGateRunDigestView) {
         releaseGateRunDigestView.textContent = "Failed to load release gate run digest.";
+      }
+      if (releaseGateSustainedView) {
+        releaseGateSustainedView.textContent = "Failed to load sustained gate trend.";
       }
     }
   }
