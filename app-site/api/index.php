@@ -1757,6 +1757,8 @@ function deployment_release_gate_runs_summary($runs)
         'signoff_integrity_watch_blocked_runs' => 0,
         'failed_item_counts' => [],
         'latest_blocked_run' => null,
+        'latest_allowed_run' => null,
+        'latest_status_change_run' => null,
     ];
     foreach ($runs as $row) {
         if (!is_array($row)) {
@@ -1766,6 +1768,14 @@ function deployment_release_gate_runs_summary($runs)
         $allowed = !empty($row['allowed']) ? 1 : 0;
         if ($allowed === 1) {
             $summary['allowed_runs']++;
+            if (!is_array($summary['latest_allowed_run'])) {
+                $summary['latest_allowed_run'] = [
+                    'run_id' => (string) ($row['run_id'] ?? ''),
+                    'created_at' => (string) ($row['created_at'] ?? ''),
+                    'source' => (string) ($row['source'] ?? ''),
+                    'reason_count' => isset($row['reason_count']) ? (int) $row['reason_count'] : 0,
+                ];
+            }
         } else {
             $summary['blocked_runs']++;
             if (!is_array($summary['latest_blocked_run'])) {
@@ -1792,6 +1802,14 @@ function deployment_release_gate_runs_summary($runs)
         }
         if (!empty($row['status_changed'])) {
             $summary['status_changed_runs']++;
+            if (!is_array($summary['latest_status_change_run'])) {
+                $summary['latest_status_change_run'] = [
+                    'run_id' => (string) ($row['run_id'] ?? ''),
+                    'created_at' => (string) ($row['created_at'] ?? ''),
+                    'source' => (string) ($row['source'] ?? ''),
+                    'allowed' => $allowed,
+                ];
+            }
         }
         if (!empty($row['alert_sent'])) {
             $summary['alert_sent_runs']++;
@@ -3454,7 +3472,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.95-release-gate-source-summary-ratios',
+        'phase' => '1.96-release-gate-latest-run-pointers',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4782,7 +4800,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.95-release-gate-source-summary-ratios',
+        'phase' => '1.96-release-gate-latest-run-pointers',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

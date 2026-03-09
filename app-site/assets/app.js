@@ -655,6 +655,8 @@
     const baselineMatchShare = Number(s.baseline_match_blocked_share_percent || 0);
     const baselineCheckShare = Number(s.baseline_check_blocked_share_percent || 0);
     const signoffShare = Number(s.signoff_integrity_watch_blocked_share_percent || 0);
+    const latestAllowedRun = s.latest_allowed_run && typeof s.latest_allowed_run === "object" ? s.latest_allowed_run : null;
+    const latestStatusChangeRun = s.latest_status_change_run && typeof s.latest_status_change_run === "object" ? s.latest_status_change_run : null;
     const topFailed = s.top_failed_items && typeof s.top_failed_items === "object" ? s.top_failed_items : {};
     const topFailedEntries = Object.entries(topFailed).slice(0, 5);
     const lines = [];
@@ -694,6 +696,14 @@
       + ", status_changed=" + String(statusChangedRatio) + "%");
     lines.push("Source blocked ratios: scheduler=" + String(schedulerBlockedRatio) + "%"
       + ", manual=" + String(manualBlockedRatio) + "%");
+    lines.push("Latest allowed run: " + (latestAllowedRun
+      ? (String(latestAllowedRun.run_id || "n/a") + " @ " + String(latestAllowedRun.created_at || "n/a") + " via " + String(latestAllowedRun.source || "n/a"))
+      : "none"));
+    lines.push("Latest status change: " + (latestStatusChangeRun
+      ? (String(latestStatusChangeRun.run_id || "n/a") + " @ " + String(latestStatusChangeRun.created_at || "n/a")
+        + " via " + String(latestStatusChangeRun.source || "n/a")
+        + " -> " + (Number(latestStatusChangeRun.allowed || 0) === 1 ? "allowed" : "blocked"))
+      : "none"));
     lines.push("Sustained blocked trend: " + formatSustainedStateDigest(sustainedState));
     lines.push("Sustained transitions: " + formatSustainedTimelineDigest(sustainedTimeline));
     if (topFailedEntries.length > 0) {
