@@ -544,6 +544,22 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="resolveWatchdogsIncidentBtn" type="button">Resolve Watchdogs Incident</button>
                     <button id="reopenWatchdogsIncidentBtn" type="button">Reopen Watchdogs Incident</button>
                 </div>
+                <div class="inline-form">
+                    <label>Gate runs limit<input id="releaseGateRunsLimitInput" type="number" min="1" max="400" value="200" /></label>
+                    <label>Gate status filter
+                        <select id="releaseGateRunsAllowedFilter">
+                            <option value="all">all</option>
+                            <option value="allowed">allowed</option>
+                            <option value="blocked">blocked</option>
+                        </select>
+                    </label>
+                    <label>Gate source filter<input id="releaseGateRunsSourceFilter" type="text" placeholder="Optional source (e.g. scheduler_tick_run)" /></label>
+                    <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
+                </div>
+                <div class="actions">
+                    <button id="applyReleaseGateRunsFilterBtn" type="button">Apply Gate Filters</button>
+                    <button id="clearReleaseGateRunsFilterBtn" type="button">Clear Gate Filters</button>
+                </div>
                 <label>Watchdogs incident note<input id="watchdogsIncidentNoteInput" type="text" placeholder="Optional note for resolve/reopen watchdog incident actions..." /></label>
                 <label>Auto-incident threshold (critical streak)<input id="watchdogsAutoIncidentThresholdInput" type="number" min="1" max="10" value="2" /></label>
                 <label>Auto-resolve threshold (OK streak)<input id="watchdogsAutoResolveThresholdInput" type="number" min="1" max="10" value="2" /></label>

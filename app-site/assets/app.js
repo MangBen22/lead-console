@@ -27,6 +27,8 @@
   const saveReleaseGateSettingsBtn = document.getElementById("saveReleaseGateSettingsBtn");
   const runReleaseGateWatchBtn = document.getElementById("runReleaseGateWatchBtn");
   const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
+  const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
+  const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -101,6 +103,10 @@
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
+  const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
+  const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
+  const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
+  const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
@@ -451,20 +457,59 @@
     }
   }
 
+  function collectReleaseGateRunsFilters() {
+    const limitRaw = releaseGateRunsLimitInput && releaseGateRunsLimitInput.value
+      ? Number(releaseGateRunsLimitInput.value)
+      : 200;
+    const safeLimit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(400, Math.round(limitRaw))) : 200;
+    const allowed = releaseGateRunsAllowedFilter && releaseGateRunsAllowedFilter.value
+      ? releaseGateRunsAllowedFilter.value
+      : "all";
+    const source = releaseGateRunsSourceFilter && releaseGateRunsSourceFilter.value
+      ? releaseGateRunsSourceFilter.value.trim()
+      : "";
+    const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
+      ? releaseGateRunsFailedItemFilter.value.trim()
+      : "";
+    return {
+      limit: safeLimit,
+      allowed: allowed,
+      source: source,
+      failed_item: failedItem,
+    };
+  }
+
   async function loadReleaseGateRuns() {
     if (!releaseGateRunsView) return;
+    const params = collectReleaseGateRunsFilters();
     try {
-      const data = await apiGet("deployment.release.gate.runs");
+      const data = await apiGetWithParams("deployment.release.gate.runs", params);
       releaseGateRunsView.textContent = JSON.stringify(data, null, 2);
       if (releaseGateRunSummaryView) {
         const summary = data && data.summary ? data.summary : {};
-        releaseGateRunSummaryView.textContent = JSON.stringify({ ok: true, summary: summary }, null, 2);
+        const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
+        releaseGateRunSummaryView.textContent = JSON.stringify({ ok: true, applied_filters: appliedFilters, summary: summary }, null, 2);
       }
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
       if (releaseGateRunSummaryView) {
         releaseGateRunSummaryView.textContent = "Failed to load release gate run summary.";
       }
+    }
+  }
+
+  function resetReleaseGateRunsFilters() {
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = "all";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = "";
     }
   }
 
@@ -1860,6 +1905,19 @@
     refreshReleaseGateRunsBtn.addEventListener("click", async function () {
       await loadReleaseGateRuns();
       await loadWatchdogsStatus();
+    });
+  }
+
+  if (applyReleaseGateRunsFilterBtn) {
+    applyReleaseGateRunsFilterBtn.addEventListener("click", async function () {
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (clearReleaseGateRunsFilterBtn) {
+    clearReleaseGateRunsFilterBtn.addEventListener("click", async function () {
+      resetReleaseGateRunsFilters();
+      await loadReleaseGateRuns();
     });
   }
 

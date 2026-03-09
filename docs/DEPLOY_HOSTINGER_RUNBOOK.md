@@ -90,6 +90,7 @@
 37. Use gate-runs `summary` (`top_failed_items`, baseline blocker run counts) to prioritize remediation before launch.
 38. Use `gate watch summary` panel in Go-Live for quick blocker analytics without scrolling through full runs payloads.
 39. Check scheduler status `release_gate_watch_summary` to confirm blocker trends during unattended automation windows.
+40. Use Gate Runs filters (`limit`, `status`, `source`, `failed item`) to isolate specific blocker windows and operator actions.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
