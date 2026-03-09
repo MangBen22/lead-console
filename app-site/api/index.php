@@ -3894,7 +3894,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.15-webops-action-execution',
+        'phase' => '2.16-webops-posture-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5571,7 +5571,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.15-webops-action-execution',
+        'phase' => '2.16-webops-posture-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8753,6 +8753,62 @@ if ($action === 'webops.actions.run') {
         'processed' => $processed,
         'completed' => $completed,
         'failed' => max(0, $processed - $completed),
+    ]);
+}
+
+if ($action === 'webops.posture.snapshot') {
+    $monitors = app_read_json_file(webops_monitors_path(), []);
+    $incidents = app_read_json_file(webops_incidents_path(), []);
+    $queue = app_read_json_file(webops_actions_queue_path(), []);
+    $actionLog = app_read_json_file(webops_actions_log_path(), []);
+    $runs = app_read_json_file(webops_log_path(), []);
+    $summaryMetrics = [
+        'active_monitors' => 0,
+        'open_incidents' => 0,
+        'queued_actions' => 0,
+        'completed_actions' => 0,
+    ];
+    foreach ($monitors as $row) {
+        if (is_array($row) && in_array(strtolower((string) ($row['status'] ?? 'planned')), ['active', 'enabled'], true)) {
+            $summaryMetrics['active_monitors']++;
+        }
+    }
+    foreach ($incidents as $row) {
+        if (is_array($row) && strtolower((string) ($row['status'] ?? 'open')) === 'open') {
+            $summaryMetrics['open_incidents']++;
+        }
+    }
+    foreach ($queue as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (strtolower((string) ($row['status'] ?? 'queued')) === 'queued') {
+            $summaryMetrics['queued_actions']++;
+        } elseif (strtolower((string) ($row['status'] ?? '')) === 'completed') {
+            $summaryMetrics['completed_actions']++;
+        }
+    }
+    out_json([
+        'ok' => true,
+        'generated_at' => gmdate('c'),
+        'summary' => $summaryMetrics,
+        'monitors' => [
+            'count' => count($monitors),
+            'latest' => isset($monitors[0]) && is_array($monitors[0]) ? $monitors[0] : null,
+        ],
+        'incidents' => [
+            'count' => count($incidents),
+            'latest' => isset($incidents[0]) && is_array($incidents[0]) ? $incidents[0] : null,
+        ],
+        'actions_queue' => [
+            'count' => count($queue),
+            'latest' => isset($queue[0]) && is_array($queue[0]) ? $queue[0] : null,
+        ],
+        'actions_log' => [
+            'count' => count($actionLog),
+            'latest' => isset($actionLog[0]) && is_array($actionLog[0]) ? $actionLog[0] : null,
+        ],
+        'last_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
     ]);
 }
 

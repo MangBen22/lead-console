@@ -234,6 +234,7 @@
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
   const refreshWebopsActionsBtn = document.getElementById("refreshWebopsActionsBtn");
+  const refreshWebopsPostureBtn = document.getElementById("refreshWebopsPostureBtn");
   const runWebopsActionsBtn = document.getElementById("runWebopsActionsBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
@@ -248,6 +249,7 @@
   const webopsActionsQueue = document.getElementById("webopsActionsQueue");
   const webopsActionForm = document.getElementById("webopsActionForm");
   const webopsActionsLog = document.getElementById("webopsActionsLog");
+  const webopsPostureView = document.getElementById("webopsPostureView");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -2316,6 +2318,16 @@
     }
   }
 
+  async function loadWebopsPosture() {
+    if (!webopsPostureView) return;
+    try {
+      const data = await apiGet("webops.posture.snapshot");
+      webopsPostureView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsPostureView.textContent = "Failed to load WebOps posture snapshot.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -2383,6 +2395,7 @@
     await loadWebopsIncidents();
     await loadWebopsActionsQueue();
     await loadWebopsActionsLog();
+    await loadWebopsPosture();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -2809,6 +2822,12 @@
     });
   }
 
+  if (refreshWebopsPostureBtn) {
+    refreshWebopsPostureBtn.addEventListener("click", async function () {
+      await loadWebopsPosture();
+    });
+  }
+
   if (runWebopsActionsBtn) {
     runWebopsActionsBtn.addEventListener("click", async function () {
       const result = await apiPost("webops.actions.run", {});
@@ -2817,6 +2836,7 @@
       }
       await loadWebopsActionsQueue();
       await loadWebopsActionsLog();
+      await loadWebopsPosture();
       const data = await apiGet("webops.summary");
       const panel = document.getElementById("modWebops");
       if (panel) {
@@ -2951,6 +2971,7 @@
         }
         await loadWebopsActionsQueue();
         await loadWebopsActionsLog();
+        await loadWebopsPosture();
         const data = await apiGet("webops.summary");
         const panel = document.getElementById("modWebops");
         if (panel) {
@@ -2969,6 +2990,7 @@
       await loadWebopsLog();
       await loadWebopsRetryQueue();
       await loadWebopsIncidents();
+      await loadWebopsPosture();
       const data = await apiGet("webops.summary");
       const panel = document.getElementById("modWebops");
       if (panel) {
@@ -2985,6 +3007,7 @@
       }
       await loadWebopsRetryQueue();
       await loadWebopsIncidents();
+      await loadWebopsPosture();
       const data = await apiGet("webops.summary");
       const panel = document.getElementById("modWebops");
       if (panel) {

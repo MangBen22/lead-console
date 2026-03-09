@@ -633,6 +633,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>WebOps Posture Snapshot</h2>
+                <div class="actions">
+                    <button id="refreshWebopsPostureBtn" type="button">Refresh WebOps Posture</button>
+                </div>
+                <pre id="webopsPostureView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>SEO Projects</h2>
                 <pre id="seoProjects">Loading...</pre>
                 <form id="seoProjectForm" class="inline-form">
