@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.25-seo-link-schema-baseline',
+        'phase' => '2.26-seo-action-plan',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4864,6 +4864,229 @@ function seo_issue_rollup_from_checks($checks)
     return [
         'priority_summary' => $summary,
         'issues' => array_values($issues),
+    ];
+}
+
+function seo_priority_rank($priority)
+{
+    $key = strtolower(trim((string) $priority));
+    if ($key === 'critical') {
+        return 3;
+    }
+    if ($key === 'fix_soon') {
+        return 2;
+    }
+    return 1;
+}
+
+function seo_issue_playbook($check)
+{
+    $catalog = [
+        'title_tag' => [
+            'title' => 'Repair the page title',
+            'recommendation' => 'Write a unique title in the recommended range so the page can compete in search results.',
+            'owner' => 'content',
+        ],
+        'meta_description' => [
+            'title' => 'Improve the meta description',
+            'recommendation' => 'Add a descriptive summary that supports click-through from search results.',
+            'owner' => 'content',
+        ],
+        'canonical' => [
+            'title' => 'Set a canonical URL',
+            'recommendation' => 'Publish a canonical tag that points to the preferred URL version.',
+            'owner' => 'technical_seo',
+        ],
+        'robots_meta' => [
+            'title' => 'Remove blocking robots directives',
+            'recommendation' => 'Confirm the page is not using noindex or other indexing blockers unless the block is intentional.',
+            'owner' => 'technical_seo',
+        ],
+        'robots_txt' => [
+            'title' => 'Publish a robots.txt file',
+            'recommendation' => 'Add a valid robots.txt so crawlers can discover the site rules cleanly.',
+            'owner' => 'technical_seo',
+        ],
+        'sitemap_xml' => [
+            'title' => 'Publish a sitemap',
+            'recommendation' => 'Generate and expose sitemap.xml to improve crawler discovery.',
+            'owner' => 'technical_seo',
+        ],
+        'h1' => [
+            'title' => 'Fix the H1 structure',
+            'recommendation' => 'Keep exactly one primary H1 for the page topic unless there is a specific template reason not to.',
+            'owner' => 'content',
+        ],
+        'heading_structure' => [
+            'title' => 'Improve section headings',
+            'recommendation' => 'Add H2 sections so the page has clear topical structure and better scanability.',
+            'owner' => 'content',
+        ],
+        'image_alt' => [
+            'title' => 'Add image alt text',
+            'recommendation' => 'Fill missing alt attributes with descriptive, non-spammy text for meaningful images.',
+            'owner' => 'content',
+        ],
+        'content_depth' => [
+            'title' => 'Increase content depth',
+            'recommendation' => 'Expand the page with useful supporting copy, FAQs, or service details to avoid thin content.',
+            'owner' => 'content',
+        ],
+        'internal_links' => [
+            'title' => 'Strengthen internal linking',
+            'recommendation' => 'Add relevant links from and to important site pages so crawlers and users can reach related content.',
+            'owner' => 'technical_seo',
+        ],
+        'schema_markup' => [
+            'title' => 'Add structured data',
+            'recommendation' => 'Implement schema markup that matches the page intent, such as Organization, LocalBusiness, or Service.',
+            'owner' => 'technical_seo',
+        ],
+        'https' => [
+            'title' => 'Move the site to HTTPS',
+            'recommendation' => 'Serve the target over HTTPS and redirect insecure variants.',
+            'owner' => 'engineering',
+        ],
+        'home_reachable' => [
+            'title' => 'Restore homepage availability',
+            'recommendation' => 'Resolve the page availability issue before deeper SEO work; crawlers cannot evaluate a broken page.',
+            'owner' => 'engineering',
+        ],
+        'target_url' => [
+            'title' => 'Set the correct project URL',
+            'recommendation' => 'Configure a valid project domain so audits point at the correct website.',
+            'owner' => 'ops',
+        ],
+    ];
+    $key = strtolower(trim((string) $check));
+    if (isset($catalog[$key])) {
+        return $catalog[$key];
+    }
+    return [
+        'title' => 'Review SEO issue: ' . ($key !== '' ? $key : 'unknown'),
+        'recommendation' => 'Inspect the latest audit evidence and resolve the issue based on the page context.',
+        'owner' => 'technical_seo',
+    ];
+}
+
+function seo_issue_map_from_audit($audit)
+{
+    $map = [];
+    if (!is_array($audit)) {
+        return $map;
+    }
+    $issues = isset($audit['issue_rollup']) && is_array($audit['issue_rollup']) ? $audit['issue_rollup'] : [];
+    if (!empty($issues)) {
+        foreach ($issues as $issue) {
+            if (!is_array($issue) || empty($issue['check'])) {
+                continue;
+            }
+            $check = (string) $issue['check'];
+            $map[$check] = [
+                'check' => $check,
+                'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+                'occurrences' => (int) ($issue['occurrences'] ?? 0),
+                'messages' => isset($issue['messages']) && is_array($issue['messages']) ? array_values($issue['messages']) : [],
+                'statuses' => isset($issue['statuses']) && is_array($issue['statuses']) ? array_values($issue['statuses']) : [],
+            ];
+        }
+        return $map;
+    }
+
+    foreach ((array) ($audit['checks'] ?? []) as $check) {
+        if (!is_array($check)) {
+            continue;
+        }
+        $key = (string) ($check['check'] ?? 'unknown');
+        if (!isset($map[$key])) {
+            $map[$key] = [
+                'check' => $key,
+                'priority' => seo_check_priority($check),
+                'occurrences' => 0,
+                'messages' => [],
+                'statuses' => [],
+            ];
+        }
+        $map[$key]['occurrences']++;
+        $message = trim((string) ($check['message'] ?? ''));
+        if ($message !== '' && !in_array($message, $map[$key]['messages'], true)) {
+            $map[$key]['messages'][] = $message;
+        }
+        $status = trim((string) ($check['status'] ?? ''));
+        if ($status !== '' && !in_array($status, $map[$key]['statuses'], true)) {
+            $map[$key]['statuses'][] = $status;
+        }
+    }
+    return $map;
+}
+
+function seo_action_plan_from_audits($project, $latestAudit, $previousAudit)
+{
+    $latestIssues = seo_issue_map_from_audit($latestAudit);
+    $previousIssues = seo_issue_map_from_audit($previousAudit);
+    $summary = [
+        'new' => 0,
+        'persistent' => 0,
+        'monitor' => 0,
+    ];
+    $actions = [];
+
+    foreach ($latestIssues as $check => $issue) {
+        $playbook = seo_issue_playbook($check);
+        $status = isset($previousIssues[$check]) ? 'persistent' : 'new';
+        $summary[$status]++;
+        $actions[] = [
+            'action_id' => 'seo_action_' . preg_replace('/[^a-z0-9_\-]/i', '_', strtolower($check)),
+            'check' => $check,
+            'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+            'status' => $status,
+            'title' => (string) ($playbook['title'] ?? ''),
+            'recommendation' => (string) ($playbook['recommendation'] ?? ''),
+            'suggested_owner' => (string) ($playbook['owner'] ?? 'technical_seo'),
+            'occurrences' => (int) ($issue['occurrences'] ?? 0),
+            'latest_messages' => array_slice(isset($issue['messages']) && is_array($issue['messages']) ? $issue['messages'] : [], 0, 3),
+            'previous_priority' => isset($previousIssues[$check]) ? (string) ($previousIssues[$check]['priority'] ?? '') : '',
+        ];
+    }
+
+    foreach ($previousIssues as $check => $issue) {
+        if (isset($latestIssues[$check])) {
+            continue;
+        }
+        $playbook = seo_issue_playbook($check);
+        $summary['monitor']++;
+        $actions[] = [
+            'action_id' => 'seo_action_' . preg_replace('/[^a-z0-9_\-]/i', '_', strtolower($check)) . '_monitor',
+            'check' => $check,
+            'priority' => 'nice_to_have',
+            'status' => 'monitor',
+            'title' => 'Monitor cleared issue: ' . (string) ($playbook['title'] ?? $check),
+            'recommendation' => 'This issue cleared in the latest audit. Monitor the next crawl to confirm it stays resolved.',
+            'suggested_owner' => (string) ($playbook['owner'] ?? 'technical_seo'),
+            'occurrences' => (int) ($issue['occurrences'] ?? 0),
+            'latest_messages' => [],
+            'previous_priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+        ];
+    }
+
+    usort($actions, static function ($left, $right) {
+        $priorityDiff = seo_priority_rank((string) ($right['priority'] ?? 'nice_to_have')) <=> seo_priority_rank((string) ($left['priority'] ?? 'nice_to_have'));
+        if ($priorityDiff !== 0) {
+            return $priorityDiff;
+        }
+        $statusOrder = ['persistent' => 3, 'new' => 2, 'monitor' => 1];
+        $leftStatus = (int) ($statusOrder[(string) ($left['status'] ?? 'monitor')] ?? 0);
+        $rightStatus = (int) ($statusOrder[(string) ($right['status'] ?? 'monitor')] ?? 0);
+        if ($rightStatus !== $leftStatus) {
+            return $rightStatus <=> $leftStatus;
+        }
+        return strcmp((string) ($left['check'] ?? ''), (string) ($right['check'] ?? ''));
+    });
+
+    return [
+        'project' => is_array($project) ? $project : null,
+        'summary' => $summary,
+        'actions' => $actions,
     ];
 }
 
@@ -6026,7 +6249,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.25-seo-link-schema-baseline',
+        'phase' => '2.26-seo-action-plan',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9152,6 +9375,50 @@ if ($action === 'seo.project.snapshot') {
         'issue_summary' => $issueSummary,
         'latest_audit' => $latestAudit,
         'latest_extension_event' => $latestEvent,
+    ]);
+}
+
+if ($action === 'seo.actions.plan') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $project = null;
+    if ($projectId !== '') {
+        foreach ($projects as $row) {
+            if (is_array($row) && (string) ($row['project_id'] ?? '') === $projectId) {
+                $project = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($project)) {
+        $project = isset($projects[0]) && is_array($projects[0]) ? $projects[0] : null;
+    }
+    if (!is_array($project)) {
+        out_json([
+            'ok' => true,
+            'project' => null,
+            'message' => 'No SEO project configured.',
+            'summary' => ['new' => 0, 'persistent' => 0, 'monitor' => 0],
+            'actions' => [],
+        ]);
+    }
+    $selectedProjectId = (string) ($project['project_id'] ?? '');
+    $audits = array_values(array_filter(app_read_json_file(seo_audits_path(), []), static function ($row) use ($selectedProjectId) {
+        return (string) ($row['project_id'] ?? '') === $selectedProjectId;
+    }));
+    $latest = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+    $previous = isset($audits[1]) && is_array($audits[1]) ? $audits[1] : null;
+    $plan = seo_action_plan_from_audits($project, $latest, $previous);
+    out_json([
+        'ok' => true,
+        'project' => $project,
+        'generated_at' => gmdate('c'),
+        'latest_audit_id' => is_array($latest) ? (string) ($latest['audit_id'] ?? '') : '',
+        'previous_audit_id' => is_array($previous) ? (string) ($previous['audit_id'] ?? '') : '',
+        'score_delta' => (is_array($latest) && is_array($previous)) ? ((int) ($latest['score'] ?? 0) - (int) ($previous['score'] ?? 0)) : null,
+        'summary' => $plan['summary'],
+        'actions' => $plan['actions'],
+        'message' => is_array($latest) ? '' : 'No SEO audit available yet for action planning.',
     ]);
 }
 

@@ -263,6 +263,7 @@
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
+  const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
@@ -272,6 +273,7 @@
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
+  const seoActionPlanView = document.getElementById("seoActionPlanView");
   const seoCompareView = document.getElementById("seoCompareView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
@@ -2444,6 +2446,19 @@
     }
   }
 
+  async function loadSeoActionPlan() {
+    if (!seoActionPlanView) return;
+    try {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.actions.plan", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      seoActionPlanView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoActionPlanView.textContent = "Failed to load SEO action plan.";
+    }
+  }
+
   async function loadSeoCompare() {
     if (!seoCompareView) return;
     try {
@@ -2485,6 +2500,7 @@
     await loadSeoExtensionEvents();
     await loadSeoExtensionSessions();
     await loadSeoProjectSnapshot();
+    await loadSeoActionPlan();
     await loadSeoCompare();
     await loadNotifications();
     await loadAutomationRuns();
@@ -4123,6 +4139,7 @@
         await loadSeoHistorySummary();
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
+        await loadSeoActionPlan();
         await loadSeoCompare();
       });
     }
@@ -4145,6 +4162,7 @@
         await loadSeoHistorySummary();
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
+        await loadSeoActionPlan();
         await loadSeoCompare();
       });
     }
@@ -4167,6 +4185,7 @@
         await loadSeoExtensionSummary();
         await loadSeoAudits();
         await loadSeoProjectSnapshot();
+        await loadSeoActionPlan();
         await loadSeoCompare();
         const data = await apiGet("seo.summary");
         const panel = document.getElementById("modSeo");
@@ -4217,6 +4236,12 @@
     });
   }
 
+  if (refreshSeoActionPlanBtn) {
+    refreshSeoActionPlanBtn.addEventListener("click", async function () {
+      await loadSeoActionPlan();
+    });
+  }
+
   if (refreshSeoCompareBtn) {
     refreshSeoCompareBtn.addEventListener("click", async function () {
       await loadSeoCompare();
@@ -4242,6 +4267,7 @@
         }
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
+        await loadSeoActionPlan();
         await loadSeoCompare();
       });
     }
@@ -4261,6 +4287,7 @@
         }
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
+        await loadSeoActionPlan();
         await loadSeoCompare();
       });
     }
