@@ -1860,6 +1860,8 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         $sourceGroupFilter = 'all';
     }
     $sourceFilter = trim((string) ($query['source'] ?? ''));
+    $sourceContainsRaw = trim((string) ($query['source_contains'] ?? ''));
+    $sourceContains = strtolower($sourceContainsRaw);
     $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
     $failedItemFilter = strtolower($failedItemFilterRaw);
     $failedItemMode = strtolower(trim((string) ($query['failed_item_mode'] ?? 'exact')));
@@ -1929,6 +1931,9 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
             continue;
         }
+        if ($sourceContains !== '' && strpos($sourceValue, $sourceContains) === false) {
+            continue;
+        }
         $reasonCount = isset($row['reason_count']) ? (int) $row['reason_count'] : 0;
         if ($reasonCountMin !== null && $reasonCount < $reasonCountMin) {
             continue;
@@ -1979,6 +1984,7 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'transition_to' => $transitionToFilter,
             'source_group' => $sourceGroupFilter,
             'source' => $sourceFilter,
+            'source_contains' => $sourceContainsRaw,
             'failed_item' => $failedItemFilterRaw,
             'failed_item_mode' => $failedItemMode,
             'reason_count_min' => $reasonCountMin,
@@ -3427,7 +3433,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.92-release-gate-failed-item-mode',
+        'phase' => '1.93-release-gate-source-contains-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4755,7 +4761,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.92-release-gate-failed-item-mode',
+        'phase' => '1.93-release-gate-source-contains-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

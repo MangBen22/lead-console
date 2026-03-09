@@ -592,6 +592,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         </select>
                     </label>
                     <label>Gate source filter<input id="releaseGateRunsSourceFilter" type="text" placeholder="Optional source (e.g. scheduler_tick_run)" /></label>
+                    <label>Source contains<input id="releaseGateRunsSourceContainsFilter" type="text" placeholder="Optional partial source text" /></label>
                     <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
                     <label>Failed item mode
                         <select id="releaseGateRunsFailedItemMode">

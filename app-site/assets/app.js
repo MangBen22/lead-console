@@ -128,6 +128,7 @@
   const releaseGateRunsTransitionToFilter = document.getElementById("releaseGateRunsTransitionToFilter");
   const releaseGateRunsSourceGroupFilter = document.getElementById("releaseGateRunsSourceGroupFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
+  const releaseGateRunsSourceContainsFilter = document.getElementById("releaseGateRunsSourceContainsFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const releaseGateRunsFailedItemMode = document.getElementById("releaseGateRunsFailedItemMode");
   const releaseGateRunsReasonMinInput = document.getElementById("releaseGateRunsReasonMinInput");
@@ -533,6 +534,9 @@
     const source = releaseGateRunsSourceFilter && releaseGateRunsSourceFilter.value
       ? releaseGateRunsSourceFilter.value.trim()
       : "";
+    const sourceContains = releaseGateRunsSourceContainsFilter && releaseGateRunsSourceContainsFilter.value
+      ? releaseGateRunsSourceContainsFilter.value.trim()
+      : "";
     const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
       ? releaseGateRunsFailedItemFilter.value.trim()
       : "";
@@ -567,6 +571,7 @@
       transition_to: transitionTo,
       source_group: sourceGroup,
       source: source,
+      source_contains: sourceContains,
       failed_item: failedItem,
       failed_item_mode: failedItemMode,
       reason_count_min: reasonMin,
@@ -653,6 +658,7 @@
       + ", transition_to=" + String(f.transition_to || "all")
       + ", source_group=" + String(f.source_group || "all")
       + ", source=" + String(f.source || "(any)")
+      + ", source_contains=" + String(f.source_contains || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
       + ", failed_item_mode=" + String(f.failed_item_mode || "exact")
       + ", reason_count_min=" + (f.reason_count_min === null || f.reason_count_min === undefined ? "(any)" : String(f.reason_count_min))
@@ -783,6 +789,9 @@
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
+    }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
@@ -851,6 +860,9 @@
       }
       if (releaseGateRunsSourceFilter && typeof stored.source === "string") {
         releaseGateRunsSourceFilter.value = stored.source;
+      }
+      if (releaseGateRunsSourceContainsFilter && typeof stored.source_contains === "string") {
+        releaseGateRunsSourceContainsFilter.value = stored.source_contains;
       }
       if (releaseGateRunsFailedItemFilter && typeof stored.failed_item === "string") {
         releaseGateRunsFailedItemFilter.value = stored.failed_item;
@@ -922,6 +934,9 @@
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
+    }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
@@ -954,6 +969,9 @@
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = source || "";
+    }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
@@ -1003,6 +1021,9 @@
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
+    }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
@@ -1050,6 +1071,9 @@
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
@@ -1099,6 +1123,9 @@
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
+    }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
@@ -1146,6 +1173,9 @@
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsSourceContainsFilter) {
+      releaseGateRunsSourceContainsFilter.value = "";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
