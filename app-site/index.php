@@ -562,6 +562,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="applyReleaseGateRunsFilterBtn" type="button">Apply Gate Filters</button>
                     <button id="clearReleaseGateRunsFilterBtn" type="button">Clear Gate Filters</button>
                     <button id="downloadReleaseGateRunsBtn" type="button">Download Gate Runs</button>
+                    <button id="downloadReleaseGateBlockerReportBtn" type="button">Download Blocker Report</button>
                 </div>
                 <div class="actions">
                     <button id="applyGatePresetBaselineMatchBtn" type="button">Preset: Baseline Match</button>

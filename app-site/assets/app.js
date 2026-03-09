@@ -31,6 +31,7 @@
   const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
+  const downloadReleaseGateBlockerReportBtn = document.getElementById("downloadReleaseGateBlockerReportBtn");
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
   const applyGatePresetBaselineCheckBtn = document.getElementById("applyGatePresetBaselineCheckBtn");
   const applyGatePresetSignoffWatchBtn = document.getElementById("applyGatePresetSignoffWatchBtn");
@@ -521,6 +522,18 @@
     const params = collectReleaseGateRunsFilters();
     const data = await apiGetWithParams("deployment.release.gate.runs.export", params);
     const filename = data && data.filename ? String(data.filename) : ("release-gate-runs-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
+  async function downloadReleaseGateBlockerReport() {
+    const params = collectReleaseGateRunsFilters();
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+    params.freshness_minutes = safeFreshness;
+    const data = await apiGetWithParams("deployment.release.gate.blockers.report", params);
+    const filename = data && data.filename ? String(data.filename) : ("release-gate-blockers-report-" + Date.now() + ".json");
     downloadJsonFile(filename, data);
   }
 
@@ -1996,6 +2009,12 @@
   if (downloadReleaseGateRunsBtn) {
     downloadReleaseGateRunsBtn.addEventListener("click", async function () {
       await downloadReleaseGateRuns();
+    });
+  }
+
+  if (downloadReleaseGateBlockerReportBtn) {
+    downloadReleaseGateBlockerReportBtn.addEventListener("click", async function () {
+      await downloadReleaseGateBlockerReport();
     });
   }
 

@@ -3141,7 +3141,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.68-scheduler-gate-summary-panel',
+        'phase' => '1.69-release-gate-blockers-report',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4469,7 +4469,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.68-scheduler-gate-summary-panel',
+        'phase' => '1.69-release-gate-blockers-report',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4733,6 +4733,40 @@ if ($action === 'deployment.release.gate.runs.export') {
         'summary' => $summary,
         'items' => $items,
         'exported_at' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.blockers.report') {
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $filter = deployment_release_gate_runs_apply_filters($runs, $_GET);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+    $summary = deployment_release_gate_runs_summary($items);
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
+    $gate = deployment_release_gate_snapshot($freshness);
+    $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    if (!is_array($state)) {
+        $state = [];
+    }
+    $report = [
+        'report_id' => 'release_gate_blockers_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'release_gate' => $gate,
+        'release_gate_state' => $state,
+        'runs_summary' => $summary,
+        'runs_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'runs_count' => count($items),
+        'runs_filtered_total_count' => (int) ($filter['filtered_total_count'] ?? count($items)),
+        'runs_total_count' => (int) ($filter['total_count'] ?? count($runs)),
+        'runs' => $items,
+    ];
+    out_json([
+        'ok' => true,
+        'filename' => 'release-gate-blockers-report-' . gmdate('Ymd-His') . '.json',
+        'report' => $report,
+        'time' => gmdate('c'),
     ]);
 }
 
