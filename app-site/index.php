@@ -333,6 +333,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Platforms</h2>
+                <div class="actions">
+                    <button id="refreshSocialPlatformsBtn" type="button">Refresh Social Platforms</button>
+                </div>
+                <pre id="socialPlatforms">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Connectors</h2>
                 <pre id="socialConnectors">Loading...</pre>
                 <form id="socialConnectorForm" class="inline-form">
@@ -343,6 +351,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <div class="form-row">
                         <label for="socialProvider">Provider</label>
                         <input id="socialProvider" type="text" placeholder="wordpress_social_bridge" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialAccountLabel">Account label</label>
+                        <input id="socialAccountLabel" type="text" placeholder="5N2 Facebook Page">
                     </div>
                     <div class="form-row">
                         <label for="socialType">Type</label>
@@ -385,6 +397,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <div class="form-row">
                         <label for="socialWebhook">Webhook URL (social_webhook)</label>
                         <input id="socialWebhook" type="text" placeholder="https://example.com/social-webhook">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialExpiresAt">Credential expiry (optional)</label>
+                        <input id="socialExpiresAt" type="datetime-local">
                     </div>
                     <button id="saveSocialConnectorBtn" type="button">Save Social Connector</button>
                     <button id="deleteSocialConnectorBtn" type="button">Delete Social Connector</button>

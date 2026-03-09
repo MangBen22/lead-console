@@ -209,6 +209,162 @@ function social_retry_queue_path()
     return app_storage_path('social_retry_queue.json');
 }
 
+function social_platform_catalog()
+{
+    return [
+        [
+            'provider' => 'facebook',
+            'label' => 'Facebook',
+            'family' => 'meta',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2'],
+            'capabilities' => ['can_publish_post', 'can_publish_video', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_manage_ads', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#1877f2', 'surface' => 'facebook'],
+        ],
+        [
+            'provider' => 'instagram',
+            'label' => 'Instagram',
+            'family' => 'meta',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2'],
+            'capabilities' => ['can_publish_post', 'can_publish_video', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#e4405f', 'surface' => 'instagram'],
+        ],
+        [
+            'provider' => 'linkedin',
+            'label' => 'LinkedIn',
+            'family' => 'professional',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2'],
+            'capabilities' => ['can_publish_post', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#0a66c2', 'surface' => 'linkedin'],
+        ],
+        [
+            'provider' => 'x',
+            'label' => 'X',
+            'family' => 'social',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2', 'token'],
+            'capabilities' => ['can_publish_post', 'can_publish_video', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#111111', 'surface' => 'x'],
+        ],
+        [
+            'provider' => 'youtube',
+            'label' => 'YouTube',
+            'family' => 'video',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2'],
+            'capabilities' => ['can_publish_video', 'can_schedule', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#ff0000', 'surface' => 'youtube'],
+        ],
+        [
+            'provider' => 'tiktok',
+            'label' => 'TikTok',
+            'family' => 'video',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2'],
+            'capabilities' => ['can_publish_video', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#00f2ea', 'surface' => 'tiktok'],
+        ],
+        [
+            'provider' => 'reddit',
+            'label' => 'Reddit',
+            'family' => 'forum',
+            'default_type' => 'external_api',
+            'auth_modes' => ['oauth2', 'token'],
+            'capabilities' => ['can_publish_post', 'can_schedule', 'can_read_inbox', 'can_reply_inbox', 'can_fetch_analytics'],
+            'theme' => ['accent' => '#ff4500', 'surface' => 'reddit'],
+        ],
+        [
+            'provider' => 'discourse',
+            'label' => 'Discourse',
+            'family' => 'forum',
+            'default_type' => 'external_api',
+            'auth_modes' => ['api_key', 'token'],
+            'capabilities' => ['can_publish_post', 'can_schedule', 'can_read_inbox', 'can_reply_inbox'],
+            'theme' => ['accent' => '#3a5ea7', 'surface' => 'discourse'],
+        ],
+        [
+            'provider' => 'wordpress_social_bridge',
+            'label' => 'WordPress Social Bridge',
+            'family' => 'bridge',
+            'default_type' => 'wordpress_plugin',
+            'auth_modes' => ['token'],
+            'capabilities' => ['can_publish_post', 'can_schedule', 'can_read_inbox'],
+            'theme' => ['accent' => '#21759b', 'surface' => 'wordpress'],
+        ],
+        [
+            'provider' => 'social_webhook',
+            'label' => 'Generic Social Webhook',
+            'family' => 'generic',
+            'default_type' => 'external_api',
+            'auth_modes' => ['api_key', 'token'],
+            'capabilities' => ['can_publish_post', 'can_publish_video', 'can_schedule'],
+            'theme' => ['accent' => '#f59e0b', 'surface' => 'generic'],
+        ],
+    ];
+}
+
+function social_platform_profile($provider)
+{
+    $needle = strtolower(trim((string) $provider));
+    foreach (social_platform_catalog() as $item) {
+        if ((string) ($item['provider'] ?? '') === $needle) {
+            return $item;
+        }
+    }
+
+    $label = $needle !== '' ? ucwords(str_replace(['_', '-'], ' ', $needle)) : 'Custom';
+    return [
+        'provider' => $needle !== '' ? $needle : 'custom',
+        'label' => $label,
+        'family' => 'custom',
+        'default_type' => 'external_api',
+        'auth_modes' => ['api_key', 'oauth2', 'token'],
+        'capabilities' => [],
+        'theme' => ['accent' => '#64748b', 'surface' => 'custom'],
+    ];
+}
+
+function normalize_social_capabilities($provider, $capabilities)
+{
+    $profile = social_platform_profile($provider);
+    $supported = isset($profile['capabilities']) && is_array($profile['capabilities']) ? $profile['capabilities'] : [];
+    $clean = [];
+    if (is_array($capabilities)) {
+        foreach ($capabilities as $value) {
+            $name = preg_replace('/[^a-z0-9_\-]/i', '', strtolower(trim((string) $value)));
+            if ($name !== '' && !in_array($name, $clean, true)) {
+                $clean[] = $name;
+            }
+        }
+    }
+    if (empty($supported)) {
+        return $clean;
+    }
+    if (empty($clean)) {
+        return $supported;
+    }
+    return array_values(array_filter($supported, static function ($item) use ($clean) {
+        return in_array((string) $item, $clean, true);
+    }));
+}
+
+function decorate_social_connector($connector)
+{
+    $masked = mask_connector($connector);
+    $profile = social_platform_profile((string) ($masked['provider'] ?? 'custom'));
+    $enabled = normalize_social_capabilities((string) ($profile['provider'] ?? 'custom'), isset($masked['capabilities']) && is_array($masked['capabilities']) ? $masked['capabilities'] : []);
+    $masked['account_label'] = trim((string) ($masked['account_label'] ?? '')) !== ''
+        ? trim((string) $masked['account_label'])
+        : (string) ($profile['label'] ?? 'Connector');
+    $masked['capabilities_enabled'] = $enabled;
+    $masked['capabilities_supported'] = isset($profile['capabilities']) && is_array($profile['capabilities']) ? $profile['capabilities'] : [];
+    $masked['capability_gaps'] = array_values(array_diff($masked['capabilities_supported'], $enabled));
+    $masked['profile'] = $profile;
+    return $masked;
+}
+
 function webops_monitors_path()
 {
     return app_storage_path('webops_monitors.json');
@@ -3603,7 +3759,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.06-release-gate-operations-snapshot-export',
+        'phase' => '2.07-social-platform-catalog',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4931,11 +5087,11 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.06-release-gate-operations-snapshot-export',
+        'phase' => '2.07-social-platform-catalog',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
-            'social_forums' => 'bootstrap',
+            'social_forums' => 'active',
             'webops_security' => 'bootstrap',
             'seo_suite' => 'bootstrap',
         ],
@@ -7031,15 +7187,23 @@ if ($action === 'social.summary') {
         $status = strtolower((string) ($row['status'] ?? ''));
         return in_array($status, ['active', 'enabled'], true);
     }));
+    $platforms = [];
+    foreach ($active as $row) {
+        $provider = strtolower((string) ($row['provider'] ?? 'custom'));
+        if ($provider !== '' && !in_array($provider, $platforms, true)) {
+            $platforms[] = $provider;
+        }
+    }
     $logs = app_read_json_file(social_sync_log_path(), []);
     $lastSync = isset($logs[0]) && is_array($logs[0]) ? $logs[0] : null;
     $retryCount = count(app_read_json_file(social_retry_queue_path(), []));
     out_json([
         'ok' => true,
         'module' => 'social_forums',
-        'status' => 'bootstrap',
+        'status' => 'active',
         'metrics' => [
             'connected_accounts' => count($active),
+            'active_platforms' => count($platforms),
             'scheduled_posts' => 0,
             'unread_conversations' => $retryCount,
         ],
@@ -7095,6 +7259,15 @@ if ($action === 'seo.summary') {
             'tracked_projects' => count($projects),
         ],
         'last_audit' => $lastAudit,
+    ]);
+}
+
+if ($action === 'social.platforms.list') {
+    $items = social_platform_catalog();
+    out_json([
+        'ok' => true,
+        'count' => count($items),
+        'items' => $items,
     ]);
 }
 
@@ -7260,7 +7433,7 @@ if ($action === 'seo.extension.events.list') {
 
 if ($action === 'social.connectors.list') {
     $rows = app_read_json_file(social_connectors_path(), []);
-    $publicRows = array_map('mask_connector', $rows);
+    $publicRows = array_map('decorate_social_connector', $rows);
     out_json([
         'ok' => true,
         'count' => count($publicRows),
@@ -7281,22 +7454,36 @@ if ($action === 'social.connectors.save') {
     $item = [
         'connector_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['connector_id'] ?? uniqid('social_', false))),
         'provider' => strtolower(trim((string) ($data['provider'] ?? 'custom'))),
+        'account_label' => trim((string) ($data['account_label'] ?? '')),
+        'expires_at' => trim((string) ($data['expires_at'] ?? '')),
         'type' => strtolower(trim((string) ($data['type'] ?? 'external_api'))),
         'status' => strtolower(trim((string) ($data['status'] ?? 'planned'))),
         'auth_mode' => strtolower(trim((string) ($data['auth_mode'] ?? 'api_key'))),
-        'capabilities' => isset($data['capabilities']) && is_array($data['capabilities']) ? array_values($data['capabilities']) : [],
+        'capabilities' => [],
         'site_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['site_id'] ?? '')),
         'config' => sanitize_connector_config($data['config'] ?? []),
         'updated_at' => gmdate('c'),
     ];
+    $profile = social_platform_profile((string) $item['provider']);
+    if ($item['type'] === '') {
+        $item['type'] = (string) ($profile['default_type'] ?? 'external_api');
+    }
+    if ($item['account_label'] === '') {
+        $item['account_label'] = (string) ($profile['label'] ?? 'Connector');
+    }
+    $allowedAuthModes = isset($profile['auth_modes']) && is_array($profile['auth_modes']) ? $profile['auth_modes'] : [];
+    if (!empty($allowedAuthModes) && !in_array($item['auth_mode'], $allowedAuthModes, true)) {
+        $item['auth_mode'] = (string) $allowedAuthModes[0];
+    }
+    $item['capabilities'] = normalize_social_capabilities((string) $item['provider'], $data['capabilities'] ?? []);
     $rows = app_read_json_file(social_connectors_path(), []);
     $rows = array_values(array_filter($rows, static function ($row) use ($item) {
         return (string) ($row['connector_id'] ?? '') !== $item['connector_id'];
     }));
     $rows[] = $item;
     app_write_json_file(social_connectors_path(), $rows);
-    audit_event('social', 'connectors.save', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider']]);
-    out_json(['ok' => true, 'item' => $item]);
+    audit_event('social', 'connectors.save', ['connector_id' => (string) $item['connector_id'], 'provider' => (string) $item['provider'], 'capability_count' => count($item['capabilities'])]);
+    out_json(['ok' => true, 'item' => decorate_social_connector($item)]);
 }
 
 if ($action === 'social.connectors.delete') {

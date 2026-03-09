@@ -218,6 +218,8 @@
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
+  const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
+  const socialPlatforms = document.getElementById("socialPlatforms");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
@@ -2175,6 +2177,16 @@
     }
   }
 
+  async function loadSocialPlatforms() {
+    if (!socialPlatforms) return;
+    try {
+      const data = await apiGet("social.platforms.list");
+      socialPlatforms.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialPlatforms.textContent = "Failed to load social platforms.";
+    }
+  }
+
   async function loadSocialSyncLog() {
     if (!socialSyncLog) return;
     try {
@@ -2257,6 +2269,7 @@
 
   (async function initCrm() {
     await loadCrmConnectors();
+    await loadSocialPlatforms();
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadSocialConnectors();
@@ -2428,6 +2441,7 @@
       saveSocialBtn.addEventListener("click", async function () {
         const connectorId = document.getElementById("socialConnectorId");
         const provider = document.getElementById("socialProvider");
+        const accountLabel = document.getElementById("socialAccountLabel");
         const type = document.getElementById("socialType");
         const status = document.getElementById("socialStatus");
         const auth = document.getElementById("socialAuth");
@@ -2435,13 +2449,16 @@
         const siteId = document.getElementById("socialSiteId");
         const runMode = document.getElementById("socialRunMode");
         const webhook = document.getElementById("socialWebhook");
+        const expiresAt = document.getElementById("socialExpiresAt");
         const payload = {
           connector_id: connectorId && connectorId.value ? connectorId.value.trim() : "",
           provider: provider ? provider.value.trim() : "",
+          account_label: accountLabel ? accountLabel.value.trim() : "",
           type: type ? type.value : "external_api",
           status: status ? status.value : "planned",
           auth_mode: auth ? auth.value : "api_key",
           site_id: siteId ? siteId.value.trim() : "",
+          expires_at: expiresAt && expiresAt.value ? new Date(expiresAt.value).toISOString() : "",
           capabilities: (caps && caps.value ? caps.value.split(",") : []).map(function (v) {
             return v.trim();
           }).filter(Boolean),
@@ -2495,6 +2512,12 @@
         }
       });
     }
+  }
+
+  if (refreshSocialPlatformsBtn) {
+    refreshSocialPlatformsBtn.addEventListener("click", async function () {
+      await loadSocialPlatforms();
+    });
   }
 
   if (runSocialSyncBtn) {
