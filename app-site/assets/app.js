@@ -28,6 +28,8 @@
   const runReleaseGateWatchBtn = document.getElementById("runReleaseGateWatchBtn");
   const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
+  const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
+  const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -84,6 +86,8 @@
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
+  const watchdogsCheckView = document.getElementById("watchdogsCheckView");
+  const watchdogsRunsView = document.getElementById("watchdogsRunsView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -435,6 +439,40 @@
     } catch (err) {
       watchdogsStatusView.textContent = "Failed to load watchdogs status.";
     }
+  }
+
+  async function loadWatchdogsRuns() {
+    if (!watchdogsRunsView) return;
+    try {
+      const data = await apiGet("deployment.watchdogs.runs");
+      watchdogsRunsView.textContent = JSON.stringify(data, null, 2);
+      const state = data && data.state ? data.state : {};
+      if (watchdogsCheckView && state && Object.keys(state).length > 0) {
+        watchdogsCheckView.textContent = JSON.stringify({ ok: true, state: state }, null, 2);
+      }
+    } catch (err) {
+      watchdogsRunsView.textContent = "Failed to load watchdogs check runs.";
+    }
+  }
+
+  async function runWatchdogsCheck() {
+    const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
+      ? Number(releaseGateFreshnessInput.value)
+      : 30;
+    const safeFreshness = Number.isFinite(freshness) ? Math.max(5, Math.min(1440, Math.round(freshness))) : 30;
+    const result = await apiPost("deployment.watchdogs.check", {
+      source: "dashboard_manual",
+      freshness_minutes: safeFreshness,
+    });
+    if (watchdogsCheckView) {
+      watchdogsCheckView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadWatchdogsStatus();
+    await loadWatchdogsRuns();
+    await loadSchedulerStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
   }
 
   async function runReleaseGateWatch() {
@@ -988,6 +1026,7 @@
     await loadReleaseGate();
     await loadReleaseGateRuns();
     await loadWatchdogsStatus();
+    await loadWatchdogsRuns();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1375,6 +1414,7 @@
       await loadReleaseGate();
       await loadGoLiveStatus();
       await loadWatchdogsStatus();
+      await loadWatchdogsRuns();
       await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
     });
@@ -1547,6 +1587,20 @@
   if (refreshWatchdogsStatusBtn) {
     refreshWatchdogsStatusBtn.addEventListener("click", async function () {
       await loadWatchdogsStatus();
+      await loadWatchdogsRuns();
+    });
+  }
+
+  if (runWatchdogsCheckBtn) {
+    runWatchdogsCheckBtn.addEventListener("click", async function () {
+      await runWatchdogsCheck();
+    });
+  }
+
+  if (refreshWatchdogsRunsBtn) {
+    refreshWatchdogsRunsBtn.addEventListener("click", async function () {
+      await loadWatchdogsRuns();
+      await loadSchedulerStatus();
     });
   }
 
