@@ -55,7 +55,7 @@
 7. In dashboard `Hosting Cutover Toolkit -> Cutover Readiness`, record the public smoke result and confirm readiness state moves to `ready` (or shows exact blockers/warnings).
 8. Click `Run Full Smoke Suite` to record both public+auth smoke snapshots in one action.
 9. Click `Download Smoke History` and archive the JSON with deployment artifacts.
-10. In `Go-Live Status`, configure release gate settings (`freshness window` + required checks, including optional `Require recent cutover signoff` and `Require active signoff integrity valid`), click `Save Release Gate Settings`, then `Refresh Release Gate`.
+10. In `Go-Live Status`, configure release gate settings (`freshness window` + required checks, including optional `Require recent cutover signoff`, `Require active signoff integrity valid`, and `Require recent valid signoff integrity watch`), click `Save Release Gate Settings`, then `Refresh Release Gate`.
 11. Confirm release gate returns `allowed=true` before generating a release candidate.
 12. Run `Run Gate Watch` and archive gate watch runs (`Refresh Gate Runs`) as part of cutover evidence.
 13. Click `Download Cutover Evidence` and archive the bundle JSON with deployment records.

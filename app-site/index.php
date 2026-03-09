@@ -527,6 +527,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <label><input id="releaseGateRequireAuthSmokeInput" type="checkbox" value="1" checked /> Require recent passing auth smoke</label>
                 <label><input id="releaseGateRequireCutoverSignoffInput" type="checkbox" value="1" /> Require recent cutover signoff</label>
                 <label><input id="releaseGateRequireSignoffIntegrityInput" type="checkbox" value="1" checked /> Require active signoff integrity valid</label>
+                <label><input id="releaseGateRequireSignoffIntegrityWatchInput" type="checkbox" value="1" /> Require recent valid signoff integrity watch</label>
                 <div class="actions">
                     <button id="refreshGoLiveStatusBtn" type="button">Refresh Go-Live Status</button>
                     <button id="refreshReleaseGateBtn" type="button">Refresh Release Gate</button>

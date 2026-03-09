@@ -77,6 +77,7 @@
   const releaseGateRequireAuthSmokeInput = document.getElementById("releaseGateRequireAuthSmokeInput");
   const releaseGateRequireCutoverSignoffInput = document.getElementById("releaseGateRequireCutoverSignoffInput");
   const releaseGateRequireSignoffIntegrityInput = document.getElementById("releaseGateRequireSignoffIntegrityInput");
+  const releaseGateRequireSignoffIntegrityWatchInput = document.getElementById("releaseGateRequireSignoffIntegrityWatchInput");
   const releaseGateSettingsView = document.getElementById("releaseGateSettingsView");
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
@@ -387,6 +388,9 @@
       }
       if (releaseGateRequireSignoffIntegrityInput) {
         releaseGateRequireSignoffIntegrityInput.checked = Number(settings.require_signoff_integrity) === 1;
+      }
+      if (releaseGateRequireSignoffIntegrityWatchInput) {
+        releaseGateRequireSignoffIntegrityWatchInput.checked = Number(settings.require_signoff_integrity_watch) === 1;
       }
     } catch (err) {
       releaseGateSettingsView.textContent = "Failed to load release gate settings.";
@@ -1484,6 +1488,7 @@
         require_auth_smoke: releaseGateRequireAuthSmokeInput && releaseGateRequireAuthSmokeInput.checked ? 1 : 0,
         require_cutover_signoff: releaseGateRequireCutoverSignoffInput && releaseGateRequireCutoverSignoffInput.checked ? 1 : 0,
         require_signoff_integrity: releaseGateRequireSignoffIntegrityInput && releaseGateRequireSignoffIntegrityInput.checked ? 1 : 0,
+        require_signoff_integrity_watch: releaseGateRequireSignoffIntegrityWatchInput && releaseGateRequireSignoffIntegrityWatchInput.checked ? 1 : 0,
       };
       const result = await apiPost("deployment.release.gate.settings.save", payload);
       if (releaseGateSettingsView) {

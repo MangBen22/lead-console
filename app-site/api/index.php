@@ -479,6 +479,7 @@ function default_deployment_guard()
         'release_gate_require_auth_smoke' => 1,
         'release_gate_require_cutover_signoff' => 0,
         'release_gate_require_signoff_integrity' => 1,
+        'release_gate_require_signoff_integrity_watch' => 0,
         'updated_at' => gmdate('c'),
     ];
 }
@@ -1145,12 +1146,38 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     $requireAuth = !empty($guardCfg['release_gate_require_auth_smoke']) ? 1 : 0;
     $requireSignoff = !empty($guardCfg['release_gate_require_cutover_signoff']) ? 1 : 0;
     $requireSignoffIntegrity = !empty($guardCfg['release_gate_require_signoff_integrity']) ? 1 : 0;
+    $requireSignoffIntegrityWatch = !empty($guardCfg['release_gate_require_signoff_integrity_watch']) ? 1 : 0;
     $readiness = deployment_cutover_readiness_snapshot();
     $history = deployment_smoke_history_snapshot();
     $activeSignoff = deployment_cutover_signoff_active_snapshot();
     $activeSignoffRow = is_array($activeSignoff['active'] ?? null) ? $activeSignoff['active'] : null;
     $activeSignoffIntegrity = is_array($activeSignoffRow) ? deployment_cutover_signoff_verify_item($activeSignoffRow) : null;
+    $signoffIntegrityWatchState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    if (!is_array($signoffIntegrityWatchState)) {
+        $signoffIntegrityWatchState = [];
+    }
+    $watchLastCheckedAt = (string) ($signoffIntegrityWatchState['last_checked_at'] ?? '');
+    $watchStatus = strtolower(trim((string) ($signoffIntegrityWatchState['last_status'] ?? '')));
+    $watchActiveSignoffId = (string) ($signoffIntegrityWatchState['active_signoff_id'] ?? '');
     $now = time();
+    $watchAgeMinutes = null;
+    if ($watchLastCheckedAt !== '') {
+        $watchTs = strtotime($watchLastCheckedAt);
+        if ($watchTs !== false) {
+            $watchAgeMinutes = max(0, (int) floor(($now - $watchTs) / 60));
+        }
+    }
+    $activeSignoffId = is_array($activeSignoffRow) ? (string) ($activeSignoffRow['signoff_id'] ?? '') : '';
+    $watchTargetsActiveSignoff = ($activeSignoffId !== '' && $watchActiveSignoffId !== '' && hash_equals($activeSignoffId, $watchActiveSignoffId));
+    $signoffIntegrityWatch = [
+        'status' => $watchStatus !== '' ? $watchStatus : 'unknown',
+        'last_checked_at' => $watchLastCheckedAt,
+        'age_minutes' => $watchAgeMinutes,
+        'active_signoff_id' => $watchActiveSignoffId,
+        'targets_active_signoff' => $watchTargetsActiveSignoff ? 1 : 0,
+        'last_run_id' => (string) ($signoffIntegrityWatchState['last_run_id'] ?? ''),
+        'last_source' => (string) ($signoffIntegrityWatchState['last_source'] ?? ''),
+    ];
     $latestPublicPass = null;
     $latestAuthPass = null;
     $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
@@ -1223,6 +1250,15 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             ? ('Active signoff integrity status: ' . (string) ($activeSignoffIntegrity['reason'] ?? 'unknown'))
             : 'No active signoff available for integrity validation.',
     ];
+    $checks[] = [
+        'item' => 'cutover_signoff_integrity_watch_valid_and_fresh',
+        'required' => ($requireSignoff && $requireSignoffIntegrity && $requireSignoffIntegrityWatch) ? 1 : 0,
+        'ok' => !($requireSignoff && $requireSignoffIntegrity && $requireSignoffIntegrityWatch)
+            || (($watchStatus === 'valid') && ($watchAgeMinutes !== null) && ($watchAgeMinutes <= $window) && $watchTargetsActiveSignoff),
+        'message' => ($watchAgeMinutes !== null)
+            ? ('Signoff integrity watch status: ' . strtoupper($watchStatus !== '' ? $watchStatus : 'unknown') . '; age: ' . (int) $watchAgeMinutes . ' minute(s); active signoff match: ' . ($watchTargetsActiveSignoff ? 'yes' : 'no') . '.')
+            : 'No signoff integrity watch run found.',
+    ];
 
     $reasons = [];
     foreach ($checks as $check) {
@@ -1241,6 +1277,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             'require_auth_smoke' => $requireAuth,
             'require_cutover_signoff' => $requireSignoff,
             'require_signoff_integrity' => $requireSignoffIntegrity,
+            'require_signoff_integrity_watch' => $requireSignoffIntegrityWatch,
         ],
         'reasons' => $reasons,
         'checks' => $checks,
@@ -1250,6 +1287,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
         'latest_auth_pass_age_minutes' => $authAge,
         'active_cutover_signoff' => $activeSignoff,
         'active_cutover_signoff_integrity' => $activeSignoffIntegrity,
+        'active_cutover_signoff_integrity_watch' => $signoffIntegrityWatch,
         'readiness' => [
             'status' => (string) ($readiness['status'] ?? 'review_required'),
             'summary' => isset($readiness['summary']) && is_array($readiness['summary']) ? $readiness['summary'] : [],
@@ -2102,7 +2140,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.38-signoff-integrity-watchdog',
+        'phase' => '1.39-release-gate-signoff-watch-policy',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3399,7 +3437,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.38-signoff-integrity-watchdog',
+        'phase' => '1.39-release-gate-signoff-watch-policy',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -3531,6 +3569,7 @@ if ($action === 'deployment.release.gate.settings.get') {
         'require_auth_smoke' => !empty($guard['release_gate_require_auth_smoke']) ? 1 : 0,
         'require_cutover_signoff' => !empty($guard['release_gate_require_cutover_signoff']) ? 1 : 0,
         'require_signoff_integrity' => !empty($guard['release_gate_require_signoff_integrity']) ? 1 : 0,
+        'require_signoff_integrity_watch' => !empty($guard['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
     ];
     out_json([
         'ok' => true,
@@ -3556,6 +3595,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'release_gate_require_auth_smoke' => !empty($data['require_auth_smoke']) ? 1 : 0,
         'release_gate_require_cutover_signoff' => !empty($data['require_cutover_signoff']) ? 1 : 0,
         'release_gate_require_signoff_integrity' => !empty($data['require_signoff_integrity']) ? 1 : 0,
+        'release_gate_require_signoff_integrity_watch' => !empty($data['require_signoff_integrity_watch']) ? 1 : 0,
     ];
     $saved = save_deployment_guard($settings);
     push_notification('info', 'Release gate settings updated.', [
@@ -3568,6 +3608,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
         'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
         'require_signoff_integrity' => !empty($saved['release_gate_require_signoff_integrity']) ? 1 : 0,
+        'require_signoff_integrity_watch' => !empty($saved['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
     ]);
     out_json([
         'ok' => true,
@@ -3578,6 +3619,7 @@ if ($action === 'deployment.release.gate.settings.save') {
             'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
             'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
             'require_signoff_integrity' => !empty($saved['release_gate_require_signoff_integrity']) ? 1 : 0,
+            'require_signoff_integrity_watch' => !empty($saved['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
         ],
         'gate' => deployment_release_gate_snapshot(null),
         'time' => gmdate('c'),
