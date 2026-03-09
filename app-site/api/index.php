@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.23-seo-project-snapshot',
+        'phase' => '2.24-seo-latest-compare',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5830,7 +5830,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.23-seo-project-snapshot',
+        'phase' => '2.24-seo-latest-compare',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8950,6 +8950,78 @@ if ($action === 'seo.project.snapshot') {
         'issue_summary' => $issueSummary,
         'latest_audit' => $latestAudit,
         'latest_extension_event' => $latestEvent,
+    ]);
+}
+
+if ($action === 'seo.compare.latest') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $audits = app_read_json_file(seo_audits_path(), []);
+    if ($projectId !== '') {
+        $audits = array_values(array_filter($audits, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $latest = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+    $previous = isset($audits[1]) && is_array($audits[1]) ? $audits[1] : null;
+    if (!is_array($latest)) {
+        out_json([
+            'ok' => true,
+            'message' => 'No SEO audit available for comparison.',
+            'latest' => null,
+            'previous' => null,
+        ]);
+    }
+    $latestChecks = [];
+    foreach ((array) ($latest['issue_rollup'] ?? []) as $issue) {
+        if (is_array($issue) && !empty($issue['check'])) {
+            $latestChecks[(string) $issue['check']] = (string) ($issue['priority'] ?? 'nice_to_have');
+        }
+    }
+    if (empty($latestChecks)) {
+        foreach ((array) ($latest['checks'] ?? []) as $check) {
+            if (!is_array($check)) {
+                continue;
+            }
+            $latestChecks[(string) ($check['check'] ?? 'unknown')] = seo_check_priority($check);
+        }
+    }
+    $previousChecks = [];
+    if (is_array($previous)) {
+        foreach ((array) ($previous['issue_rollup'] ?? []) as $issue) {
+            if (is_array($issue) && !empty($issue['check'])) {
+                $previousChecks[(string) $issue['check']] = (string) ($issue['priority'] ?? 'nice_to_have');
+            }
+        }
+        if (empty($previousChecks)) {
+            foreach ((array) ($previous['checks'] ?? []) as $check) {
+                if (!is_array($check)) {
+                    continue;
+                }
+                $previousChecks[(string) ($check['check'] ?? 'unknown')] = seo_check_priority($check);
+            }
+        }
+    }
+    $added = array_values(array_diff(array_keys($latestChecks), array_keys($previousChecks)));
+    $cleared = array_values(array_diff(array_keys($previousChecks), array_keys($latestChecks)));
+    $changed = [];
+    foreach ($latestChecks as $check => $priority) {
+        if (isset($previousChecks[$check]) && $previousChecks[$check] !== $priority) {
+            $changed[] = [
+                'check' => $check,
+                'from' => $previousChecks[$check],
+                'to' => $priority,
+            ];
+        }
+    }
+    out_json([
+        'ok' => true,
+        'project_id' => (string) ($latest['project_id'] ?? $projectId),
+        'latest' => $latest,
+        'previous' => $previous,
+        'score_delta' => is_array($previous) ? ((int) ($latest['score'] ?? 0) - (int) ($previous['score'] ?? 0)) : null,
+        'added_checks' => $added,
+        'cleared_checks' => $cleared,
+        'changed_priorities' => $changed,
     ]);
 }
 

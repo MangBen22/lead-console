@@ -263,6 +263,7 @@
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
+  const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoExtensionSummary = document.getElementById("seoExtensionSummary");
@@ -271,6 +272,7 @@
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
+  const seoCompareView = document.getElementById("seoCompareView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
 
@@ -2442,6 +2444,19 @@
     }
   }
 
+  async function loadSeoCompare() {
+    if (!seoCompareView) return;
+    try {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.compare.latest", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      seoCompareView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoCompareView.textContent = "Failed to load SEO compare view.";
+    }
+  }
+
   (async function initCrm() {
     await loadCrmConnectors();
     await loadSocialPlatforms();
@@ -2470,6 +2485,7 @@
     await loadSeoExtensionEvents();
     await loadSeoExtensionSessions();
     await loadSeoProjectSnapshot();
+    await loadSeoCompare();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -4107,6 +4123,7 @@
         await loadSeoHistorySummary();
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
+        await loadSeoCompare();
       });
     }
 
@@ -4128,6 +4145,7 @@
         await loadSeoHistorySummary();
         await loadSeoExtensionSummary();
         await loadSeoProjectSnapshot();
+        await loadSeoCompare();
       });
     }
 
@@ -4149,6 +4167,7 @@
         await loadSeoExtensionSummary();
         await loadSeoAudits();
         await loadSeoProjectSnapshot();
+        await loadSeoCompare();
         const data = await apiGet("seo.summary");
         const panel = document.getElementById("modSeo");
         if (panel) {
@@ -4198,6 +4217,12 @@
     });
   }
 
+  if (refreshSeoCompareBtn) {
+    refreshSeoCompareBtn.addEventListener("click", async function () {
+      await loadSeoCompare();
+    });
+  }
+
   if (seoExtensionSessionForm) {
     seoExtensionSessionForm.addEventListener("submit", function (event) {
       event.preventDefault();
@@ -4217,6 +4242,7 @@
         }
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
+        await loadSeoCompare();
       });
     }
 
@@ -4235,6 +4261,7 @@
         }
         await loadSeoExtensionSessions();
         await loadSeoProjectSnapshot();
+        await loadSeoCompare();
       });
     }
   }
