@@ -261,6 +261,7 @@
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
+  const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoExtensionSummary = document.getElementById("seoExtensionSummary");
@@ -4153,6 +4154,22 @@
   if (refreshSeoExtensionSummaryBtn) {
     refreshSeoExtensionSummaryBtn.addEventListener("click", async function () {
       await loadSeoExtensionSummary();
+    });
+  }
+
+  if (downloadSeoReportBtn) {
+    downloadSeoReportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const id = projectId && projectId.value ? projectId.value.trim() : "";
+      const data = await apiGetWithParams("seo.report.export", {
+        project_id: id,
+      });
+      if (data && data.ok && data.export) {
+        downloadJsonFile(data.filename || "seo-report.json", data.export);
+      }
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 

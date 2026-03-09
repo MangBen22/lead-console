@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.21-seo-extension-summary',
+        'phase' => '2.22-seo-report-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5830,7 +5830,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.21-seo-extension-summary',
+        'phase' => '2.22-seo-report-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8830,6 +8830,64 @@ if ($action === 'seo.extension.events.summary') {
         'top_issues' => array_slice($issues, 0, 20),
         'latest_event' => isset($events[0]) && is_array($events[0]) ? $events[0] : null,
         'project_id' => $projectId,
+    ]);
+}
+
+if ($action === 'seo.report.export') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $audits = app_read_json_file(seo_audits_path(), []);
+    $events = app_read_json_file(seo_extension_events_path(), []);
+    if ($projectId !== '') {
+        $projects = array_values(array_filter($projects, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+        $audits = array_values(array_filter($audits, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+        $events = array_values(array_filter($events, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+
+    $prioritySummary = ['critical' => 0, 'fix_soon' => 0, 'nice_to_have' => 0];
+    foreach ($audits as $audit) {
+        if (!is_array($audit)) {
+            continue;
+        }
+        $summary = isset($audit['priority_summary']) && is_array($audit['priority_summary'])
+            ? $audit['priority_summary']
+            : seo_issue_rollup_from_checks(isset($audit['checks']) && is_array($audit['checks']) ? $audit['checks'] : [])['priority_summary'];
+        foreach (['critical', 'fix_soon', 'nice_to_have'] as $key) {
+            $prioritySummary[$key] += (int) ($summary[$key] ?? 0);
+        }
+    }
+
+    $averageAuditScore = count($audits) > 0
+        ? round(array_sum(array_map(static function ($row) {
+            return (int) ($row['score'] ?? 0);
+        }, $audits)) / count($audits), 2)
+        : 0;
+
+    $payload = [
+        'generated_at' => gmdate('c'),
+        'project_id' => $projectId,
+        'summary' => [
+            'project_count' => count($projects),
+            'audit_count' => count($audits),
+            'extension_event_count' => count($events),
+            'average_audit_score' => $averageAuditScore,
+            'priority_summary' => $prioritySummary,
+        ],
+        'projects' => $projects,
+        'latest_audits' => array_slice($audits, 0, 25),
+        'latest_extension_events' => array_slice($events, 0, 25),
+    ];
+
+    out_json([
+        'ok' => true,
+        'filename' => 'seo-report-' . ($projectId !== '' ? $projectId . '-' : '') . gmdate('Ymd-His') . '.json',
+        'export' => $payload,
     ]);
 }
 
