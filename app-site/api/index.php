@@ -2540,7 +2540,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.47-watchdogs-incident-summary',
+        'phase' => '1.48-scheduler-watchdogs-incident-telemetry',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3857,7 +3857,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.47-watchdogs-incident-summary',
+        'phase' => '1.48-scheduler-watchdogs-incident-telemetry',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -6178,6 +6178,7 @@ if ($action === 'automation.scheduler.status') {
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsCheckState = app_read_json_file(deployment_watchdogs_state_path(), []);
     $watchdogsCheckRuns = app_read_json_file(deployment_watchdogs_runs_path(), []);
+    $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
     $lastSignoffIntegrityRun = [];
     if (is_array($signoffIntegrityRuns) && !empty($signoffIntegrityRuns[0]) && is_array($signoffIntegrityRuns[0])) {
         $lastSignoffIntegrityRun = $signoffIntegrityRuns[0];
@@ -6199,6 +6200,7 @@ if ($action === 'automation.scheduler.status') {
         'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'watchdogs_check_state' => is_array($watchdogsCheckState) ? $watchdogsCheckState : [],
         'watchdogs_check_last_run' => $lastWatchdogsCheckRun,
+        'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         'time' => gmdate('c'),
     ]);
 }
@@ -6259,6 +6261,7 @@ if ($action === 'automation.scheduler.tick') {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_disabled', null);
         $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_disabled');
         $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_disabled', null);
+        $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
         out_json([
             'ok' => true,
             'skipped' => true,
@@ -6266,6 +6269,7 @@ if ($action === 'automation.scheduler.tick') {
             'release_gate_watch' => $watch,
             'signoff_integrity_watch' => $signoffWatch,
             'watchdogs_check' => $watchdogsCheck,
+            'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         ]);
     }
     $nowTs = time();
@@ -6275,6 +6279,7 @@ if ($action === 'automation.scheduler.tick') {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_interval_skip', null);
         $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_interval_skip');
         $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_interval_skip', null);
+        $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
         out_json([
             'ok' => true,
             'skipped' => true,
@@ -6283,12 +6288,14 @@ if ($action === 'automation.scheduler.tick') {
             'release_gate_watch' => $watch,
             'signoff_integrity_watch' => $signoffWatch,
             'watchdogs_check' => $watchdogsCheck,
+            'watchdogs_incident_summary' => $watchdogsIncidentSummary,
         ]);
     }
     $summary = execute_automation_run($settings, 'scheduler');
     $watch = deployment_release_gate_watch_snapshot('scheduler_tick_run', null);
     $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_run');
     $watchdogsCheck = deployment_watchdogs_check_snapshot('scheduler_tick_run', null);
+    $watchdogsIncidentSummary = deployment_watchdogs_incident_summary_snapshot();
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
     audit_event('automation', 'scheduler.tick', ['automation_id' => (string) $summary['automation_id'], 'source' => 'scheduler']);
@@ -6298,6 +6305,7 @@ if ($action === 'automation.scheduler.tick') {
         'release_gate_watch' => $watch,
         'signoff_integrity_watch' => $signoffWatch,
         'watchdogs_check' => $watchdogsCheck,
+        'watchdogs_incident_summary' => $watchdogsIncidentSummary,
     ]);
 }
 

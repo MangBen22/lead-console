@@ -68,6 +68,7 @@
 18. Confirm scheduler status includes both watch states:
    - `release_gate_watch_state`
    - `signoff_integrity_watch_state`
+   - `watchdogs_incident_summary`
 19. Click `Refresh Watchdogs` in `Go-Live Status` and confirm `deployment.watchdogs.status` is not `critical` before launch.
 20. Run `Run Full Cutover Check` and confirm pipeline summary includes `watchdogs_status` not `critical`.
 21. Run `Run Watchdogs Check` and `Refresh Watchdogs Runs` to verify watchdog check execution is logged with current status.
