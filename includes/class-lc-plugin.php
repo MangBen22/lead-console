@@ -1235,6 +1235,18 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/email-templates', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_email_templates'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/email-templates', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_email_templates_save'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/crm-intake', [
             'methods' => 'POST',
             'callback' => [$this, 'rest_bridge_crm_intake'],
@@ -1431,6 +1443,39 @@ class LC_Plugin
             'received' => (bool) $received,
             'test_confirmation' => $state,
             'smtp_health' => $this->get_smtp_health_status(),
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_email_templates($request)
+    {
+        $templates = $this->get_email_templates_snapshot();
+        $this->log_system_event('bridge', 'info', 'Bridge email templates requested.', [
+            'template_count' => count((array) ($templates['templates'] ?? [])),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'email_templates' => $templates,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_email_templates_save($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $templates = isset($payload['templates']) && is_array($payload['templates']) ? $payload['templates'] : [];
+        $saved = $this->save_email_templates_snapshot($templates);
+        $this->log_system_event('bridge', 'info', 'Bridge email templates updated.', [
+            'template_count' => count((array) ($saved['templates'] ?? [])),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'email_templates' => $saved,
             'time' => current_time('mysql'),
         ]);
     }
@@ -1724,6 +1769,102 @@ class LC_Plugin
         $next['last_error_code'] = sanitize_text_field((string) ($next['last_error_code'] ?? ''));
         update_option('lc_smtp_test_confirmed', $next);
         return $next;
+    }
+
+    public function get_email_templates_snapshot()
+    {
+        $settings = $this->get_settings();
+        $definitions = $this->email_template_definitions();
+        $templates = [];
+        foreach ($definitions as $template_key => $definition) {
+            $subject_key = 'email_template_' . $template_key . '_subject';
+            $body_key = 'email_template_' . $template_key . '_body';
+            $templates[$template_key] = [
+                'label' => (string) ($definition['label'] ?? $template_key),
+                'subject' => (string) ($settings[$subject_key] ?? ''),
+                'body' => (string) ($settings[$body_key] ?? ''),
+                'placeholders' => isset($definition['placeholders']) && is_array($definition['placeholders']) ? array_values($definition['placeholders']) : [],
+            ];
+        }
+        return [
+            'templates' => $templates,
+            'placeholders' => $this->email_template_placeholders(),
+        ];
+    }
+
+    public function save_email_templates_snapshot($templates)
+    {
+        $current = $this->get_settings();
+        $updates = [];
+        $definitions = $this->email_template_definitions();
+        foreach ($definitions as $template_key => $definition) {
+            if (!isset($templates[$template_key]) || !is_array($templates[$template_key])) {
+                continue;
+            }
+            $template = $templates[$template_key];
+            $subject_key = 'email_template_' . $template_key . '_subject';
+            $body_key = 'email_template_' . $template_key . '_body';
+            if (array_key_exists('subject', $template)) {
+                $updates[$subject_key] = (string) ($template['subject'] ?? '');
+            }
+            if (array_key_exists('body', $template)) {
+                $updates[$body_key] = (string) ($template['body'] ?? '');
+            }
+        }
+        $sanitized = $this->sanitize_settings(array_merge($current, $updates));
+        update_option('lc_settings', $sanitized);
+        return $this->get_email_templates_snapshot();
+    }
+
+    private function email_template_placeholders()
+    {
+        return [
+            '{first_name}',
+            '{full_name}',
+            '{user_email}',
+            '{reset_link}',
+            '{revoke_link}',
+            '{current_time}',
+            '{company}',
+            '{phone}',
+            '{site_name}',
+            '{site_url}',
+        ];
+    }
+
+    private function email_template_definitions()
+    {
+        $placeholders = $this->email_template_placeholders();
+        return [
+            'reset' => [
+                'label' => 'Password Reset',
+                'placeholders' => ['{first_name}', '{reset_link}', '{site_name}'],
+            ],
+            'password_changed' => [
+                'label' => 'Password Changed',
+                'placeholders' => ['{first_name}', '{revoke_link}', '{site_name}'],
+            ],
+            'admin_password_changed' => [
+                'label' => 'Admin Password Alert',
+                'placeholders' => ['{user_email}', '{current_time}'],
+            ],
+            'registration_received' => [
+                'label' => 'Registration Received',
+                'placeholders' => ['{first_name}', '{site_name}'],
+            ],
+            'registration_admin' => [
+                'label' => 'Registration Admin Alert',
+                'placeholders' => ['{full_name}', '{user_email}', '{company}', '{phone}'],
+            ],
+            'registration_approved' => [
+                'label' => 'Registration Approved',
+                'placeholders' => ['{first_name}', '{site_name}'],
+            ],
+            'registration_rejected' => [
+                'label' => 'Registration Rejected',
+                'placeholders' => ['{first_name}', '{site_name}'],
+            ],
+        ];
     }
 
     public function run_smtp_health_check_cron()
