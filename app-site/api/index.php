@@ -504,6 +504,7 @@ function default_deployment_guard()
         'release_gate_require_cutover_signoff' => 0,
         'release_gate_require_signoff_integrity' => 1,
         'release_gate_require_signoff_integrity_watch' => 0,
+        'release_gate_require_watchdogs_policy_baseline_match' => 0,
         'watchdogs_auto_incident_threshold' => 2,
         'watchdogs_auto_resolve_ok_streak' => 2,
         'updated_at' => gmdate('c'),
@@ -1274,8 +1275,10 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     $requireSignoff = !empty($guardCfg['release_gate_require_cutover_signoff']) ? 1 : 0;
     $requireSignoffIntegrity = !empty($guardCfg['release_gate_require_signoff_integrity']) ? 1 : 0;
     $requireSignoffIntegrityWatch = !empty($guardCfg['release_gate_require_signoff_integrity_watch']) ? 1 : 0;
+    $requirePolicyBaselineMatch = !empty($guardCfg['release_gate_require_watchdogs_policy_baseline_match']) ? 1 : 0;
     $readiness = deployment_cutover_readiness_snapshot();
     $history = deployment_smoke_history_snapshot();
+    $policyBaseline = deployment_watchdogs_policy_baseline_snapshot();
     $activeSignoff = deployment_cutover_signoff_active_snapshot();
     $activeSignoffRow = is_array($activeSignoff['active'] ?? null) ? $activeSignoff['active'] : null;
     $activeSignoffIntegrity = is_array($activeSignoffRow) ? deployment_cutover_signoff_verify_item($activeSignoffRow) : null;
@@ -1386,6 +1389,14 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             ? ('Signoff integrity watch status: ' . strtoupper($watchStatus !== '' ? $watchStatus : 'unknown') . '; age: ' . (int) $watchAgeMinutes . ' minute(s); active signoff match: ' . ($watchTargetsActiveSignoff ? 'yes' : 'no') . '.')
             : 'No signoff integrity watch run found.',
     ];
+    $checks[] = [
+        'item' => 'watchdogs_policy_baseline_match',
+        'required' => $requirePolicyBaselineMatch,
+        'ok' => !$requirePolicyBaselineMatch || (!empty($policyBaseline['has_baseline']) && empty($policyBaseline['has_changes'])),
+        'message' => empty($policyBaseline['has_baseline'])
+            ? 'No watchdog policy baseline configured.'
+            : ('Watchdogs policy baseline drift count: ' . (int) ($policyBaseline['changed_count'] ?? 0) . '.'),
+    ];
 
     $reasons = [];
     foreach ($checks as $check) {
@@ -1405,6 +1416,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             'require_cutover_signoff' => $requireSignoff,
             'require_signoff_integrity' => $requireSignoffIntegrity,
             'require_signoff_integrity_watch' => $requireSignoffIntegrityWatch,
+            'require_watchdogs_policy_baseline_match' => $requirePolicyBaselineMatch,
         ],
         'reasons' => $reasons,
         'checks' => $checks,
@@ -1415,6 +1427,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
         'active_cutover_signoff' => $activeSignoff,
         'active_cutover_signoff_integrity' => $activeSignoffIntegrity,
         'active_cutover_signoff_integrity_watch' => $signoffIntegrityWatch,
+        'watchdogs_policy_baseline' => $policyBaseline,
         'readiness' => [
             'status' => (string) ($readiness['status'] ?? 'review_required'),
             'summary' => isset($readiness['summary']) && is_array($readiness['summary']) ? $readiness['summary'] : [],
@@ -2719,7 +2732,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.54-watchdogs-policy-baseline-drift',
+        'phase' => '1.55-release-gate-policy-baseline-match',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4041,7 +4054,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.54-watchdogs-policy-baseline-drift',
+        'phase' => '1.55-release-gate-policy-baseline-match',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4174,6 +4187,7 @@ if ($action === 'deployment.release.gate.settings.get') {
         'require_cutover_signoff' => !empty($guard['release_gate_require_cutover_signoff']) ? 1 : 0,
         'require_signoff_integrity' => !empty($guard['release_gate_require_signoff_integrity']) ? 1 : 0,
         'require_signoff_integrity_watch' => !empty($guard['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
+        'require_watchdogs_policy_baseline_match' => !empty($guard['release_gate_require_watchdogs_policy_baseline_match']) ? 1 : 0,
     ];
     out_json([
         'ok' => true,
@@ -4200,6 +4214,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'release_gate_require_cutover_signoff' => !empty($data['require_cutover_signoff']) ? 1 : 0,
         'release_gate_require_signoff_integrity' => !empty($data['require_signoff_integrity']) ? 1 : 0,
         'release_gate_require_signoff_integrity_watch' => !empty($data['require_signoff_integrity_watch']) ? 1 : 0,
+        'release_gate_require_watchdogs_policy_baseline_match' => !empty($data['require_watchdogs_policy_baseline_match']) ? 1 : 0,
     ];
     $saved = save_deployment_guard($settings);
     push_notification('info', 'Release gate settings updated.', [
@@ -4213,6 +4228,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
         'require_signoff_integrity' => !empty($saved['release_gate_require_signoff_integrity']) ? 1 : 0,
         'require_signoff_integrity_watch' => !empty($saved['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
+        'require_watchdogs_policy_baseline_match' => !empty($saved['release_gate_require_watchdogs_policy_baseline_match']) ? 1 : 0,
     ]);
     out_json([
         'ok' => true,
@@ -4224,6 +4240,7 @@ if ($action === 'deployment.release.gate.settings.save') {
             'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
             'require_signoff_integrity' => !empty($saved['release_gate_require_signoff_integrity']) ? 1 : 0,
             'require_signoff_integrity_watch' => !empty($saved['release_gate_require_signoff_integrity_watch']) ? 1 : 0,
+            'require_watchdogs_policy_baseline_match' => !empty($saved['release_gate_require_watchdogs_policy_baseline_match']) ? 1 : 0,
         ],
         'gate' => deployment_release_gate_snapshot(null),
         'time' => gmdate('c'),
