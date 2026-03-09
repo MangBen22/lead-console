@@ -524,6 +524,11 @@ function seo_extension_events_path()
     return app_storage_path('seo_extension_events.json');
 }
 
+function seo_extension_sessions_path()
+{
+    return app_storage_path('seo_extension_sessions.json');
+}
+
 function notifications_path()
 {
     return app_storage_path('notifications.json');
@@ -670,6 +675,7 @@ function module_storage_map()
         'seo_projects' => seo_projects_path(),
         'seo_audits' => seo_audits_path(),
         'seo_extension_events' => seo_extension_events_path(),
+        'seo_extension_sessions' => seo_extension_sessions_path(),
         'notifications' => notifications_path(),
         'notification_settings' => notification_settings_path(),
         'automation_runs' => automation_runs_path(),
@@ -3894,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.19-seo-history-summary',
+        'phase' => '2.20-seo-extension-sessions',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4691,6 +4697,37 @@ function seo_issue_rollup_from_checks($checks)
         'priority_summary' => $summary,
         'issues' => array_values($issues),
     ];
+}
+
+function seo_extension_mask_session($session)
+{
+    if (!is_array($session)) {
+        return [];
+    }
+    $masked = $session;
+    $token = (string) ($masked['token'] ?? '');
+    if ($token !== '') {
+        $masked['token'] = substr($token, 0, 6) . str_repeat('*', max(4, strlen($token) - 10)) . substr($token, -4);
+    }
+    return $masked;
+}
+
+function seo_extension_session_by_token($token)
+{
+    $needle = trim((string) $token);
+    if ($needle === '') {
+        return null;
+    }
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['token'] ?? '') === $needle && strtolower((string) ($row['status'] ?? 'active')) === 'active') {
+            return $row;
+        }
+    }
+    return null;
 }
 
 function run_seo_audit_for_project($project)
@@ -5710,7 +5747,7 @@ $rateLimitedWriteActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
-    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -5751,7 +5788,7 @@ $deploymentGuardedActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
-    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -5784,7 +5821,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.19-seo-history-summary',
+        'phase' => '2.20-seo-extension-sessions',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8150,6 +8187,16 @@ if ($action === 'seo.history.summary') {
     ]);
 }
 
+if ($action === 'seo.extension.sessions.list') {
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    $items = array_map('seo_extension_mask_session', $rows);
+    out_json([
+        'ok' => true,
+        'count' => count($items),
+        'items' => $items,
+    ]);
+}
+
 if ($action === 'social.platforms.list') {
     $items = social_platform_catalog();
     out_json([
@@ -8555,13 +8602,83 @@ if ($action === 'seo.audit.run') {
     ]);
 }
 
+if ($action === 'seo.extension.session.create') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $session = [
+        'session_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['session_id'] ?? uniqid('seo_ext_session_', false))),
+        'project_id' => preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['project_id'] ?? '')),
+        'label' => trim((string) ($data['label'] ?? 'Extension Session')),
+        'token' => bin2hex(random_bytes(24)),
+        'status' => 'active',
+        'created_at' => gmdate('c'),
+        'updated_at' => gmdate('c'),
+        'last_used_at' => '',
+    ];
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) use ($session) {
+        return (string) ($row['session_id'] ?? '') !== $session['session_id'];
+    }));
+    array_unshift($rows, $session);
+    $rows = array_slice($rows, 0, 300);
+    app_write_json_file(seo_extension_sessions_path(), $rows);
+    audit_event('seo', 'extension.session.create', ['session_id' => (string) $session['session_id'], 'project_id' => (string) $session['project_id']]);
+    out_json([
+        'ok' => true,
+        'session' => $session,
+    ]);
+}
+
+if ($action === 'seo.extension.session.revoke') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['session_id'])) {
+        out_json(['ok' => false, 'error' => 'session_id is required.'], 400);
+    }
+    $sessionId = (string) $data['session_id'];
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    $updated = null;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row) || (string) ($row['session_id'] ?? '') !== $sessionId) {
+            continue;
+        }
+        $row['status'] = 'revoked';
+        $row['updated_at'] = gmdate('c');
+        $rows[$index] = $row;
+        $updated = seo_extension_mask_session($row);
+        break;
+    }
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Extension session not found.'], 404);
+    }
+    app_write_json_file(seo_extension_sessions_path(), $rows);
+    audit_event('seo', 'extension.session.revoke', ['session_id' => $sessionId]);
+    out_json([
+        'ok' => true,
+        'session' => $updated,
+    ]);
+}
+
 if ($action === 'seo.extension.intake') {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         out_json(['ok' => false, 'error' => 'POST required.'], 405);
     }
     $expected = (string) ($config['seo_extension_ingest_key'] ?? '');
     $incoming = isset($_SERVER['HTTP_X_SEO_EXTENSION_KEY']) ? (string) $_SERVER['HTTP_X_SEO_EXTENSION_KEY'] : '';
-    if ($expected === '' || $incoming === '' || !hash_equals($expected, $incoming)) {
+    $session = seo_extension_session_by_token($incoming);
+    $masterOk = ($expected !== '' && $incoming !== '' && hash_equals($expected, $incoming));
+    if (!$masterOk && !is_array($session)) {
         out_json(['ok' => false, 'error' => 'Invalid extension key.'], 403);
     }
     $data = app_read_json_body();
@@ -8575,10 +8692,27 @@ if ($action === 'seo.extension.intake') {
         'title' => app_clean_text((string) ($data['title'] ?? '')),
         'issues' => isset($data['issues']) && is_array($data['issues']) ? $data['issues'] : [],
         'score' => isset($data['score']) ? max(0, min(100, (int) $data['score'])) : 0,
+        'session_id' => is_array($session) ? (string) ($session['session_id'] ?? '') : '',
         'source' => 'browser_extension',
         'created_at' => gmdate('c'),
     ];
     $eventRollup = seo_issue_rollup_from_checks(is_array($event['issues']) ? $event['issues'] : []);
+    if (is_array($session)) {
+        $rows = app_read_json_file(seo_extension_sessions_path(), []);
+        foreach ($rows as $index => $row) {
+            if (!is_array($row) || (string) ($row['session_id'] ?? '') !== (string) ($session['session_id'] ?? '')) {
+                continue;
+            }
+            $row['last_used_at'] = gmdate('c');
+            $row['updated_at'] = gmdate('c');
+            $rows[$index] = $row;
+            break;
+        }
+        app_write_json_file(seo_extension_sessions_path(), $rows);
+        if ($event['project_id'] === '' && !empty($session['project_id'])) {
+            $event['project_id'] = (string) $session['project_id'];
+        }
+    }
     $events = app_read_json_file(seo_extension_events_path(), []);
     array_unshift($events, $event);
     $events = array_slice($events, 0, 500);

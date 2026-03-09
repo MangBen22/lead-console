@@ -264,6 +264,8 @@
   const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
+  const seoExtensionSessions = document.getElementById("seoExtensionSessions");
+  const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
 
@@ -2402,6 +2404,16 @@
     }
   }
 
+  async function loadSeoExtensionSessions() {
+    if (!seoExtensionSessions) return;
+    try {
+      const data = await apiGet("seo.extension.sessions.list");
+      seoExtensionSessions.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoExtensionSessions.textContent = "Failed to load SEO extension sessions.";
+    }
+  }
+
   (async function initCrm() {
     await loadCrmConnectors();
     await loadSocialPlatforms();
@@ -2427,6 +2439,7 @@
     await loadSeoHistorySummary();
     await loadSeoAudits();
     await loadSeoExtensionEvents();
+    await loadSeoExtensionSessions();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -4119,5 +4132,44 @@
     refreshSeoHistoryBtn.addEventListener("click", async function () {
       await loadSeoHistorySummary();
     });
+  }
+
+  if (seoExtensionSessionForm) {
+    seoExtensionSessionForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const createSeoExtensionSessionBtn = document.getElementById("createSeoExtensionSessionBtn");
+    if (createSeoExtensionSessionBtn) {
+      createSeoExtensionSessionBtn.addEventListener("click", async function () {
+        const projectId = document.getElementById("seoExtensionSessionProjectId");
+        const label = document.getElementById("seoExtensionSessionLabel");
+        const payload = {
+          project_id: projectId && projectId.value ? projectId.value.trim() : "",
+          label: label ? label.value.trim() : "",
+        };
+        const result = await apiPost("seo.extension.session.create", payload);
+        if (seoResult) {
+          seoResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSeoExtensionSessions();
+      });
+    }
+
+    const revokeSeoExtensionSessionBtn = document.getElementById("revokeSeoExtensionSessionBtn");
+    if (revokeSeoExtensionSessionBtn) {
+      revokeSeoExtensionSessionBtn.addEventListener("click", async function () {
+        const sessionId = document.getElementById("seoExtensionSessionId");
+        const id = sessionId && sessionId.value ? sessionId.value.trim() : "";
+        if (!id) {
+          if (seoResult) seoResult.textContent = "Enter Extension Session ID to revoke.";
+          return;
+        }
+        const result = await apiPost("seo.extension.session.revoke", { session_id: id });
+        if (seoResult) {
+          seoResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSeoExtensionSessions();
+      });
+    }
   }
 })();

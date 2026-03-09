@@ -687,6 +687,27 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>SEO Extension Sessions</h2>
+                <pre id="seoExtensionSessions">Loading...</pre>
+                <form id="seoExtensionSessionForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="seoExtensionSessionProjectId">Project ID (optional)</label>
+                        <input id="seoExtensionSessionProjectId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionLabel">Session Label</label>
+                        <input id="seoExtensionSessionLabel" type="text" placeholder="Chrome Laptop Extension">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionId">Session ID (for revoke)</label>
+                        <input id="seoExtensionSessionId" type="text" placeholder="seo_ext_session_abc123">
+                    </div>
+                    <button id="createSeoExtensionSessionBtn" type="button">Create Extension Session</button>
+                    <button id="revokeSeoExtensionSessionBtn" type="button">Revoke Extension Session</button>
+                </form>
+            </section>
+
+            <section class="api-status">
                 <h2>Backup + Audit</h2>
                 <div class="actions">
                     <button id="exportBackupBtn" type="button">Export Backup</button>
