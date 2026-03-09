@@ -30,6 +30,8 @@
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
+  const refreshWatchdogsIncidentBtn = document.getElementById("refreshWatchdogsIncidentBtn");
+  const resolveWatchdogsIncidentBtn = document.getElementById("resolveWatchdogsIncidentBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -88,6 +90,7 @@
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
+  const watchdogsIncidentView = document.getElementById("watchdogsIncidentView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -455,6 +458,32 @@
     }
   }
 
+  async function loadWatchdogsOpenIncident() {
+    if (!watchdogsIncidentView) return;
+    try {
+      const data = await apiGet("deployment.watchdogs.incident.open");
+      watchdogsIncidentView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      watchdogsIncidentView.textContent = "No open watchdog incident.";
+    }
+  }
+
+  async function resolveWatchdogsIncident() {
+    const result = await apiPost("deployment.watchdogs.incident.resolve", {});
+    if (watchdogsIncidentView) {
+      watchdogsIncidentView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadWatchdogsOpenIncident();
+    await loadIncidentReports();
+    await loadIncidentSummary();
+    await loadIncidentSla();
+    await loadWatchdogsRuns();
+    await loadWatchdogsStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
   async function runWatchdogsCheck() {
     const freshness = releaseGateFreshnessInput && releaseGateFreshnessInput.value
       ? Number(releaseGateFreshnessInput.value)
@@ -469,6 +498,7 @@
     }
     await loadWatchdogsStatus();
     await loadWatchdogsRuns();
+    await loadWatchdogsOpenIncident();
     await loadSchedulerStatus();
     await loadNotifications();
     await loadAuditLog();
@@ -1027,6 +1057,7 @@
     await loadReleaseGateRuns();
     await loadWatchdogsStatus();
     await loadWatchdogsRuns();
+    await loadWatchdogsOpenIncident();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1415,6 +1446,7 @@
       await loadGoLiveStatus();
       await loadWatchdogsStatus();
       await loadWatchdogsRuns();
+      await loadWatchdogsOpenIncident();
       await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
     });
@@ -1588,6 +1620,7 @@
     refreshWatchdogsStatusBtn.addEventListener("click", async function () {
       await loadWatchdogsStatus();
       await loadWatchdogsRuns();
+      await loadWatchdogsOpenIncident();
     });
   }
 
@@ -1600,7 +1633,22 @@
   if (refreshWatchdogsRunsBtn) {
     refreshWatchdogsRunsBtn.addEventListener("click", async function () {
       await loadWatchdogsRuns();
+      await loadWatchdogsOpenIncident();
       await loadSchedulerStatus();
+    });
+  }
+
+  if (refreshWatchdogsIncidentBtn) {
+    refreshWatchdogsIncidentBtn.addEventListener("click", async function () {
+      await loadWatchdogsOpenIncident();
+      await loadWatchdogsRuns();
+      await loadWatchdogsStatus();
+    });
+  }
+
+  if (resolveWatchdogsIncidentBtn) {
+    resolveWatchdogsIncidentBtn.addEventListener("click", async function () {
+      await resolveWatchdogsIncident();
     });
   }
 

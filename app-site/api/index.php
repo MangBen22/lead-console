@@ -2439,7 +2439,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.43-watchdogs-auto-incident-escalation',
+        'phase' => '1.44-watchdogs-incident-quick-actions',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3706,6 +3706,7 @@ $rateLimitedWriteActions = [
     'deployment.cutover.signoff.revoke',
     'deployment.cutover.signoff.integrity.watch',
     'deployment.watchdogs.check',
+    'deployment.watchdogs.incident.resolve',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3754,7 +3755,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.43-watchdogs-auto-incident-escalation',
+        'phase' => '1.44-watchdogs-incident-quick-actions',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4027,6 +4028,55 @@ if ($action === 'deployment.watchdogs.runs') {
         'count' => is_array($runs) ? count($runs) : 0,
         'items' => is_array($runs) ? $runs : [],
         'state' => is_array($state) ? $state : [],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.incident.open') {
+    $open = deployment_find_open_watchdogs_incident();
+    out_json([
+        'ok' => true,
+        'has_open_incident' => is_array($open),
+        'incident' => is_array($open) ? $open : null,
+        'time' => gmdate('c'),
+    ], is_array($open) ? 200 : 404);
+}
+
+if ($action === 'deployment.watchdogs.incident.resolve') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $open = deployment_find_open_watchdogs_incident();
+    if (!is_array($open)) {
+        out_json(['ok' => false, 'error' => 'No open watchdog incident found.'], 404);
+    }
+    $note = trim((string) ($data['note'] ?? ''));
+    if ($note === '') {
+        $note = 'Resolved via Go-Live watchdog incident quick action.';
+    }
+    $reportId = (string) ($open['report_id'] ?? '');
+    $updated = update_incident_report_status($reportId, 'resolved', $note);
+    if (!is_array($updated)) {
+        out_json(['ok' => false, 'error' => 'Failed to resolve watchdog incident.'], 500);
+    }
+    audit_event('deployment', 'watchdogs.incident.resolve', [
+        'report_id' => (string) ($updated['report_id'] ?? $reportId),
+        'origin' => (string) ($updated['incident_origin'] ?? ''),
+    ]);
+    push_notification('success', 'Watchdog incident resolved: ' . (string) ($updated['report_id'] ?? $reportId), [
+        'report_id' => (string) ($updated['report_id'] ?? $reportId),
+        'origin' => 'watchdogs_check',
+    ]);
+    out_json([
+        'ok' => true,
+        'incident' => $updated,
+        'summary' => deployment_incident_summary_snapshot(),
         'time' => gmdate('c'),
     ]);
 }
