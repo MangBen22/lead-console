@@ -35,6 +35,8 @@
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
   const applyGatePresetBaselineCheckBtn = document.getElementById("applyGatePresetBaselineCheckBtn");
   const applyGatePresetSignoffWatchBtn = document.getElementById("applyGatePresetSignoffWatchBtn");
+  const applyGatePresetSchedulerBlockedBtn = document.getElementById("applyGatePresetSchedulerBlockedBtn");
+  const applyGatePresetManualBlockedBtn = document.getElementById("applyGatePresetManualBlockedBtn");
   const refreshWatchdogsStatusBtn = document.getElementById("refreshWatchdogsStatusBtn");
   const runWatchdogsCheckBtn = document.getElementById("runWatchdogsCheckBtn");
   const refreshWatchdogsRunsBtn = document.getElementById("refreshWatchdogsRunsBtn");
@@ -652,6 +654,24 @@
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
+    }
+    if (releaseGateRunsLimitInput) {
+      releaseGateRunsLimitInput.value = "200";
+    }
+    if (releaseGateRunsWindowInput) {
+      releaseGateRunsWindowInput.value = "0";
+    }
+  }
+
+  function applyReleaseGateRunsSourcePreset(source) {
+    if (releaseGateRunsAllowedFilter) {
+      releaseGateRunsAllowedFilter.value = "blocked";
+    }
+    if (releaseGateRunsSourceFilter) {
+      releaseGateRunsSourceFilter.value = source || "";
+    }
+    if (releaseGateRunsFailedItemFilter) {
+      releaseGateRunsFailedItemFilter.value = "";
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
@@ -2099,6 +2119,20 @@
   if (applyGatePresetSignoffWatchBtn) {
     applyGatePresetSignoffWatchBtn.addEventListener("click", async function () {
       applyReleaseGateRunsPreset("cutover_signoff_integrity_watch_valid_and_fresh");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetSchedulerBlockedBtn) {
+    applyGatePresetSchedulerBlockedBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsSourcePreset("scheduler_tick_run");
+      await loadReleaseGateRuns();
+    });
+  }
+
+  if (applyGatePresetManualBlockedBtn) {
+    applyGatePresetManualBlockedBtn.addEventListener("click", async function () {
+      applyReleaseGateRunsSourcePreset("dashboard_manual");
       await loadReleaseGateRuns();
     });
   }

@@ -100,6 +100,7 @@
 47. Gate-watch notifications now include `blocker_digest`; use it for quick triage before opening full run payloads.
 48. Use gate summary ratio fields (`blocked_ratio_percent`, blocker share percentages) to prioritize high-impact remediation work.
 49. Use `Gate runs window` to analyze only the most recent N gate watch runs before applying status/source/blocker filters.
+50. Use source presets (`Scheduler Blocked`, `Manual Blocked`) to quickly split cron-driven issues from operator-triggered checks.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
