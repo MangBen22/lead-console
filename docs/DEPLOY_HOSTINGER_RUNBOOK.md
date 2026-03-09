@@ -84,6 +84,7 @@
 31. Enable release gate option `Require watchdogs policy baseline match` when you want launch approval to fail on baseline drift.
 32. Run `Run Watchdogs Check` and confirm no baseline drift warning notifications are emitted before final launch approval.
 33. Run `Run Baseline Check` and verify scheduler status includes `watchdogs_policy_baseline_check_state` and a recent baseline check run.
+34. Enable release gate option `Require recent watchdogs baseline check` to enforce fresh baseline validation during launch windows.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

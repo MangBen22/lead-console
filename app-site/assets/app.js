@@ -95,6 +95,7 @@
   const releaseGateRequireSignoffIntegrityInput = document.getElementById("releaseGateRequireSignoffIntegrityInput");
   const releaseGateRequireSignoffIntegrityWatchInput = document.getElementById("releaseGateRequireSignoffIntegrityWatchInput");
   const releaseGateRequirePolicyBaselineMatchInput = document.getElementById("releaseGateRequirePolicyBaselineMatchInput");
+  const releaseGateRequirePolicyBaselineCheckInput = document.getElementById("releaseGateRequirePolicyBaselineCheckInput");
   const releaseGateSettingsView = document.getElementById("releaseGateSettingsView");
   const releaseGateView = document.getElementById("releaseGateView");
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
@@ -426,6 +427,9 @@
       }
       if (releaseGateRequirePolicyBaselineMatchInput) {
         releaseGateRequirePolicyBaselineMatchInput.checked = Number(settings.require_watchdogs_policy_baseline_match) === 1;
+      }
+      if (releaseGateRequirePolicyBaselineCheckInput) {
+        releaseGateRequirePolicyBaselineCheckInput.checked = Number(settings.require_watchdogs_policy_baseline_check) === 1;
       }
     } catch (err) {
       releaseGateSettingsView.textContent = "Failed to load release gate settings.";
@@ -1818,6 +1822,7 @@
         require_signoff_integrity: releaseGateRequireSignoffIntegrityInput && releaseGateRequireSignoffIntegrityInput.checked ? 1 : 0,
         require_signoff_integrity_watch: releaseGateRequireSignoffIntegrityWatchInput && releaseGateRequireSignoffIntegrityWatchInput.checked ? 1 : 0,
         require_watchdogs_policy_baseline_match: releaseGateRequirePolicyBaselineMatchInput && releaseGateRequirePolicyBaselineMatchInput.checked ? 1 : 0,
+        require_watchdogs_policy_baseline_check: releaseGateRequirePolicyBaselineCheckInput && releaseGateRequirePolicyBaselineCheckInput.checked ? 1 : 0,
       };
       const result = await apiPost("deployment.release.gate.settings.save", payload);
       if (releaseGateSettingsView) {
