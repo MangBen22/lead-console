@@ -564,6 +564,17 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadHandoffBundleBtn" type="button">Download Handoff Bundle</button>
                     <button id="runCutoverPipelineBtn" type="button">Run Full Cutover Check</button>
                 </div>
+                <h3>Cutover Readiness</h3>
+                <label>Smoke check note<input id="cutoverSmokeNote" type="text" placeholder="Optional note for smoke check records..." /></label>
+                <div class="actions">
+                    <button id="refreshCutoverReadinessBtn" type="button">Refresh Readiness</button>
+                    <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
+                    <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
+                    <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>
+                    <button id="recordAuthSmokeFailBtn" type="button">Record Auth Smoke Fail</button>
+                </div>
+                <pre id="cutoverReadinessView">Loading readiness...</pre>
+                <pre id="cutoverSmokeRecordView">No smoke record action yet.</pre>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>

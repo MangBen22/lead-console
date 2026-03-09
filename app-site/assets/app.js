@@ -30,6 +30,11 @@
   const runDeploymentVerifyBtn = document.getElementById("runDeploymentVerifyBtn");
   const downloadHandoffBundleBtn = document.getElementById("downloadHandoffBundleBtn");
   const runCutoverPipelineBtn = document.getElementById("runCutoverPipelineBtn");
+  const refreshCutoverReadinessBtn = document.getElementById("refreshCutoverReadinessBtn");
+  const recordPublicSmokePassBtn = document.getElementById("recordPublicSmokePassBtn");
+  const recordPublicSmokeFailBtn = document.getElementById("recordPublicSmokeFailBtn");
+  const recordAuthSmokePassBtn = document.getElementById("recordAuthSmokePassBtn");
+  const recordAuthSmokeFailBtn = document.getElementById("recordAuthSmokeFailBtn");
   const deploymentGuardForm = document.getElementById("deploymentGuardForm");
   const saveDeploymentGuardBtn = document.getElementById("saveDeploymentGuardBtn");
   const previewDeploymentGuardBtn = document.getElementById("previewDeploymentGuardBtn");
@@ -60,6 +65,9 @@
   const cutoverPipelineNote = document.getElementById("cutoverPipelineNote");
   const cutoverPipelineView = document.getElementById("cutoverPipelineView");
   const cutoverPipelineRunsView = document.getElementById("cutoverPipelineRunsView");
+  const cutoverSmokeNote = document.getElementById("cutoverSmokeNote");
+  const cutoverReadinessView = document.getElementById("cutoverReadinessView");
+  const cutoverSmokeRecordView = document.getElementById("cutoverSmokeRecordView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
@@ -384,6 +392,37 @@
     }
   }
 
+  async function loadCutoverReadiness() {
+    if (!cutoverReadinessView) return;
+    try {
+      const data = await apiGet("deployment.cutover.readiness");
+      cutoverReadinessView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      cutoverReadinessView.textContent = "Failed to load cutover readiness.";
+    }
+  }
+
+  async function recordSmokeRun(smokeType, okValue) {
+    const note = cutoverSmokeNote && cutoverSmokeNote.value ? cutoverSmokeNote.value.trim() : "";
+    const payload = {
+      smoke_type: smokeType,
+      ok: okValue ? 1 : 0,
+      source: "dashboard_manual",
+      note: note,
+      details: {
+        ui_action: "cutover_readiness_card",
+      },
+    };
+    const result = await apiPost("deployment.smoke.report", payload);
+    if (cutoverSmokeRecordView) {
+      cutoverSmokeRecordView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCutoverReadiness();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
   async function loadBypassLog() {
     if (!deploymentBypassLogView) return;
     try {
@@ -639,6 +678,7 @@
     await loadGoLiveStatus();
     await loadReleaseLog();
     await loadArtifactManifest();
+    await loadCutoverReadiness();
     await loadCutoverPipelineRuns();
     await loadBypassLog();
     await loadIncidentReports();
@@ -1212,6 +1252,37 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadCutoverReadiness();
+    });
+  }
+
+  if (refreshCutoverReadinessBtn) {
+    refreshCutoverReadinessBtn.addEventListener("click", async function () {
+      await loadCutoverReadiness();
+    });
+  }
+
+  if (recordPublicSmokePassBtn) {
+    recordPublicSmokePassBtn.addEventListener("click", async function () {
+      await recordSmokeRun("public", true);
+    });
+  }
+
+  if (recordPublicSmokeFailBtn) {
+    recordPublicSmokeFailBtn.addEventListener("click", async function () {
+      await recordSmokeRun("public", false);
+    });
+  }
+
+  if (recordAuthSmokePassBtn) {
+    recordAuthSmokePassBtn.addEventListener("click", async function () {
+      await recordSmokeRun("auth", true);
+    });
+  }
+
+  if (recordAuthSmokeFailBtn) {
+    recordAuthSmokeFailBtn.addEventListener("click", async function () {
+      await recordSmokeRun("auth", false);
     });
   }
 
@@ -1230,6 +1301,7 @@
       await loadAuditLog();
       await loadNotifications();
       await loadStatus();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1246,6 +1318,7 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1266,6 +1339,7 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1296,6 +1370,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadBypassLog();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1316,6 +1391,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadBypassLog();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1331,6 +1407,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadBypassLog();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1356,6 +1433,7 @@
       await loadStatus();
       await loadIncidentReports();
       await loadIncidentSummary();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1395,6 +1473,7 @@
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1425,6 +1504,7 @@
     await loadStatus();
     await loadIncidentSummary();
     await loadIncidentSla();
+    await loadCutoverReadiness();
   }
 
   if (resolveIncidentBtn) {
@@ -1449,6 +1529,7 @@
       await loadStatus();
       await loadDeploymentGuard();
       await loadGoLiveStatus();
+      await loadCutoverReadiness();
     });
   }
 
@@ -1461,6 +1542,7 @@
       await loadAuditLog();
       await loadStatus();
       await loadDeploymentGuard();
+      await loadCutoverReadiness();
     });
   }
 

@@ -52,6 +52,7 @@
 5. Run authenticated smoke test from repo root:
    - `powershell -ExecutionPolicy Bypass -File scripts\smoke-auth.ps1 -BaseUrl https://app.5n2digital.com -Email owner@yourdomain.com -Password "your-strong-password"`
 6. Confirm all authenticated checks return `ok=True` and no endpoint reports HTTP 5xx.
+7. In dashboard `Hosting Cutover Toolkit -> Cutover Readiness`, record the public smoke result and confirm readiness state moves to `ready` (or shows exact blockers/warnings).
 
 ## 8) Rollback Plan
 1. Restore previous app files.

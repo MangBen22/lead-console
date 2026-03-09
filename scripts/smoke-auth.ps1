@@ -122,6 +122,25 @@ foreach ($c in $checks) {
 }
 
 $failed = @($results | Where-Object { -not $_.ok })
+$reportPayload = @{
+    smoke_type = "auth"
+    ok = if ($failed.Count -gt 0) { 0 } else { 1 }
+    source = "scripts_smoke_auth"
+    note = if ($failed.Count -gt 0) { "Authenticated smoke script detected failures." } else { "Authenticated smoke script passed." }
+    details = @{
+        endpoint_count = $results.Count
+        failed_count = $failed.Count
+        checks = $results
+    }
+}
+
+try {
+    Write-Host "Recording smoke result..."
+    $report = Post-Json -Url "$root/api/index.php?action=deployment.smoke.report" -Body $reportPayload -CsrfToken $csrf
+    Write-Host ("Smoke result recorded: http={0}" -f $report.http)
+} catch {
+    Write-Warning ("Unable to record smoke result: {0}" -f $_.Exception.Message)
+}
 
 Write-Host ""
 Write-Host "Smoke Auth Summary"
