@@ -712,6 +712,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>SEO Project Snapshot</h2>
+                <div class="actions">
+                    <button id="refreshSeoProjectSnapshotBtn" type="button">Refresh Project Snapshot</button>
+                </div>
+                <pre id="seoProjectSnapshot">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Backup + Audit</h2>
                 <div class="actions">
                     <button id="exportBackupBtn" type="button">Export Backup</button>
