@@ -3894,7 +3894,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.16-webops-posture-snapshot',
+        'phase' => '2.17-seo-on-page-baseline',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4558,6 +4558,77 @@ function save_automation_settings($settings)
     return $payload;
 }
 
+function seo_extract_title($html)
+{
+    if (!is_string($html) || $html === '') {
+        return '';
+    }
+    if (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $matches)) {
+        return trim(html_entity_decode(strip_tags((string) ($matches[1] ?? '')), ENT_QUOTES | ENT_HTML5));
+    }
+    return '';
+}
+
+function seo_extract_meta_content($html, $name)
+{
+    if (!is_string($html) || $html === '' || trim((string) $name) === '') {
+        return '';
+    }
+    $pattern = '/<meta[^>]+(?:name|property)=["\']' . preg_quote((string) $name, '/') . '["\'][^>]+content=["\']([^"\']*)["\']/i';
+    if (preg_match($pattern, $html, $matches)) {
+        return trim(html_entity_decode((string) ($matches[1] ?? ''), ENT_QUOTES | ENT_HTML5));
+    }
+    $patternReverse = '/<meta[^>]+content=["\']([^"\']*)["\'][^>]+(?:name|property)=["\']' . preg_quote((string) $name, '/') . '["\']/i';
+    if (preg_match($patternReverse, $html, $matches)) {
+        return trim(html_entity_decode((string) ($matches[1] ?? ''), ENT_QUOTES | ENT_HTML5));
+    }
+    return '';
+}
+
+function seo_extract_link_href($html, $rel)
+{
+    if (!is_string($html) || $html === '' || trim((string) $rel) === '') {
+        return '';
+    }
+    $pattern = '/<link[^>]+rel=["\']' . preg_quote((string) $rel, '/') . '["\'][^>]+href=["\']([^"\']*)["\']/i';
+    if (preg_match($pattern, $html, $matches)) {
+        return trim((string) ($matches[1] ?? ''));
+    }
+    $patternReverse = '/<link[^>]+href=["\']([^"\']*)["\'][^>]+rel=["\']' . preg_quote((string) $rel, '/') . '["\']/i';
+    if (preg_match($patternReverse, $html, $matches)) {
+        return trim((string) ($matches[1] ?? ''));
+    }
+    return '';
+}
+
+function seo_count_tag($html, $tag)
+{
+    if (!is_string($html) || $html === '' || trim((string) $tag) === '') {
+        return 0;
+    }
+    if (preg_match_all('/<' . preg_quote((string) $tag, '/') . '\b/i', $html, $matches)) {
+        return count($matches[0]);
+    }
+    return 0;
+}
+
+function seo_count_images_missing_alt($html)
+{
+    if (!is_string($html) || $html === '') {
+        return 0;
+    }
+    if (!preg_match_all('/<img\b[^>]*>/i', $html, $matches)) {
+        return 0;
+    }
+    $missing = 0;
+    foreach ($matches[0] as $imgTag) {
+        if (!preg_match('/\balt\s*=\s*(["\']).*?\1/i', (string) $imgTag)) {
+            $missing++;
+        }
+    }
+    return $missing;
+}
+
 function run_seo_audit_for_project($project)
 {
     $domain = trim((string) ($project['domain'] ?? ''));
@@ -4569,6 +4640,15 @@ function run_seo_audit_for_project($project)
     $critical = 0;
     $warnings = 0;
     $score = 100;
+    $pageSignals = [
+        'title' => '',
+        'title_length' => 0,
+        'meta_description_length' => 0,
+        'canonical_url' => '',
+        'robots' => '',
+        'h1_count' => 0,
+        'images_missing_alt' => 0,
+    ];
 
     if ($base === '') {
         $checks[] = ['check' => 'target_url', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Project domain is missing.'];
@@ -4589,6 +4669,71 @@ function run_seo_audit_for_project($project)
         $homeStatus = (int) ($homeRes['status'] ?? 0);
         if ($homeStatus >= 200 && $homeStatus < 400) {
             $checks[] = ['check' => 'home_reachable', 'status' => 'pass', 'severity' => 'info', 'message' => 'Homepage reachable (' . $homeStatus . ').'];
+            $html = (string) ($homeRes['raw'] ?? '');
+            $pageSignals['title'] = seo_extract_title($html);
+            $pageSignals['title_length'] = strlen($pageSignals['title']);
+            $metaDescription = seo_extract_meta_content($html, 'description');
+            $pageSignals['meta_description_length'] = strlen($metaDescription);
+            $pageSignals['canonical_url'] = seo_extract_link_href($html, 'canonical');
+            $pageSignals['robots'] = strtolower(seo_extract_meta_content($html, 'robots'));
+            $pageSignals['h1_count'] = seo_count_tag($html, 'h1');
+            $pageSignals['images_missing_alt'] = seo_count_images_missing_alt($html);
+
+            if ($pageSignals['title_length'] === 0) {
+                $checks[] = ['check' => 'title_tag', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Title tag missing.'];
+                $warnings++;
+                $score -= 12;
+            } elseif ($pageSignals['title_length'] < 15 || $pageSignals['title_length'] > 65) {
+                $checks[] = ['check' => 'title_tag', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Title length outside recommended range.'];
+                $warnings++;
+                $score -= 8;
+            } else {
+                $checks[] = ['check' => 'title_tag', 'status' => 'pass', 'severity' => 'info', 'message' => 'Title tag present.'];
+            }
+
+            if ($pageSignals['meta_description_length'] === 0) {
+                $checks[] = ['check' => 'meta_description', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Meta description missing.'];
+                $warnings++;
+                $score -= 10;
+            } elseif ($pageSignals['meta_description_length'] < 70 || $pageSignals['meta_description_length'] > 170) {
+                $checks[] = ['check' => 'meta_description', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Meta description length outside recommended range.'];
+                $warnings++;
+                $score -= 6;
+            } else {
+                $checks[] = ['check' => 'meta_description', 'status' => 'pass', 'severity' => 'info', 'message' => 'Meta description present.'];
+            }
+
+            if ($pageSignals['canonical_url'] === '') {
+                $checks[] = ['check' => 'canonical', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Canonical tag missing.'];
+                $warnings++;
+                $score -= 6;
+            } else {
+                $checks[] = ['check' => 'canonical', 'status' => 'pass', 'severity' => 'info', 'message' => 'Canonical tag present.'];
+            }
+
+            if (strpos($pageSignals['robots'], 'noindex') !== false) {
+                $checks[] = ['check' => 'robots_meta', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Robots meta contains noindex.'];
+                $critical++;
+                $score -= 20;
+            } else {
+                $checks[] = ['check' => 'robots_meta', 'status' => 'pass', 'severity' => 'info', 'message' => 'Robots meta does not block indexing.'];
+            }
+
+            if ($pageSignals['h1_count'] === 0) {
+                $checks[] = ['check' => 'h1', 'status' => 'warn', 'severity' => 'warning', 'message' => 'No H1 tag detected.'];
+                $warnings++;
+                $score -= 8;
+            } else {
+                $checks[] = ['check' => 'h1', 'status' => 'pass', 'severity' => 'info', 'message' => 'H1 tag detected.'];
+            }
+
+            if ($pageSignals['images_missing_alt'] > 0) {
+                $checks[] = ['check' => 'image_alt', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Images without alt text detected: ' . $pageSignals['images_missing_alt'] . '.'];
+                $warnings++;
+                $score -= min(12, $pageSignals['images_missing_alt']);
+            } else {
+                $checks[] = ['check' => 'image_alt', 'status' => 'pass', 'severity' => 'info', 'message' => 'Image alt coverage looks good.'];
+            }
         } else {
             $checks[] = ['check' => 'home_reachable', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Homepage unreachable (' . $homeStatus . ').'];
             $critical++;
@@ -4625,6 +4770,7 @@ function run_seo_audit_for_project($project)
         'score' => $score,
         'critical_issues' => $critical,
         'warnings' => $warnings,
+        'page_signals' => $pageSignals,
         'checks' => $checks,
         'source' => 'internal_runner',
         'created_at' => gmdate('c'),
@@ -5571,13 +5717,13 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.16-webops-posture-snapshot',
+        'phase' => '2.17-seo-on-page-baseline',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
             'social_forums' => 'active',
             'webops_security' => 'active',
-            'seo_suite' => 'bootstrap',
+            'seo_suite' => 'active',
         ],
         'automation' => $automationSettings,
         'health' => [
@@ -7777,7 +7923,7 @@ if ($action === 'seo.summary') {
     out_json([
         'ok' => true,
         'module' => 'seo_suite',
-        'status' => 'bootstrap',
+        'status' => 'active',
         'metrics' => [
             'audits_completed' => count($audits),
             'critical_issues' => $criticalIssues,
