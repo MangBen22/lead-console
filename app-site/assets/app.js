@@ -231,12 +231,14 @@
   const socialActivityFeed = document.getElementById("socialActivityFeed");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
+  const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const webopsMonitors = document.getElementById("webopsMonitors");
+  const webopsTypes = document.getElementById("webopsTypes");
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
@@ -2266,6 +2268,16 @@
     }
   }
 
+  async function loadWebopsTypes() {
+    if (!webopsTypes) return;
+    try {
+      const data = await apiGet("webops.types.list");
+      webopsTypes.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsTypes.textContent = "Failed to load WebOps types.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -2328,6 +2340,7 @@
     await loadSocialInboxThreads();
     await loadSocialSyncLog();
     await loadSocialRetryQueue();
+    await loadWebopsTypes();
     await loadWebopsMonitors();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
@@ -2734,6 +2747,12 @@
       if (socialPanel) {
         socialPanel.textContent = JSON.stringify(socialData, null, 2);
       }
+    });
+  }
+
+  if (refreshWebopsTypesBtn) {
+    refreshWebopsTypesBtn.addEventListener("click", async function () {
+      await loadWebopsTypes();
     });
   }
 

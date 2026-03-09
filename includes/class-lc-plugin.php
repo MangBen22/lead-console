@@ -1234,6 +1234,18 @@ class LC_Plugin
             'callback' => [$this, 'rest_bridge_site_health'],
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
+
+        register_rest_route('lc/v1', '/bridge/wp-heartbeat', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_wp_heartbeat'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/update-health', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_update_health'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
     }
 
     public function rest_bridge_permission($request)
@@ -1412,6 +1424,60 @@ class LC_Plugin
                 'queued_runs' => $queued_runs,
                 'recent_errors_24h' => $recent_errors,
                 'smtp_connected' => !empty($smtp['connected']),
+            ],
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_wp_heartbeat($request)
+    {
+        global $wp_version;
+
+        $payload = [
+            'ok' => true,
+            'site_url' => home_url('/'),
+            'wp_version' => (string) $wp_version,
+            'php_version' => PHP_VERSION,
+            'time' => current_time('mysql'),
+        ];
+
+        $this->log_system_event('bridge', 'info', 'Bridge WordPress heartbeat requested.', [
+            'wp_version' => (string) $wp_version,
+        ]);
+
+        return rest_ensure_response($payload);
+    }
+
+    public function rest_bridge_update_health($request)
+    {
+        if (!function_exists('get_core_updates')) {
+            require_once ABSPATH . 'wp-admin/includes/update.php';
+        }
+
+        $core_updates = get_core_updates(['dismissed' => false]);
+        $plugin_updates = get_site_transient('update_plugins');
+        $theme_updates = get_site_transient('update_themes');
+
+        $core_count = is_array($core_updates) ? count($core_updates) : 0;
+        $plugin_count = (is_object($plugin_updates) && !empty($plugin_updates->response) && is_array($plugin_updates->response))
+            ? count($plugin_updates->response)
+            : 0;
+        $theme_count = (is_object($theme_updates) && !empty($theme_updates->response) && is_array($theme_updates->response))
+            ? count($theme_updates->response)
+            : 0;
+
+        $this->log_system_event('bridge', 'info', 'Bridge update health requested.', [
+            'core_updates' => $core_count,
+            'plugin_updates' => $plugin_count,
+            'theme_updates' => $theme_count,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'updates' => [
+                'core' => $core_count,
+                'plugins' => $plugin_count,
+                'themes' => $theme_count,
             ],
             'time' => current_time('mysql'),
         ]);

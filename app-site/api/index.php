@@ -395,6 +395,105 @@ function webops_retry_queue_path()
     return app_storage_path('webops_retry_queue.json');
 }
 
+function webops_monitor_catalog()
+{
+    return [
+        [
+            'type' => 'uptime_http',
+            'label' => 'HTTP Uptime',
+            'target_mode' => 'url',
+            'uses_bridge' => 0,
+        ],
+        [
+            'type' => 'ssl_expiry',
+            'label' => 'SSL Expiry',
+            'target_mode' => 'url',
+            'uses_bridge' => 0,
+        ],
+        [
+            'type' => 'dns_resolution',
+            'label' => 'DNS Resolution',
+            'target_mode' => 'url_or_host',
+            'uses_bridge' => 0,
+        ],
+        [
+            'type' => 'wp_heartbeat',
+            'label' => 'WordPress Heartbeat',
+            'target_mode' => 'bridge_site_or_url',
+            'uses_bridge' => 1,
+        ],
+        [
+            'type' => 'update_health',
+            'label' => 'Update Health',
+            'target_mode' => 'bridge_site',
+            'uses_bridge' => 1,
+        ],
+        [
+            'type' => 'bridge_site_health',
+            'label' => 'Bridge Site Health',
+            'target_mode' => 'bridge_site',
+            'uses_bridge' => 1,
+        ],
+        [
+            'type' => 'webhook_check',
+            'label' => 'Webhook Check',
+            'target_mode' => 'url',
+            'uses_bridge' => 0,
+        ],
+    ];
+}
+
+function webops_target_host($target)
+{
+    $value = trim((string) $target);
+    if ($value === '') {
+        return '';
+    }
+    if (stripos($value, 'http://') === 0 || stripos($value, 'https://') === 0) {
+        return (string) parse_url($value, PHP_URL_HOST);
+    }
+    $parts = explode('/', $value);
+    return (string) ($parts[0] ?? '');
+}
+
+function webops_ssl_certificate_snapshot($target)
+{
+    $host = webops_target_host($target);
+    if ($host === '') {
+        return ['ok' => false, 'error' => 'missing_target_host'];
+    }
+    $port = 443;
+    $context = stream_context_create([
+        'ssl' => [
+            'capture_peer_cert' => true,
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+        ],
+    ]);
+    $client = @stream_socket_client('ssl://' . $host . ':' . $port, $errno, $errstr, 6, STREAM_CLIENT_CONNECT, $context);
+    if (!is_resource($client)) {
+        return ['ok' => false, 'error' => trim((string) $errstr) !== '' ? trim((string) $errstr) : 'ssl_connect_failed'];
+    }
+    $params = stream_context_get_params($client);
+    fclose($client);
+    $certificate = isset($params['options']['ssl']['peer_certificate']) ? $params['options']['ssl']['peer_certificate'] : null;
+    if (!is_resource($certificate)) {
+        return ['ok' => false, 'error' => 'missing_peer_certificate'];
+    }
+    $parsed = openssl_x509_parse($certificate);
+    if (!is_array($parsed) || empty($parsed['validTo_time_t'])) {
+        return ['ok' => false, 'error' => 'certificate_parse_failed'];
+    }
+    $expiresTs = (int) $parsed['validTo_time_t'];
+    $daysRemaining = (int) floor(($expiresTs - time()) / 86400);
+    return [
+        'ok' => true,
+        'host' => $host,
+        'expires_at' => gmdate('c', $expiresTs),
+        'days_remaining' => $daysRemaining,
+    ];
+}
+
 function seo_projects_path()
 {
     return app_storage_path('seo_projects.json');
@@ -3777,7 +3876,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.11-social-inbox-workflow',
+        'phase' => '2.12-webops-monitor-catalog',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4573,6 +4672,139 @@ function execute_webops_monitor($monitor)
         return $result;
     }
 
+    if ($type === 'ssl_expiry') {
+        if ($target === '') {
+            $result['message'] = 'Missing target URL.';
+            $result['error_code'] = 'missing_target_url';
+            return $result;
+        }
+        $ssl = webops_ssl_certificate_snapshot($target);
+        $result['details'] = $ssl;
+        if (empty($ssl['ok'])) {
+            $result['message'] = 'SSL certificate check failed.';
+            $result['error_code'] = 'ssl_check_failed';
+            $result['severity'] = 'critical';
+            return $result;
+        }
+        $daysRemaining = (int) ($ssl['days_remaining'] ?? 0);
+        if ($daysRemaining < 0) {
+            $result['message'] = 'SSL certificate already expired.';
+            $result['error_code'] = 'ssl_expired';
+            $result['severity'] = 'critical';
+            return $result;
+        }
+        $result['ok'] = true;
+        if ($daysRemaining <= 14) {
+            $result['severity'] = 'warning';
+            $result['message'] = 'SSL certificate expires in ' . $daysRemaining . ' day(s).';
+        } else {
+            $result['severity'] = 'info';
+            $result['message'] = 'SSL certificate valid for ' . $daysRemaining . ' day(s).';
+        }
+        return $result;
+    }
+
+    if ($type === 'dns_resolution') {
+        $host = webops_target_host($target);
+        if ($host === '') {
+            $result['message'] = 'Missing target host.';
+            $result['error_code'] = 'missing_target_host';
+            return $result;
+        }
+        $resolved = gethostbyname($host);
+        $result['details'] = ['host' => $host, 'resolved_ip' => $resolved];
+        if ($resolved === $host) {
+            $result['message'] = 'DNS resolution failed.';
+            $result['error_code'] = 'dns_resolution_failed';
+            $result['severity'] = 'critical';
+            return $result;
+        }
+        $result['ok'] = true;
+        $result['severity'] = 'info';
+        $result['message'] = 'DNS resolution succeeded.';
+        return $result;
+    }
+
+    if ($type === 'wp_heartbeat') {
+        $siteId = (string) ($config['bridge_site_id'] ?? '');
+        $site = $siteId !== '' ? site_by_id($siteId) : null;
+        if ($site !== null) {
+            if ($runMode !== 'live') {
+                $result['ok'] = true;
+                $result['severity'] = 'info';
+                $result['message'] = 'Dry run ok.';
+                return $result;
+            }
+            $res = app_bridge_request($site, 'GET', 'bridge/wp-heartbeat');
+            $result['details'] = is_array($res['data']) ? $res['data'] : ['status' => (int) ($res['status'] ?? 0)];
+            if (!empty($res['ok']) && is_array($res['data'])) {
+                $result['ok'] = true;
+                $result['severity'] = 'info';
+                $result['message'] = 'WordPress heartbeat retrieved.';
+            } else {
+                $result['message'] = 'WordPress heartbeat request failed.';
+                $result['error_code'] = 'wp_heartbeat_failed';
+                $result['severity'] = 'critical';
+            }
+            return $result;
+        }
+        if ($target === '') {
+            $result['message'] = 'Missing bridge site or target URL.';
+            $result['error_code'] = 'missing_target_url';
+            return $result;
+        }
+        $heartbeatUrl = rtrim($target, '/') . '/wp-json/';
+        $res = app_http_json_request('GET', $heartbeatUrl, [], null, 10);
+        $result['details'] = ['status' => (int) ($res['status'] ?? 0), 'url' => $heartbeatUrl];
+        if (!empty($res['ok'])) {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'WordPress REST heartbeat reachable.';
+        } else {
+            $result['message'] = 'WordPress REST heartbeat failed.';
+            $result['error_code'] = 'wp_heartbeat_failed';
+            $result['severity'] = 'critical';
+        }
+        return $result;
+    }
+
+    if ($type === 'update_health') {
+        $siteId = (string) ($config['bridge_site_id'] ?? '');
+        $site = $siteId !== '' ? site_by_id($siteId) : null;
+        if ($site === null) {
+            $result['message'] = 'Missing valid bridge_site_id.';
+            $result['error_code'] = 'missing_bridge_site';
+            return $result;
+        }
+        if ($runMode !== 'live') {
+            $result['ok'] = true;
+            $result['severity'] = 'info';
+            $result['message'] = 'Dry run ok.';
+            return $result;
+        }
+        $res = app_bridge_request($site, 'GET', 'bridge/update-health');
+        $result['details'] = is_array($res['data']) ? $res['data'] : ['status' => (int) ($res['status'] ?? 0)];
+        if (!empty($res['ok']) && is_array($res['data'])) {
+            $pluginUpdates = (int) ($res['data']['updates']['plugins'] ?? 0);
+            $themeUpdates = (int) ($res['data']['updates']['themes'] ?? 0);
+            $coreUpdates = (int) ($res['data']['updates']['core'] ?? 0);
+            $totalUpdates = $pluginUpdates + $themeUpdates + $coreUpdates;
+            $result['ok'] = true;
+            if ($totalUpdates > 0) {
+                $result['severity'] = 'warning';
+                $result['message'] = 'Updates pending: ' . $totalUpdates . '.';
+            } else {
+                $result['severity'] = 'info';
+                $result['message'] = 'No pending updates.';
+            }
+        } else {
+            $result['message'] = 'Update health request failed.';
+            $result['error_code'] = 'update_health_failed';
+            $result['severity'] = 'critical';
+        }
+        return $result;
+    }
+
     if ($type === 'bridge_site_health') {
         $siteId = (string) ($config['bridge_site_id'] ?? '');
         $site = $siteId !== '' ? site_by_id($siteId) : null;
@@ -5205,12 +5437,12 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.11-social-inbox-workflow',
+        'phase' => '2.12-webops-monitor-catalog',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
             'social_forums' => 'active',
-            'webops_security' => 'bootstrap',
+            'webops_security' => 'active',
             'seo_suite' => 'bootstrap',
         ],
         'automation' => $automationSettings,
@@ -7366,13 +7598,22 @@ if ($action === 'webops.summary') {
     out_json([
         'ok' => true,
         'module' => 'webops_security',
-        'status' => 'bootstrap',
+        'status' => 'active',
         'metrics' => [
             'sites_monitored' => count($active),
             'active_incidents' => $critical + $retryCount,
             'uptime_percent' => 100,
         ],
         'last_run' => $lastRun,
+    ]);
+}
+
+if ($action === 'webops.types.list') {
+    $rows = webops_monitor_catalog();
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
     ]);
 }
 

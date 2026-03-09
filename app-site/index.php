@@ -491,6 +491,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>WebOps Monitor Types</h2>
+                <div class="actions">
+                    <button id="refreshWebopsTypesBtn" type="button">Refresh WebOps Types</button>
+                </div>
+                <pre id="webopsTypes">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>WebOps Monitors</h2>
                 <pre id="webopsMonitors">Loading...</pre>
                 <form id="webopsMonitorForm" class="inline-form">
@@ -506,6 +514,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="webopsMonitorType">Type</label>
                         <select id="webopsMonitorType">
                             <option value="uptime_http">uptime_http</option>
+                            <option value="ssl_expiry">ssl_expiry</option>
+                            <option value="dns_resolution">dns_resolution</option>
+                            <option value="wp_heartbeat">wp_heartbeat</option>
+                            <option value="update_health">update_health</option>
                             <option value="bridge_site_health">bridge_site_health</option>
                             <option value="webhook_check">webhook_check</option>
                         </select>
