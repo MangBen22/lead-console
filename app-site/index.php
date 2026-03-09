@@ -598,6 +598,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="releaseGateWatchView">No gate watch run yet.</pre>
                 <pre id="releaseGateRunsView">Loading gate watch runs...</pre>
                 <pre id="releaseGateRunSummaryView">Loading gate watch summary...</pre>
+                <pre id="releaseGateRunDigestView">Loading gate watch digest...</pre>
                 <pre id="watchdogsStatusView">Loading watchdogs status...</pre>
                 <pre id="watchdogsCheckView">No watchdogs check run yet.</pre>
                 <pre id="watchdogsRunsView">Loading watchdogs check runs...</pre>

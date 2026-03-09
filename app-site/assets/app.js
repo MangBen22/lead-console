@@ -109,6 +109,7 @@
   const releaseGateWatchView = document.getElementById("releaseGateWatchView");
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
+  const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
   const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
@@ -499,6 +500,37 @@
     return filters;
   }
 
+  function formatReleaseGateRunDigest(summary, filters) {
+    const s = summary && typeof summary === "object" ? summary : {};
+    const f = filters && typeof filters === "object" ? filters : {};
+    const totalRuns = Number(s.total_runs || 0);
+    const allowedRuns = Number(s.allowed_runs || 0);
+    const blockedRuns = Number(s.blocked_runs || 0);
+    const baselineMatchBlocked = Number(s.baseline_match_blocked_runs || 0);
+    const baselineCheckBlocked = Number(s.baseline_check_blocked_runs || 0);
+    const signoffWatchBlocked = Number(s.signoff_integrity_watch_blocked_runs || 0);
+    const topFailed = s.top_failed_items && typeof s.top_failed_items === "object" ? s.top_failed_items : {};
+    const topFailedEntries = Object.entries(topFailed).slice(0, 5);
+    const lines = [];
+    lines.push("Release Gate Runs Digest");
+    lines.push("Filters: limit=" + String(f.limit || 0) + ", allowed=" + String(f.allowed || "all")
+      + ", source=" + String(f.source || "(any)")
+      + ", failed_item=" + String(f.failed_item || "(any)"));
+    lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
+    lines.push("Blocker runs: baseline_match=" + String(baselineMatchBlocked)
+      + ", baseline_check=" + String(baselineCheckBlocked)
+      + ", signoff_watch=" + String(signoffWatchBlocked));
+    if (topFailedEntries.length > 0) {
+      lines.push("Top failed items:");
+      topFailedEntries.forEach(function (entry) {
+        lines.push("- " + String(entry[0]) + ": " + String(entry[1]));
+      });
+    } else {
+      lines.push("Top failed items: none");
+    }
+    return lines.join("\n");
+  }
+
   async function loadReleaseGateRuns() {
     if (!releaseGateRunsView) return;
     const params = collectReleaseGateRunsFilters();
@@ -509,11 +541,17 @@
         const summary = data && data.summary ? data.summary : {};
         const appliedFilters = data && data.applied_filters ? data.applied_filters : params;
         releaseGateRunSummaryView.textContent = JSON.stringify({ ok: true, applied_filters: appliedFilters, summary: summary }, null, 2);
+        if (releaseGateRunDigestView) {
+          releaseGateRunDigestView.textContent = formatReleaseGateRunDigest(summary, appliedFilters);
+        }
       }
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
       if (releaseGateRunSummaryView) {
         releaseGateRunSummaryView.textContent = "Failed to load release gate run summary.";
+      }
+      if (releaseGateRunDigestView) {
+        releaseGateRunDigestView.textContent = "Failed to load release gate run digest.";
       }
     }
   }
