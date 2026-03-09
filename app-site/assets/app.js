@@ -265,6 +265,8 @@
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
   const refreshSeoOpportunitiesBtn = document.getElementById("refreshSeoOpportunitiesBtn");
+  const refreshSeoRegressionsBtn = document.getElementById("refreshSeoRegressionsBtn");
+  const runSeoRegressionsBtn = document.getElementById("runSeoRegressionsBtn");
   const refreshSeoUrlHistoryBtn = document.getElementById("refreshSeoUrlHistoryBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
@@ -277,6 +279,7 @@
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
   const seoActionPlanView = document.getElementById("seoActionPlanView");
   const seoOpportunitiesView = document.getElementById("seoOpportunitiesView");
+  const seoRegressionView = document.getElementById("seoRegressionView");
   const seoUrlHistoryView = document.getElementById("seoUrlHistoryView");
   const seoCompareView = document.getElementById("seoCompareView");
   let lastNotificationToneKey = "";
@@ -2491,6 +2494,16 @@
     }
   }
 
+  async function loadSeoRegressions() {
+    if (!seoRegressionView) return;
+    try {
+      const data = await apiGet("seo.regressions.summary");
+      seoRegressionView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoRegressionView.textContent = "Failed to load SEO regression watch.";
+    }
+  }
+
   async function loadSeoCompare() {
     if (!seoCompareView) return;
     try {
@@ -2534,6 +2547,7 @@
     await loadSeoProjectSnapshot();
     await loadSeoActionPlan();
     await loadSeoOpportunities();
+    await loadSeoRegressions();
     await loadSeoUrlHistory();
     await loadSeoCompare();
     await loadNotifications();
@@ -4175,6 +4189,7 @@
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
         await loadSeoOpportunities();
+        await loadSeoRegressions();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4200,6 +4215,7 @@
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
         await loadSeoOpportunities();
+        await loadSeoRegressions();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4225,6 +4241,7 @@
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
         await loadSeoOpportunities();
+        await loadSeoRegressions();
         await loadSeoUrlHistory();
         await loadSeoCompare();
         const data = await apiGet("seo.summary");
@@ -4288,6 +4305,22 @@
     });
   }
 
+  if (refreshSeoRegressionsBtn) {
+    refreshSeoRegressionsBtn.addEventListener("click", async function () {
+      await loadSeoRegressions();
+    });
+  }
+
+  if (runSeoRegressionsBtn) {
+    runSeoRegressionsBtn.addEventListener("click", async function () {
+      const result = await apiPost("seo.regressions.run", {});
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadSeoRegressions();
+    });
+  }
+
   if (refreshSeoUrlHistoryBtn) {
     refreshSeoUrlHistoryBtn.addEventListener("click", async function () {
       await loadSeoUrlHistory();
@@ -4321,6 +4354,7 @@
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
         await loadSeoOpportunities();
+        await loadSeoRegressions();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });
@@ -4343,6 +4377,7 @@
         await loadSeoProjectSnapshot();
         await loadSeoActionPlan();
         await loadSeoOpportunities();
+        await loadSeoRegressions();
         await loadSeoUrlHistory();
         await loadSeoCompare();
       });

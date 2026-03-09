@@ -529,6 +529,16 @@ function seo_extension_sessions_path()
     return app_storage_path('seo_extension_sessions.json');
 }
 
+function seo_regression_state_path()
+{
+    return app_storage_path('seo_regression_state.json');
+}
+
+function seo_regression_runs_path()
+{
+    return app_storage_path('seo_regression_runs.json');
+}
+
 function notifications_path()
 {
     return app_storage_path('notifications.json');
@@ -676,6 +686,8 @@ function module_storage_map()
         'seo_audits' => seo_audits_path(),
         'seo_extension_events' => seo_extension_events_path(),
         'seo_extension_sessions' => seo_extension_sessions_path(),
+        'seo_regression_state' => seo_regression_state_path(),
+        'seo_regression_runs' => seo_regression_runs_path(),
         'notifications' => notifications_path(),
         'notification_settings' => notification_settings_path(),
         'automation_runs' => automation_runs_path(),
@@ -3900,7 +3912,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.28-seo-opportunities-summary',
+        'phase' => '2.29-seo-regression-watch',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5206,6 +5218,179 @@ function seo_project_url_history_snapshot($project, $audits, $urlFilter = '')
     ];
 }
 
+function seo_project_regression_snapshot($project, $audits)
+{
+    $latest = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+    $previous = isset($audits[1]) && is_array($audits[1]) ? $audits[1] : null;
+    if (!is_array($latest)) {
+        return [
+            'project_id' => (string) ($project['project_id'] ?? ''),
+            'project_name' => (string) ($project['name'] ?? ''),
+            'status' => 'no_data',
+            'latest_audit_id' => '',
+            'previous_audit_id' => '',
+            'score_delta' => null,
+            'current_critical_checks' => [],
+            'new_critical_checks' => [],
+            'cleared_critical_checks' => [],
+            'reasons' => ['No SEO audit available yet.'],
+            'created_at' => gmdate('c'),
+        ];
+    }
+
+    $latestIssues = seo_issue_map_from_audit($latest);
+    $previousIssues = seo_issue_map_from_audit($previous);
+    $currentCritical = [];
+    foreach ($latestIssues as $check => $issue) {
+        if ((string) ($issue['priority'] ?? 'nice_to_have') === 'critical') {
+            $currentCritical[] = $check;
+        }
+    }
+    $previousCritical = [];
+    foreach ($previousIssues as $check => $issue) {
+        if ((string) ($issue['priority'] ?? 'nice_to_have') === 'critical') {
+            $previousCritical[] = $check;
+        }
+    }
+    sort($currentCritical);
+    sort($previousCritical);
+    $newCritical = array_values(array_diff($currentCritical, $previousCritical));
+    $clearedCritical = array_values(array_diff($previousCritical, $currentCritical));
+    $latestScore = isset($latest['score']) ? (int) $latest['score'] : null;
+    $previousScore = is_array($previous) && isset($previous['score']) ? (int) $previous['score'] : null;
+    $scoreDelta = ($latestScore !== null && $previousScore !== null) ? ($latestScore - $previousScore) : null;
+    $reasons = [];
+    $status = 'stable';
+
+    if ($scoreDelta !== null && $scoreDelta <= -5) {
+        $status = 'regression';
+        $reasons[] = 'Score dropped by ' . abs($scoreDelta) . ' points.';
+    }
+    if (!empty($newCritical)) {
+        $status = 'regression';
+        $reasons[] = 'New critical checks detected: ' . implode(', ', $newCritical) . '.';
+    }
+    if ($status !== 'regression' && $scoreDelta !== null && $scoreDelta >= 5) {
+        $status = 'improved';
+        $reasons[] = 'Score improved by ' . $scoreDelta . ' points.';
+    }
+    if ($status !== 'regression' && !empty($clearedCritical)) {
+        $status = 'improved';
+        $reasons[] = 'Critical checks cleared: ' . implode(', ', $clearedCritical) . '.';
+    }
+    if (empty($reasons)) {
+        $reasons[] = 'No significant regression detected.';
+    }
+
+    return [
+        'project_id' => (string) ($project['project_id'] ?? ''),
+        'project_name' => (string) ($project['name'] ?? ''),
+        'status' => $status,
+        'latest_audit_id' => (string) ($latest['audit_id'] ?? ''),
+        'previous_audit_id' => is_array($previous) ? (string) ($previous['audit_id'] ?? '') : '',
+        'latest_score' => $latestScore,
+        'previous_score' => $previousScore,
+        'score_delta' => $scoreDelta,
+        'current_critical_checks' => $currentCritical,
+        'new_critical_checks' => $newCritical,
+        'cleared_critical_checks' => $clearedCritical,
+        'reasons' => $reasons,
+        'created_at' => gmdate('c'),
+    ];
+}
+
+function seo_regression_watch_snapshot($source = 'manual', $emitNotifications = true)
+{
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $audits = app_read_json_file(seo_audits_path(), []);
+    $activeProjects = array_values(array_filter($projects, static function ($row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        return in_array($status, ['active', 'enabled'], true);
+    }));
+    $state = app_read_json_file(seo_regression_state_path(), []);
+    $previousProjects = isset($state['projects']) && is_array($state['projects']) ? $state['projects'] : [];
+    $items = [];
+    $summary = [
+        'regression' => 0,
+        'improved' => 0,
+        'stable' => 0,
+        'no_data' => 0,
+    ];
+    $nextProjects = [];
+    foreach ($activeProjects as $project) {
+        $projectId = (string) ($project['project_id'] ?? '');
+        $projectAudits = array_values(array_filter($audits, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+        $snapshot = seo_project_regression_snapshot($project, $projectAudits);
+        $items[] = $snapshot;
+        $status = (string) ($snapshot['status'] ?? 'stable');
+        if (!isset($summary[$status])) {
+            $summary[$status] = 0;
+        }
+        $summary[$status]++;
+        $signature = sha1(json_encode([
+            'status' => $status,
+            'score_delta' => $snapshot['score_delta'],
+            'new_critical_checks' => $snapshot['new_critical_checks'],
+            'cleared_critical_checks' => $snapshot['cleared_critical_checks'],
+        ]));
+        $previous = isset($previousProjects[$projectId]) && is_array($previousProjects[$projectId]) ? $previousProjects[$projectId] : [];
+        $previousStatus = (string) ($previous['status'] ?? '');
+        $previousSignature = (string) ($previous['signature'] ?? '');
+        if ($emitNotifications) {
+            if ($status === 'regression' && ($previousStatus !== 'regression' || $previousSignature !== $signature)) {
+                push_notification('warning', 'SEO regression detected for ' . (string) ($snapshot['project_name'] ?? $projectId) . '.', [
+                    'project_id' => $projectId,
+                    'source' => $source,
+                    'score_delta' => $snapshot['score_delta'],
+                    'new_critical_checks' => $snapshot['new_critical_checks'],
+                ]);
+            } elseif ($previousStatus === 'regression' && in_array($status, ['stable', 'improved'], true)) {
+                push_notification('success', 'SEO regression cleared for ' . (string) ($snapshot['project_name'] ?? $projectId) . '.', [
+                    'project_id' => $projectId,
+                    'source' => $source,
+                    'score_delta' => $snapshot['score_delta'],
+                    'cleared_critical_checks' => $snapshot['cleared_critical_checks'],
+                ]);
+            }
+        }
+        $nextProjects[$projectId] = [
+            'status' => $status,
+            'signature' => $signature,
+            'checked_at' => gmdate('c'),
+        ];
+    }
+
+    $run = [
+        'run_id' => 'seo_regression_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'created_at' => gmdate('c'),
+        'summary' => $summary,
+        'items' => $items,
+    ];
+    $runs = app_read_json_file(seo_regression_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 200);
+    app_write_json_file(seo_regression_runs_path(), $runs);
+    app_write_json_file(seo_regression_state_path(), [
+        'last_checked_at' => gmdate('c'),
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => (string) $source,
+        'summary' => $summary,
+        'projects' => $nextProjects,
+    ]);
+    audit_event('seo', 'regression.watch', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'source' => $source,
+        'summary' => $summary,
+    ]);
+    return [
+        'run' => $run,
+        'state' => app_read_json_file(seo_regression_state_path(), []),
+    ];
+}
+
 function seo_extension_mask_session($session)
 {
     if (!is_array($session)) {
@@ -6291,7 +6476,7 @@ $rateLimitedWriteActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
-    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -6332,7 +6517,7 @@ $deploymentGuardedActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
     'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
-    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke',
+    'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -6365,7 +6550,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.28-seo-opportunities-summary',
+        'phase' => '2.29-seo-regression-watch',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9706,6 +9891,31 @@ if ($action === 'seo.opportunities.summary') {
         'lowest_scoring_urls' => array_slice($lowestUrls, 0, 10),
         'declining_urls' => array_slice($decliningUrls, 0, 10),
         'message' => empty($audits) ? 'No SEO audits available yet for opportunity analysis.' : '',
+    ]);
+}
+
+if ($action === 'seo.regressions.summary') {
+    $state = app_read_json_file(seo_regression_state_path(), []);
+    $runs = app_read_json_file(seo_regression_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'state' => is_array($state) ? $state : [],
+        'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+        'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+    ]);
+}
+
+if ($action === 'seo.regressions.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $watch = seo_regression_watch_snapshot('manual_run', true);
+    out_json([
+        'ok' => true,
+        'state' => $watch['state'],
+        'run' => $watch['run'],
     ]);
 }
 
