@@ -582,6 +582,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCutoverReadinessBtn" type="button">Refresh Readiness</button>
                     <button id="runSmokeSuiteBtn" type="button">Run Full Smoke Suite</button>
                     <button id="downloadSmokeHistoryBtn" type="button">Download Smoke History</button>
+                    <button id="downloadCutoverEvidenceBtn" type="button">Download Cutover Evidence</button>
                     <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
                     <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
                     <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>

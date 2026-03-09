@@ -37,6 +37,7 @@
   const refreshCutoverReadinessBtn = document.getElementById("refreshCutoverReadinessBtn");
   const runSmokeSuiteBtn = document.getElementById("runSmokeSuiteBtn");
   const downloadSmokeHistoryBtn = document.getElementById("downloadSmokeHistoryBtn");
+  const downloadCutoverEvidenceBtn = document.getElementById("downloadCutoverEvidenceBtn");
   const recordPublicSmokePassBtn = document.getElementById("recordPublicSmokePassBtn");
   const recordPublicSmokeFailBtn = document.getElementById("recordPublicSmokeFailBtn");
   const recordAuthSmokePassBtn = document.getElementById("recordAuthSmokePassBtn");
@@ -1451,6 +1452,21 @@
       const history = data && data.history ? data.history : data;
       const stamp = history && history.generated_at ? String(history.generated_at).replace(/[:.]/g, "-") : "smoke_history";
       downloadJsonFile("deployment_smoke_history_" + stamp + ".json", data);
+    });
+  }
+
+  if (downloadCutoverEvidenceBtn) {
+    downloadCutoverEvidenceBtn.addEventListener("click", async function () {
+      const note = cutoverSmokeNote && cutoverSmokeNote.value ? cutoverSmokeNote.value.trim() : "";
+      const data = await apiGetWithParams("deployment.cutover.evidence.bundle", { note: note });
+      if (cutoverSmokeRecordView) {
+        cutoverSmokeRecordView.textContent = JSON.stringify(data, null, 2);
+      }
+      const bundle = data && data.bundle ? data.bundle : data;
+      const bundleId = bundle && bundle.bundle_id ? bundle.bundle_id : "cutover_evidence_bundle";
+      downloadJsonFile(bundleId + ".json", data);
+      await loadAuditLog();
+      await loadStatus();
     });
   }
 

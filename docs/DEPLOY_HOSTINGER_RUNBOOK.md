@@ -58,6 +58,7 @@
 10. In `Go-Live Status`, configure release gate settings (`freshness window` + required checks), click `Save Release Gate Settings`, then `Refresh Release Gate`.
 11. Confirm release gate returns `allowed=true` before generating a release candidate.
 12. Run `Run Gate Watch` and archive gate watch runs (`Refresh Gate Runs`) as part of cutover evidence.
+13. Click `Download Cutover Evidence` and archive the bundle JSON with deployment records.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

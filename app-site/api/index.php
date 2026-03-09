@@ -2025,6 +2025,74 @@ function deployment_cutover_readiness_snapshot()
     ];
 }
 
+function deployment_cutover_evidence_bundle_snapshot($note = '')
+{
+    $readiness = deployment_cutover_readiness_snapshot();
+    $gate = deployment_release_gate_snapshot(null);
+    $gateState = app_read_json_file(deployment_release_gate_state_path(), []);
+    $gateRuns = app_read_json_file(deployment_release_gate_runs_path(), []);
+    $smokeHistory = deployment_smoke_history_snapshot();
+    $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
+    $releaseLog = app_read_json_file(deployment_release_log_path(), []);
+    $incidentSummary = deployment_incident_summary_snapshot();
+    $slaState = app_read_json_file(deployment_incident_sla_state_path(), []);
+    $threshold = is_array($slaState) && isset($slaState['last_threshold_minutes'])
+        ? max(5, min(10080, (int) $slaState['last_threshold_minutes']))
+        : 120;
+    $incidentSla = deployment_incident_sla_snapshot($threshold);
+    $guard = deployment_guard_evaluate();
+    $automation = get_automation_settings();
+    $nowTs = time();
+    $lastTs = $automation['last_run_at'] !== '' ? strtotime((string) $automation['last_run_at']) : 0;
+    $intervalSecs = max(5, (int) ($automation['interval_minutes'] ?? 30)) * 60;
+    $elapsed = $lastTs > 0 ? ($nowTs - $lastTs) : null;
+    $dueNow = ($lastTs === 0) ? true : ($elapsed >= $intervalSecs);
+    $nextDueIn = ($lastTs === 0) ? 0 : max(0, $intervalSecs - max(0, (int) $elapsed));
+
+    return [
+        'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'phase' => '1.32-cutover-evidence-bundle',
+        'note' => trim((string) $note),
+        'summary' => [
+            'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
+            'release_gate_allowed' => !empty($gate['allowed']) ? 1 : 0,
+            'smoke_total_runs' => (int) (($smokeHistory['summary']['total_runs'] ?? 0)),
+            'pipeline_runs' => count($pipelineRuns),
+            'release_candidates' => count($releaseLog),
+            'open_incidents' => (int) ($incidentSummary['open_total'] ?? 0),
+            'sla_breach_count' => (int) ($incidentSla['breach_count'] ?? 0),
+        ],
+        'readiness' => $readiness,
+        'release_gate' => $gate,
+        'release_gate_watch' => [
+            'state' => is_array($gateState) ? $gateState : [],
+            'runs' => array_slice(is_array($gateRuns) ? $gateRuns : [], 0, 200),
+        ],
+        'smoke_history' => $smokeHistory,
+        'pipeline_runs' => array_slice(is_array($pipelineRuns) ? $pipelineRuns : [], 0, 100),
+        'release_log' => array_slice(is_array($releaseLog) ? $releaseLog : [], 0, 100),
+        'incidents' => [
+            'summary' => $incidentSummary,
+            'sla' => $incidentSla,
+            'sla_threshold_minutes' => $threshold,
+        ],
+        'deployment_guard' => [
+            'allowed' => !empty($guard['allowed']),
+            'reasons' => isset($guard['reasons']) && is_array($guard['reasons']) ? $guard['reasons'] : [],
+            'guard' => isset($guard['guard']) && is_array($guard['guard']) ? $guard['guard'] : [],
+        ],
+        'automation_scheduler' => [
+            'enabled' => !empty($automation['enabled']) ? 1 : 0,
+            'last_run_at' => (string) ($automation['last_run_at'] ?? ''),
+            'interval_minutes' => (int) ($automation['interval_minutes'] ?? 30),
+            'due_now' => $dueNow,
+            'next_due_in_seconds' => $nextDueIn,
+            'modules' => isset($automation['modules']) && is_array($automation['modules']) ? $automation['modules'] : [],
+        ],
+    ];
+}
+
 function deployment_pipeline_run_snapshot($note = '')
 {
     $install = install_check_snapshot();
@@ -2843,7 +2911,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.31-release-gate-watchdog',
+        'phase' => '1.32-cutover-evidence-bundle',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -3576,6 +3644,20 @@ if ($action === 'deployment.smoke.history') {
         'ok' => true,
         'history' => $history,
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.evidence.bundle') {
+    $note = isset($_GET['note']) ? (string) $_GET['note'] : '';
+    $bundle = deployment_cutover_evidence_bundle_snapshot($note);
+    audit_event('deployment', 'cutover.evidence.bundle.export', [
+        'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
+        'readiness_status' => (string) ($bundle['summary']['readiness_status'] ?? 'review_required'),
+        'release_gate_allowed' => (int) ($bundle['summary']['release_gate_allowed'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'bundle' => $bundle,
     ]);
 }
 
