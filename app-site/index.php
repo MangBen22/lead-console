@@ -596,6 +596,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="revokeSignoffBtn" type="button">Revoke Signoff</button>
                     <button id="verifyLatestSignoffBtn" type="button">Verify Latest Signoff</button>
                     <button id="verifyAllSignoffsBtn" type="button">Verify All Signoffs</button>
+                    <button id="runSignoffIntegrityWatchBtn" type="button">Run Signoff Integrity Watch</button>
+                    <button id="refreshSignoffIntegrityRunsBtn" type="button">Refresh Integrity Watch Runs</button>
                     <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
                     <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
                     <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>
@@ -608,6 +610,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="cutoverSignoffListView">Loading cutover signoffs...</pre>
                 <pre id="cutoverActiveSignoffView">Loading active cutover signoff...</pre>
                 <pre id="cutoverSignoffVerifyView">No signoff verification yet.</pre>
+                <pre id="cutoverSignoffIntegrityWatchView">No signoff integrity watch run yet.</pre>
+                <pre id="cutoverSignoffIntegrityRunsView">Loading signoff integrity watch runs...</pre>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>

@@ -46,6 +46,8 @@
   const revokeSignoffBtn = document.getElementById("revokeSignoffBtn");
   const verifyLatestSignoffBtn = document.getElementById("verifyLatestSignoffBtn");
   const verifyAllSignoffsBtn = document.getElementById("verifyAllSignoffsBtn");
+  const runSignoffIntegrityWatchBtn = document.getElementById("runSignoffIntegrityWatchBtn");
+  const refreshSignoffIntegrityRunsBtn = document.getElementById("refreshSignoffIntegrityRunsBtn");
   const recordPublicSmokePassBtn = document.getElementById("recordPublicSmokePassBtn");
   const recordPublicSmokeFailBtn = document.getElementById("recordPublicSmokeFailBtn");
   const recordAuthSmokePassBtn = document.getElementById("recordAuthSmokePassBtn");
@@ -101,6 +103,8 @@
   const cutoverSignoffListView = document.getElementById("cutoverSignoffListView");
   const cutoverActiveSignoffView = document.getElementById("cutoverActiveSignoffView");
   const cutoverSignoffVerifyView = document.getElementById("cutoverSignoffVerifyView");
+  const cutoverSignoffIntegrityWatchView = document.getElementById("cutoverSignoffIntegrityWatchView");
+  const cutoverSignoffIntegrityRunsView = document.getElementById("cutoverSignoffIntegrityRunsView");
   const deploymentGuardView = document.getElementById("deploymentGuardView");
   const deploymentGuardPreviewView = document.getElementById("deploymentGuardPreviewView");
   const deploymentBypassLogView = document.getElementById("deploymentBypassLogView");
@@ -570,6 +574,37 @@
     }
   }
 
+  async function loadCutoverSignoffIntegrityRuns() {
+    if (!cutoverSignoffIntegrityRunsView) return;
+    try {
+      const data = await apiGet("deployment.cutover.signoff.integrity.runs");
+      cutoverSignoffIntegrityRunsView.textContent = JSON.stringify(data, null, 2);
+      const state = data && data.state ? data.state : {};
+      if (cutoverSignoffIntegrityWatchView && state && Object.keys(state).length > 0) {
+        cutoverSignoffIntegrityWatchView.textContent = JSON.stringify({ ok: true, state: state }, null, 2);
+      }
+    } catch (err) {
+      cutoverSignoffIntegrityRunsView.textContent = "Failed to load signoff integrity watch runs.";
+    }
+  }
+
+  async function runCutoverSignoffIntegrityWatch(source) {
+    const safeSource = source && String(source).trim() ? String(source).trim() : "dashboard_manual";
+    const result = await apiPost("deployment.cutover.signoff.integrity.watch", { source: safeSource });
+    if (cutoverSignoffIntegrityWatchView) {
+      cutoverSignoffIntegrityWatchView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCutoverSignoffIntegrityRuns();
+    await loadActiveCutoverSignoff();
+    await verifyLatestCutoverSignoff();
+    await loadReleaseGate();
+    await loadGoLiveStatus();
+    await loadSchedulerStatus();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
   async function recordSmokeRun(smokeType, okValue) {
     const note = cutoverSmokeNote && cutoverSmokeNote.value ? cutoverSmokeNote.value.trim() : "";
     const payload = {
@@ -932,6 +967,7 @@
     await loadCutoverSignoffs();
     await loadActiveCutoverSignoff();
     await verifyLatestCutoverSignoff();
+    await loadCutoverSignoffIntegrityRuns();
     await loadCutoverPipelineRuns();
     await loadBypassLog();
     await loadIncidentReports();
@@ -1310,6 +1346,7 @@
       await loadReleaseGateRuns();
       await loadReleaseGate();
       await loadGoLiveStatus();
+      await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
     });
   }
@@ -1575,6 +1612,7 @@
       await loadCutoverSignoffs();
       await loadActiveCutoverSignoff();
       await verifyLatestCutoverSignoff();
+      await loadCutoverSignoffIntegrityRuns();
     });
   }
 
@@ -1667,6 +1705,19 @@
   if (verifyAllSignoffsBtn) {
     verifyAllSignoffsBtn.addEventListener("click", async function () {
       await verifyAllCutoverSignoffs();
+    });
+  }
+
+  if (runSignoffIntegrityWatchBtn) {
+    runSignoffIntegrityWatchBtn.addEventListener("click", async function () {
+      await runCutoverSignoffIntegrityWatch("dashboard_manual");
+    });
+  }
+
+  if (refreshSignoffIntegrityRunsBtn) {
+    refreshSignoffIntegrityRunsBtn.addEventListener("click", async function () {
+      await loadCutoverSignoffIntegrityRuns();
+      await loadSchedulerStatus();
     });
   }
 

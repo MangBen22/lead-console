@@ -64,6 +64,10 @@
 16. Use signoff lifecycle controls as needed:
    - `Activate Signoff` to set the release-driving signoff.
    - `Revoke Signoff` (with reason) to invalidate an outdated signoff.
+17. Run `Run Signoff Integrity Watch` and archive integrity watch runs (`Refresh Integrity Watch Runs`) as part of cutover evidence.
+18. Confirm scheduler status includes both watch states:
+   - `release_gate_watch_state`
+   - `signoff_integrity_watch_state`
 
 ## 8) Rollback Plan
 1. Restore previous app files.

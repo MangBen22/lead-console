@@ -299,6 +299,16 @@ function deployment_release_gate_runs_path()
     return app_storage_path('deployment_release_gate_runs.json');
 }
 
+function deployment_cutover_signoff_integrity_state_path()
+{
+    return app_storage_path('deployment_cutover_signoff_integrity_state.json');
+}
+
+function deployment_cutover_signoff_integrity_runs_path()
+{
+    return app_storage_path('deployment_cutover_signoff_integrity_runs.json');
+}
+
 function deployment_cutover_signoffs_path()
 {
     return app_storage_path('deployment_cutover_signoffs.json');
@@ -345,6 +355,8 @@ function module_storage_map()
         'automation_settings' => automation_settings_path(),
         'deployment_release_gate_state' => deployment_release_gate_state_path(),
         'deployment_release_gate_runs' => deployment_release_gate_runs_path(),
+        'deployment_cutover_signoff_integrity_state' => deployment_cutover_signoff_integrity_state_path(),
+        'deployment_cutover_signoff_integrity_runs' => deployment_cutover_signoff_integrity_runs_path(),
         'deployment_cutover_signoffs' => deployment_cutover_signoffs_path(),
     ];
 }
@@ -2064,6 +2076,8 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $gate = deployment_release_gate_snapshot(null);
     $gateState = app_read_json_file(deployment_release_gate_state_path(), []);
     $gateRuns = app_read_json_file(deployment_release_gate_runs_path(), []);
+    $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $smokeHistory = deployment_smoke_history_snapshot();
     $pipelineRuns = app_read_json_file(deployment_pipeline_runs_path(), []);
     $releaseLog = app_read_json_file(deployment_release_log_path(), []);
@@ -2088,7 +2102,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.37-release-gate-signoff-integrity-policy',
+        'phase' => '1.38-signoff-integrity-watchdog',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2106,6 +2120,10 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
         'release_gate_watch' => [
             'state' => is_array($gateState) ? $gateState : [],
             'runs' => array_slice(is_array($gateRuns) ? $gateRuns : [], 0, 200),
+        ],
+        'signoff_integrity_watch' => [
+            'state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
+            'runs' => array_slice(is_array($signoffIntegrityRuns) ? $signoffIntegrityRuns : [], 0, 200),
         ],
         'smoke_history' => $smokeHistory,
         'pipeline_runs' => array_slice(is_array($pipelineRuns) ? $pipelineRuns : [], 0, 100),
@@ -2449,6 +2467,113 @@ function deployment_cutover_signoff_verify_all_snapshot($limit = 100)
     return [
         'summary' => $summary,
         'items' => $items,
+    ];
+}
+
+function deployment_cutover_signoff_integrity_watch_snapshot($source = 'manual')
+{
+    $src = trim((string) $source);
+    if ($src === '') {
+        $src = 'manual';
+    }
+
+    $active = deployment_cutover_signoff_active_snapshot();
+    $activeRow = isset($active['active']) && is_array($active['active']) ? $active['active'] : null;
+    $status = 'no_active';
+    $reason = 'No active cutover signoff found.';
+    $check = null;
+    if (is_array($activeRow)) {
+        $check = deployment_cutover_signoff_verify_item($activeRow);
+        if (empty($check['verifiable'])) {
+            $status = 'unverifiable';
+            $reason = 'Active signoff is legacy/unverifiable.';
+        } elseif (!empty($check['valid'])) {
+            $status = 'valid';
+            $reason = 'Active signoff integrity is valid.';
+        } else {
+            $status = 'invalid';
+            $reason = 'Active signoff integrity is invalid.';
+        }
+    }
+
+    $state = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    if (!is_array($state)) {
+        $state = [];
+    }
+    $prevStatus = isset($state['last_status']) ? (string) $state['last_status'] : '';
+    $statusChanged = ($prevStatus !== '' && $prevStatus !== $status) ? 1 : 0;
+
+    $lastAlertAt = isset($state['last_alert_at']) ? (string) $state['last_alert_at'] : '';
+    $lastAlertTs = $lastAlertAt !== '' ? strtotime($lastAlertAt) : false;
+    $cooldownMinutes = 60;
+    $cooldownActive = ($lastAlertTs !== false) ? ((time() - $lastAlertTs) < ($cooldownMinutes * 60)) : false;
+
+    $alertSent = 0;
+    $alertType = '';
+    $alertMessage = '';
+    if ($statusChanged === 1) {
+        if ($status === 'valid') {
+            $alertType = 'success';
+            $alertMessage = 'Cutover signoff integrity changed to VALID.';
+        } elseif ($status === 'invalid') {
+            $alertType = 'critical';
+            $alertMessage = 'Cutover signoff integrity changed to INVALID.';
+        } elseif ($status === 'unverifiable') {
+            $alertType = 'warning';
+            $alertMessage = 'Cutover signoff integrity changed to UNVERIFIABLE.';
+        } else {
+            $alertType = 'warning';
+            $alertMessage = 'Cutover signoff integrity changed to NO_ACTIVE.';
+        }
+        $alertSent = 1;
+    } elseif ($status !== 'valid' && !$cooldownActive) {
+        $alertType = ($status === 'invalid') ? 'critical' : 'warning';
+        $alertMessage = 'Cutover signoff integrity remains ' . strtoupper($status) . '.';
+        $alertSent = 1;
+    }
+
+    if ($alertSent === 1) {
+        push_notification($alertType, $alertMessage, [
+            'source' => $src,
+            'status' => $status,
+            'reason' => $reason,
+            'active_signoff_id' => is_array($activeRow) ? (string) ($activeRow['signoff_id'] ?? '') : '',
+        ]);
+    }
+
+    $run = [
+        'run_id' => 'signoff_integrity_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => $src,
+        'status' => $status,
+        'reason' => $reason,
+        'status_changed' => $statusChanged,
+        'alert_sent' => $alertSent,
+        'active_signoff_id' => is_array($activeRow) ? (string) ($activeRow['signoff_id'] ?? '') : '',
+        'verification' => is_array($check) ? $check : [],
+    ];
+    $runs = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 400);
+    app_write_json_file(deployment_cutover_signoff_integrity_runs_path(), $runs);
+
+    $nextState = [
+        'last_checked_at' => gmdate('c'),
+        'last_status' => $status,
+        'last_reason' => $reason,
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => $src,
+        'last_alert_at' => ($alertSent === 1) ? gmdate('c') : (string) ($state['last_alert_at'] ?? ''),
+        'active_signoff_id' => is_array($activeRow) ? (string) ($activeRow['signoff_id'] ?? '') : '',
+    ];
+    app_write_json_file(deployment_cutover_signoff_integrity_state_path(), $nextState);
+
+    return [
+        'run' => $run,
+        'state' => $nextState,
     ];
 }
 
@@ -3225,6 +3350,7 @@ $rateLimitedWriteActions = [
     'deployment.cutover.signoff.create',
     'deployment.cutover.signoff.activate',
     'deployment.cutover.signoff.revoke',
+    'deployment.cutover.signoff.integrity.watch',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3273,7 +3399,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.37-release-gate-signoff-integrity-policy',
+        'phase' => '1.38-signoff-integrity-watchdog',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4199,6 +4325,44 @@ if ($action === 'deployment.cutover.signoff.verify_all') {
         'verification' => $snap,
         'time' => gmdate('c'),
     ], ((int) ($snap['summary']['invalid'] ?? 0) === 0) ? 200 : 409);
+}
+
+if ($action === 'deployment.cutover.signoff.integrity.watch') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $source = isset($data['source']) ? (string) $data['source'] : 'dashboard_manual';
+    $snap = deployment_cutover_signoff_integrity_watch_snapshot($source);
+    audit_event('deployment', 'cutover.signoff.integrity.watch', [
+        'run_id' => (string) ($snap['run']['run_id'] ?? ''),
+        'status' => (string) ($snap['run']['status'] ?? ''),
+        'source' => (string) ($snap['run']['source'] ?? ''),
+        'status_changed' => (int) ($snap['run']['status_changed'] ?? 0),
+        'alert_sent' => (int) ($snap['run']['alert_sent'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'watch' => $snap,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.cutover.signoff.integrity.runs') {
+    $runs = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
+    $state = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    out_json([
+        'ok' => true,
+        'count' => is_array($runs) ? count($runs) : 0,
+        'items' => is_array($runs) ? $runs : [],
+        'state' => is_array($state) ? $state : [],
+        'time' => gmdate('c'),
+    ]);
 }
 
 if ($action === 'deployment.cutover.readiness') {
@@ -5379,6 +5543,12 @@ if ($action === 'automation.scheduler.status') {
     $due = ($lastTs === 0) ? true : ($elapsed >= $intervalSecs);
     $nextDueIn = ($lastTs === 0) ? 0 : max(0, $intervalSecs - max(0, (int) $elapsed));
     $gateWatchState = app_read_json_file(deployment_release_gate_state_path(), []);
+    $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
+    $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
+    $lastSignoffIntegrityRun = [];
+    if (is_array($signoffIntegrityRuns) && !empty($signoffIntegrityRuns[0]) && is_array($signoffIntegrityRuns[0])) {
+        $lastSignoffIntegrityRun = $signoffIntegrityRuns[0];
+    }
     out_json([
         'ok' => true,
         'enabled' => !empty($settings['enabled']),
@@ -5388,6 +5558,8 @@ if ($action === 'automation.scheduler.status') {
         'next_due_in_seconds' => $nextDueIn,
         'modules' => $settings['modules'],
         'release_gate_watch_state' => is_array($gateWatchState) ? $gateWatchState : [],
+        'signoff_integrity_watch_state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
+        'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'time' => gmdate('c'),
     ]);
 }
@@ -5446,11 +5618,13 @@ if ($action === 'automation.scheduler.tick') {
     $settings = get_automation_settings();
     if (empty($settings['enabled'])) {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_disabled', null);
+        $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_disabled');
         out_json([
             'ok' => true,
             'skipped' => true,
             'reason' => 'Automation disabled in settings.',
             'release_gate_watch' => $watch,
+            'signoff_integrity_watch' => $signoffWatch,
         ]);
     }
     $nowTs = time();
@@ -5458,16 +5632,19 @@ if ($action === 'automation.scheduler.tick') {
     $interval = max(5, (int) ($settings['interval_minutes'] ?? 30)) * 60;
     if ($lastTs > 0 && ($nowTs - $lastTs) < $interval) {
         $watch = deployment_release_gate_watch_snapshot('scheduler_tick_interval_skip', null);
+        $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_interval_skip');
         out_json([
             'ok' => true,
             'skipped' => true,
             'reason' => 'Interval not reached.',
             'next_due_in_seconds' => $interval - ($nowTs - $lastTs),
             'release_gate_watch' => $watch,
+            'signoff_integrity_watch' => $signoffWatch,
         ]);
     }
     $summary = execute_automation_run($settings, 'scheduler');
     $watch = deployment_release_gate_watch_snapshot('scheduler_tick_run', null);
+    $signoffWatch = deployment_cutover_signoff_integrity_watch_snapshot('scheduler_tick_run');
     $settings['last_run_at'] = (string) ($summary['created_at'] ?? gmdate('c'));
     save_automation_settings($settings);
     audit_event('automation', 'scheduler.tick', ['automation_id' => (string) $summary['automation_id'], 'source' => 'scheduler']);
@@ -5475,6 +5652,7 @@ if ($action === 'automation.scheduler.tick') {
         'ok' => true,
         'run' => $summary,
         'release_gate_watch' => $watch,
+        'signoff_integrity_watch' => $signoffWatch,
     ]);
 }
 
