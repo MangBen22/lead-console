@@ -34,6 +34,7 @@
   const refreshWatchdogsIncidentSummaryBtn = document.getElementById("refreshWatchdogsIncidentSummaryBtn");
   const resolveWatchdogsIncidentBtn = document.getElementById("resolveWatchdogsIncidentBtn");
   const reopenWatchdogsIncidentBtn = document.getElementById("reopenWatchdogsIncidentBtn");
+  const saveWatchdogsPolicyBtn = document.getElementById("saveWatchdogsPolicyBtn");
   const generateReleaseCandidateBtn = document.getElementById("generateReleaseCandidateBtn");
   const downloadArtifactManifestBtn = document.getElementById("downloadArtifactManifestBtn");
   const verifyArtifactManifestBtn = document.getElementById("verifyArtifactManifestBtn");
@@ -95,6 +96,9 @@
   const watchdogsIncidentView = document.getElementById("watchdogsIncidentView");
   const watchdogsIncidentSummaryView = document.getElementById("watchdogsIncidentSummaryView");
   const watchdogsIncidentNoteInput = document.getElementById("watchdogsIncidentNoteInput");
+  const watchdogsAutoIncidentThresholdInput = document.getElementById("watchdogsAutoIncidentThresholdInput");
+  const watchdogsAutoResolveThresholdInput = document.getElementById("watchdogsAutoResolveThresholdInput");
+  const watchdogsPolicyView = document.getElementById("watchdogsPolicyView");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -482,6 +486,23 @@
     }
   }
 
+  async function loadWatchdogsPolicy() {
+    if (!watchdogsPolicyView) return;
+    try {
+      const data = await apiGet("deployment.watchdogs.policy.get");
+      watchdogsPolicyView.textContent = JSON.stringify(data, null, 2);
+      const settings = data && data.settings ? data.settings : {};
+      if (watchdogsAutoIncidentThresholdInput) {
+        watchdogsAutoIncidentThresholdInput.value = String(settings.auto_incident_threshold || 2);
+      }
+      if (watchdogsAutoResolveThresholdInput) {
+        watchdogsAutoResolveThresholdInput.value = String(settings.auto_resolve_ok_streak || 2);
+      }
+    } catch (err) {
+      watchdogsPolicyView.textContent = "Failed to load watchdogs policy.";
+    }
+  }
+
   async function resolveWatchdogsIncident() {
     const note = watchdogsIncidentNoteInput && watchdogsIncidentNoteInput.value ? watchdogsIncidentNoteInput.value.trim() : "";
     const result = await apiPost("deployment.watchdogs.incident.resolve", { note: note });
@@ -513,6 +534,31 @@
     await loadWatchdogsRuns();
     await loadWatchdogsStatus();
     await loadWatchdogsIncidentSummary();
+    await loadNotifications();
+    await loadAuditLog();
+    await loadStatus();
+  }
+
+  async function saveWatchdogsPolicy() {
+    const incidentThreshold = watchdogsAutoIncidentThresholdInput && watchdogsAutoIncidentThresholdInput.value
+      ? Number(watchdogsAutoIncidentThresholdInput.value)
+      : 2;
+    const resolveThreshold = watchdogsAutoResolveThresholdInput && watchdogsAutoResolveThresholdInput.value
+      ? Number(watchdogsAutoResolveThresholdInput.value)
+      : 2;
+    const safeIncidentThreshold = Number.isFinite(incidentThreshold) ? Math.max(1, Math.min(10, Math.round(incidentThreshold))) : 2;
+    const safeResolveThreshold = Number.isFinite(resolveThreshold) ? Math.max(1, Math.min(10, Math.round(resolveThreshold))) : 2;
+    const result = await apiPost("deployment.watchdogs.policy.save", {
+      auto_incident_threshold: safeIncidentThreshold,
+      auto_resolve_ok_streak: safeResolveThreshold,
+    });
+    if (watchdogsPolicyView) {
+      watchdogsPolicyView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadWatchdogsPolicy();
+    await loadWatchdogsRuns();
+    await loadWatchdogsStatus();
+    await loadSchedulerStatus();
     await loadNotifications();
     await loadAuditLog();
     await loadStatus();
@@ -1094,6 +1140,7 @@
     await loadWatchdogsRuns();
     await loadWatchdogsOpenIncident();
     await loadWatchdogsIncidentSummary();
+    await loadWatchdogsPolicy();
     await loadReleaseLog();
     await loadArtifactManifest();
     await loadCutoverReadiness();
@@ -1703,6 +1750,12 @@
   if (reopenWatchdogsIncidentBtn) {
     reopenWatchdogsIncidentBtn.addEventListener("click", async function () {
       await reopenWatchdogsIncident();
+    });
+  }
+
+  if (saveWatchdogsPolicyBtn) {
+    saveWatchdogsPolicyBtn.addEventListener("click", async function () {
+      await saveWatchdogsPolicy();
     });
   }
 

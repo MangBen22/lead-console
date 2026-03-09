@@ -76,6 +76,7 @@
 23. Use `Refresh Watchdogs Incident` plus `Resolve/Reopen Watchdogs Incident` quick actions in Go-Live after remediation, and include an operator note before actioning.
 24. Use `Refresh Watchdogs Incident Summary` to confirm watchdog incident counts and latest open state are back within expected levels.
 25. After sustained healthy watchdog checks, verify auto-resolution entries appear in watchdog runs/state before final cutover approval.
+26. Configure `Save Watchdogs Policy` thresholds to match operational tolerance (critical escalation streak and healthy auto-resolve streak).
 
 ## 8) Rollback Plan
 1. Restore previous app files.

@@ -492,6 +492,8 @@ function default_deployment_guard()
         'release_gate_require_cutover_signoff' => 0,
         'release_gate_require_signoff_integrity' => 1,
         'release_gate_require_signoff_integrity_watch' => 0,
+        'watchdogs_auto_incident_threshold' => 2,
+        'watchdogs_auto_resolve_ok_streak' => 2,
         'updated_at' => gmdate('c'),
     ];
 }
@@ -1635,6 +1637,7 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         $src = 'manual';
     }
     $watchdogs = deployment_watchdogs_status_snapshot($freshnessMinutes);
+    $guardCfg = get_deployment_guard();
     $status = strtolower(trim((string) ($watchdogs['status'] ?? 'warning')));
     if ($status === '') {
         $status = 'warning';
@@ -1650,8 +1653,8 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
     $criticalStreak = ($status === 'critical') ? ($prevCriticalStreak + 1) : 0;
     $prevOkStreak = isset($state['ok_streak']) ? (int) $state['ok_streak'] : 0;
     $okStreak = ($status === 'ok') ? ($prevOkStreak + 1) : 0;
-    $autoIncidentThreshold = 2;
-    $autoResolveThreshold = 2;
+    $autoIncidentThreshold = max(1, min(10, (int) ($guardCfg['watchdogs_auto_incident_threshold'] ?? 2)));
+    $autoResolveThreshold = max(1, min(10, (int) ($guardCfg['watchdogs_auto_resolve_ok_streak'] ?? 2)));
     $autoIncidentCreated = 0;
     $autoIncidentReopened = 0;
     $autoIncidentResolved = 0;
@@ -2578,7 +2581,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.49-watchdogs-auto-recovery-resolution',
+        'phase' => '1.50-watchdogs-policy-settings',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3847,6 +3850,7 @@ $rateLimitedWriteActions = [
     'deployment.watchdogs.check',
     'deployment.watchdogs.incident.resolve',
     'deployment.watchdogs.incident.reopen',
+    'deployment.watchdogs.policy.save',
     'deployment.release.gate.watch',
     'deployment.release.gate.settings.save',
     'deployment.verify',
@@ -3895,7 +3899,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.49-watchdogs-auto-recovery-resolution',
+        'phase' => '1.50-watchdogs-policy-settings',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4168,6 +4172,47 @@ if ($action === 'deployment.watchdogs.runs') {
         'count' => is_array($runs) ? count($runs) : 0,
         'items' => is_array($runs) ? $runs : [],
         'state' => is_array($state) ? $state : [],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.get') {
+    $guard = get_deployment_guard();
+    $settings = [
+        'auto_incident_threshold' => max(1, min(10, (int) ($guard['watchdogs_auto_incident_threshold'] ?? 2))),
+        'auto_resolve_ok_streak' => max(1, min(10, (int) ($guard['watchdogs_auto_resolve_ok_streak'] ?? 2))),
+    ];
+    out_json([
+        'ok' => true,
+        'settings' => $settings,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.watchdogs.policy.save') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $settings = [
+        'watchdogs_auto_incident_threshold' => max(1, min(10, (int) ($data['auto_incident_threshold'] ?? 2))),
+        'watchdogs_auto_resolve_ok_streak' => max(1, min(10, (int) ($data['auto_resolve_ok_streak'] ?? 2))),
+    ];
+    $saved = save_deployment_guard($settings);
+    $response = [
+        'auto_incident_threshold' => max(1, min(10, (int) ($saved['watchdogs_auto_incident_threshold'] ?? 2))),
+        'auto_resolve_ok_streak' => max(1, min(10, (int) ($saved['watchdogs_auto_resolve_ok_streak'] ?? 2))),
+    ];
+    audit_event('deployment', 'watchdogs.policy.save', $response);
+    push_notification('info', 'Watchdogs policy settings updated.', $response);
+    out_json([
+        'ok' => true,
+        'settings' => $response,
         'time' => gmdate('c'),
     ]);
 }
