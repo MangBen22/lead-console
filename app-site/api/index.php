@@ -3081,7 +3081,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.62-release-gate-summary-panel',
+        'phase' => '1.63-scheduler-release-gate-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4409,7 +4409,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.62-release-gate-summary-panel',
+        'phase' => '1.63-scheduler-release-gate-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -7066,6 +7066,8 @@ if ($action === 'automation.scheduler.status') {
     $due = ($lastTs === 0) ? true : ($elapsed >= $intervalSecs);
     $nextDueIn = ($lastTs === 0) ? 0 : max(0, $intervalSecs - max(0, (int) $elapsed));
     $gateWatchState = app_read_json_file(deployment_release_gate_state_path(), []);
+    $gateWatchRuns = app_read_json_file(deployment_release_gate_runs_path(), []);
+    $gateWatchSummary = deployment_release_gate_runs_summary($gateWatchRuns);
     $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsCheckState = app_read_json_file(deployment_watchdogs_state_path(), []);
@@ -7094,6 +7096,7 @@ if ($action === 'automation.scheduler.status') {
         'next_due_in_seconds' => $nextDueIn,
         'modules' => $settings['modules'],
         'release_gate_watch_state' => is_array($gateWatchState) ? $gateWatchState : [],
+        'release_gate_watch_summary' => $gateWatchSummary,
         'signoff_integrity_watch_state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
         'signoff_integrity_watch_last_run' => $lastSignoffIntegrityRun,
         'watchdogs_check_state' => is_array($watchdogsCheckState) ? $watchdogsCheckState : [],

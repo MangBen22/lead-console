@@ -89,6 +89,7 @@
 36. In `Refresh Gate Runs`, inspect `failed_items` and `blocker_flags` to quickly identify whether baseline requirements are blocking release.
 37. Use gate-runs `summary` (`top_failed_items`, baseline blocker run counts) to prioritize remediation before launch.
 38. Use `gate watch summary` panel in Go-Live for quick blocker analytics without scrolling through full runs payloads.
+39. Check scheduler status `release_gate_watch_summary` to confirm blocker trends during unattended automation windows.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
