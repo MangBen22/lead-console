@@ -120,6 +120,7 @@
   const releaseGateRunsAllowedFilter = document.getElementById("releaseGateRunsAllowedFilter");
   const releaseGateRunsSustainedFilter = document.getElementById("releaseGateRunsSustainedFilter");
   const releaseGateRunsSustainedAlertFilter = document.getElementById("releaseGateRunsSustainedAlertFilter");
+  const releaseGateRunsStatusChangeFilter = document.getElementById("releaseGateRunsStatusChangeFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
@@ -510,6 +511,9 @@
     const sustainedAlert = releaseGateRunsSustainedAlertFilter && releaseGateRunsSustainedAlertFilter.value
       ? releaseGateRunsSustainedAlertFilter.value
       : "all";
+    const statusChange = releaseGateRunsStatusChangeFilter && releaseGateRunsStatusChangeFilter.value
+      ? releaseGateRunsStatusChangeFilter.value
+      : "all";
     const source = releaseGateRunsSourceFilter && releaseGateRunsSourceFilter.value
       ? releaseGateRunsSourceFilter.value.trim()
       : "";
@@ -526,6 +530,7 @@
       allowed: allowed,
       sustained: sustained,
       sustained_alert: sustainedAlert,
+      status_change: statusChange,
       source: source,
       failed_item: failedItem,
       transition_limit: transitionLimit,
@@ -598,6 +603,7 @@
     lines.push("Filters: limit=" + String(f.limit || 0) + ", window=" + String(f.window || 0) + ", allowed=" + String(f.allowed || "all")
       + ", sustained=" + String(f.sustained || "all")
       + ", sustained_alert=" + String(f.sustained_alert || "all")
+      + ", status_change=" + String(f.status_change || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
       + ", transition_limit=" + String(f.transition_limit || 12));
@@ -706,6 +712,9 @@
     if (releaseGateRunsSustainedAlertFilter) {
       releaseGateRunsSustainedAlertFilter.value = "all";
     }
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "all";
+    }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
     }
@@ -751,6 +760,10 @@
         const sustainedAlert = ["all", "sent", "not_sent"].includes(stored.sustained_alert) ? stored.sustained_alert : "all";
         releaseGateRunsSustainedAlertFilter.value = sustainedAlert;
       }
+      if (releaseGateRunsStatusChangeFilter && typeof stored.status_change === "string") {
+        const statusChange = ["all", "changed", "stable"].includes(stored.status_change) ? stored.status_change : "all";
+        releaseGateRunsStatusChangeFilter.value = statusChange;
+      }
       if (releaseGateRunsSourceFilter && typeof stored.source === "string") {
         releaseGateRunsSourceFilter.value = stored.source;
       }
@@ -774,6 +787,9 @@
     }
     if (releaseGateRunsSustainedAlertFilter) {
       releaseGateRunsSustainedAlertFilter.value = "all";
+    }
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "all";
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = failedItem || "";
@@ -802,6 +818,9 @@
     if (releaseGateRunsSustainedAlertFilter) {
       releaseGateRunsSustainedAlertFilter.value = "all";
     }
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "all";
+    }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = source || "";
     }
@@ -825,6 +844,9 @@
     }
     if (releaseGateRunsSustainedAlertFilter) {
       releaseGateRunsSustainedAlertFilter.value = "all";
+    }
+    if (releaseGateRunsStatusChangeFilter) {
+      releaseGateRunsStatusChangeFilter.value = "all";
     }
     if (releaseGateRunsAllowedFilter) {
       releaseGateRunsAllowedFilter.value = allowed || "all";

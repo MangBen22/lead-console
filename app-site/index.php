@@ -570,6 +570,13 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                             <option value="not_sent">not_sent</option>
                         </select>
                     </label>
+                    <label>Status change filter
+                        <select id="releaseGateRunsStatusChangeFilter">
+                            <option value="all">all</option>
+                            <option value="changed">changed</option>
+                            <option value="stable">stable</option>
+                        </select>
+                    </label>
                     <label>Gate source filter<input id="releaseGateRunsSourceFilter" type="text" placeholder="Optional source (e.g. scheduler_tick_run)" /></label>
                     <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
                     <label>Sustained transitions<input id="releaseGateRunsTransitionLimitInput" type="number" min="1" max="50" value="12" /></label>
