@@ -1748,6 +1748,10 @@ function deployment_release_gate_runs_summary($runs)
         'sustained_active_runs' => 0,
         'sustained_clear_runs' => 0,
         'sustained_alert_sent_runs' => 0,
+        'scheduler_runs' => 0,
+        'manual_runs' => 0,
+        'scheduler_blocked_runs' => 0,
+        'manual_blocked_runs' => 0,
         'baseline_match_blocked_runs' => 0,
         'baseline_check_blocked_runs' => 0,
         'signoff_integrity_watch_blocked_runs' => 0,
@@ -1771,6 +1775,19 @@ function deployment_release_gate_runs_summary($runs)
                     'failed_items' => isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [],
                     'reason_count' => isset($row['reason_count']) ? (int) $row['reason_count'] : 0,
                 ];
+            }
+        }
+        $sourceValue = strtolower(trim((string) ($row['source'] ?? '')));
+        $isScheduler = (strpos($sourceValue, 'scheduler_') === 0);
+        if ($isScheduler) {
+            $summary['scheduler_runs']++;
+            if ($allowed === 0) {
+                $summary['scheduler_blocked_runs']++;
+            }
+        } else {
+            $summary['manual_runs']++;
+            if ($allowed === 0) {
+                $summary['manual_blocked_runs']++;
             }
         }
         if (!empty($row['status_changed'])) {
@@ -1819,6 +1836,10 @@ function deployment_release_gate_runs_summary($runs)
     $summary['status_changed_ratio_percent'] = round((((int) ($summary['status_changed_runs'] ?? 0)) / $total) * 100, 2);
     $summary['sustained_active_ratio_percent'] = round((((int) ($summary['sustained_active_runs'] ?? 0)) / $total) * 100, 2);
     $summary['sustained_alert_sent_ratio_percent'] = round((((int) ($summary['sustained_alert_sent_runs'] ?? 0)) / $total) * 100, 2);
+    $schedulerTotal = max(1, (int) ($summary['scheduler_runs'] ?? 0));
+    $manualTotal = max(1, (int) ($summary['manual_runs'] ?? 0));
+    $summary['scheduler_blocked_ratio_percent'] = round((((int) ($summary['scheduler_blocked_runs'] ?? 0)) / $schedulerTotal) * 100, 2);
+    $summary['manual_blocked_ratio_percent'] = round((((int) ($summary['manual_blocked_runs'] ?? 0)) / $manualTotal) * 100, 2);
     $denominator = max(1, $blocked);
     $summary['baseline_match_blocked_share_percent'] = round((((int) ($summary['baseline_match_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
     $summary['baseline_check_blocked_share_percent'] = round((((int) ($summary['baseline_check_blocked_runs'] ?? 0)) / $denominator) * 100, 2);
@@ -3433,7 +3454,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.94-release-gate-runs-meta',
+        'phase' => '1.95-release-gate-source-summary-ratios',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4761,7 +4782,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.94-release-gate-runs-meta',
+        'phase' => '1.95-release-gate-source-summary-ratios',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

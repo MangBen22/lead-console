@@ -641,11 +641,17 @@
     const sustainedClearRuns = Number(s.sustained_clear_runs || 0);
     const sustainedAlertSentRuns = Number(s.sustained_alert_sent_runs || 0);
     const statusChangedRuns = Number(s.status_changed_runs || 0);
+    const schedulerRuns = Number(s.scheduler_runs || 0);
+    const manualRuns = Number(s.manual_runs || 0);
+    const schedulerBlockedRuns = Number(s.scheduler_blocked_runs || 0);
+    const manualBlockedRuns = Number(s.manual_blocked_runs || 0);
     const blockedRatio = Number(s.blocked_ratio_percent || 0);
     const allowedRatio = Number(s.allowed_ratio_percent || 0);
     const sustainedActiveRatio = Number(s.sustained_active_ratio_percent || 0);
     const sustainedAlertSentRatio = Number(s.sustained_alert_sent_ratio_percent || 0);
     const statusChangedRatio = Number(s.status_changed_ratio_percent || 0);
+    const schedulerBlockedRatio = Number(s.scheduler_blocked_ratio_percent || 0);
+    const manualBlockedRatio = Number(s.manual_blocked_ratio_percent || 0);
     const baselineMatchShare = Number(s.baseline_match_blocked_share_percent || 0);
     const baselineCheckShare = Number(s.baseline_check_blocked_share_percent || 0);
     const signoffShare = Number(s.signoff_integrity_watch_blocked_share_percent || 0);
@@ -679,9 +685,15 @@
       + ", clear=" + String(sustainedClearRuns)
       + ", alert_sent=" + String(sustainedAlertSentRuns)
       + ", status_changed=" + String(statusChangedRuns));
+    lines.push("Source counters: scheduler_runs=" + String(schedulerRuns)
+      + ", manual_runs=" + String(manualRuns)
+      + ", scheduler_blocked=" + String(schedulerBlockedRuns)
+      + ", manual_blocked=" + String(manualBlockedRuns));
     lines.push("Sustained ratios: active=" + String(sustainedActiveRatio) + "%"
       + ", alert_sent=" + String(sustainedAlertSentRatio) + "%"
       + ", status_changed=" + String(statusChangedRatio) + "%");
+    lines.push("Source blocked ratios: scheduler=" + String(schedulerBlockedRatio) + "%"
+      + ", manual=" + String(manualBlockedRatio) + "%");
     lines.push("Sustained blocked trend: " + formatSustainedStateDigest(sustainedState));
     lines.push("Sustained transitions: " + formatSustainedTimelineDigest(sustainedTimeline));
     if (topFailedEntries.length > 0) {
