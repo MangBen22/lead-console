@@ -675,11 +675,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="refreshSeoIssuesBtn" type="button">Refresh SEO Issues</button>
                     <button id="refreshSeoHistoryBtn" type="button">Refresh SEO History</button>
+                    <button id="refreshSeoExtensionSummaryBtn" type="button">Refresh Extension Summary</button>
                 </div>
                 <h3>Issue Summary</h3>
                 <pre id="seoIssuesSummary">Loading...</pre>
                 <h3>History Summary</h3>
                 <pre id="seoHistorySummary">Loading...</pre>
+                <h3>Extension Summary</h3>
+                <pre id="seoExtensionSummary">Loading...</pre>
                 <h3>SEO Audits</h3>
                 <pre id="seoAudits">Loading...</pre>
                 <h3>Extension Events</h3>

@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.20-seo-extension-sessions',
+        'phase' => '2.21-seo-extension-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4665,7 +4665,16 @@ function seo_issue_rollup_from_checks($checks)
 
     foreach ($checks as $check) {
         if (!is_array($check)) {
-            continue;
+            if (is_scalar($check) && trim((string) $check) !== '') {
+                $check = [
+                    'check' => preg_replace('/[^a-z0-9_\-]/i', '_', strtolower(trim((string) $check))),
+                    'status' => 'warn',
+                    'severity' => 'warning',
+                    'message' => trim((string) $check),
+                ];
+            } else {
+                continue;
+            }
         }
         $priority = seo_check_priority($check);
         $summary[$priority]++;
@@ -5821,7 +5830,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.20-seo-extension-sessions',
+        'phase' => '2.21-seo-extension-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8697,6 +8706,8 @@ if ($action === 'seo.extension.intake') {
         'created_at' => gmdate('c'),
     ];
     $eventRollup = seo_issue_rollup_from_checks(is_array($event['issues']) ? $event['issues'] : []);
+    $event['priority_summary'] = $eventRollup['priority_summary'];
+    $event['issue_rollup'] = $eventRollup['issues'];
     if (is_array($session)) {
         $rows = app_read_json_file(seo_extension_sessions_path(), []);
         foreach ($rows as $index => $row) {
@@ -8747,6 +8758,78 @@ if ($action === 'seo.extension.events.list') {
         'ok' => true,
         'count' => count($events),
         'items' => $events,
+    ]);
+}
+
+if ($action === 'seo.extension.events.summary') {
+    $events = app_read_json_file(seo_extension_events_path(), []);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    if ($projectId !== '') {
+        $events = array_values(array_filter($events, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $scoreTotal = 0;
+    $projectMap = [];
+    $issueMap = [];
+    foreach ($events as $event) {
+        if (!is_array($event)) {
+            continue;
+        }
+        $scoreTotal += (int) ($event['score'] ?? 0);
+        $pid = (string) ($event['project_id'] ?? '');
+        if ($pid === '') {
+            $pid = 'unassigned';
+        }
+        if (!isset($projectMap[$pid])) {
+            $projectMap[$pid] = [
+                'project_id' => $pid,
+                'event_count' => 0,
+                'average_score' => 0,
+                'total_score' => 0,
+            ];
+        }
+        $projectMap[$pid]['event_count']++;
+        $projectMap[$pid]['total_score'] += (int) ($event['score'] ?? 0);
+        $rollup = isset($event['issue_rollup']) && is_array($event['issue_rollup'])
+            ? $event['issue_rollup']
+            : seo_issue_rollup_from_checks(isset($event['issues']) && is_array($event['issues']) ? $event['issues'] : [])['issues'];
+        foreach ($rollup as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+            $check = (string) ($issue['check'] ?? 'unknown');
+            if (!isset($issueMap[$check])) {
+                $issueMap[$check] = [
+                    'check' => $check,
+                    'occurrences' => 0,
+                    'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+                ];
+            }
+            $issueMap[$check]['occurrences'] += (int) ($issue['occurrences'] ?? 0);
+            $currentPriority = (string) ($issueMap[$check]['priority'] ?? 'nice_to_have');
+            $nextPriority = (string) ($issue['priority'] ?? 'nice_to_have');
+            if ($currentPriority !== 'critical' && ($nextPriority === 'critical' || ($currentPriority === 'nice_to_have' && $nextPriority === 'fix_soon'))) {
+                $issueMap[$check]['priority'] = $nextPriority;
+            }
+        }
+    }
+    foreach ($projectMap as $key => $row) {
+        $projectMap[$key]['average_score'] = $row['event_count'] > 0 ? round($row['total_score'] / $row['event_count'], 2) : 0;
+        unset($projectMap[$key]['total_score']);
+    }
+    $issues = array_values($issueMap);
+    usort($issues, static function ($a, $b) {
+        return (int) ($b['occurrences'] ?? 0) <=> (int) ($a['occurrences'] ?? 0);
+    });
+    out_json([
+        'ok' => true,
+        'event_count' => count($events),
+        'average_score' => count($events) > 0 ? round($scoreTotal / count($events), 2) : 0,
+        'projects' => array_values($projectMap),
+        'top_issues' => array_slice($issues, 0, 20),
+        'latest_event' => isset($events[0]) && is_array($events[0]) ? $events[0] : null,
+        'project_id' => $projectId,
     ]);
 }
 

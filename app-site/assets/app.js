@@ -260,8 +260,10 @@
   const seoResult = document.getElementById("seoResult");
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
+  const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
+  const seoExtensionSummary = document.getElementById("seoExtensionSummary");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
@@ -2394,6 +2396,16 @@
     }
   }
 
+  async function loadSeoExtensionSummary() {
+    if (!seoExtensionSummary) return;
+    try {
+      const data = await apiGet("seo.extension.events.summary");
+      seoExtensionSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoExtensionSummary.textContent = "Failed to load SEO extension summary.";
+    }
+  }
+
   async function loadSeoExtensionEvents() {
     if (!seoExtensionEvents) return;
     try {
@@ -2437,6 +2449,7 @@
     await loadSeoProjects();
     await loadSeoIssuesSummary();
     await loadSeoHistorySummary();
+    await loadSeoExtensionSummary();
     await loadSeoAudits();
     await loadSeoExtensionEvents();
     await loadSeoExtensionSessions();
@@ -4075,6 +4088,7 @@
         await loadSeoProjects();
         await loadSeoIssuesSummary();
         await loadSeoHistorySummary();
+        await loadSeoExtensionSummary();
       });
     }
 
@@ -4094,6 +4108,7 @@
         await loadSeoProjects();
         await loadSeoIssuesSummary();
         await loadSeoHistorySummary();
+        await loadSeoExtensionSummary();
       });
     }
 
@@ -4112,6 +4127,7 @@
         }
         await loadSeoIssuesSummary();
         await loadSeoHistorySummary();
+        await loadSeoExtensionSummary();
         await loadSeoAudits();
         const data = await apiGet("seo.summary");
         const panel = document.getElementById("modSeo");
@@ -4131,6 +4147,12 @@
   if (refreshSeoHistoryBtn) {
     refreshSeoHistoryBtn.addEventListener("click", async function () {
       await loadSeoHistorySummary();
+    });
+  }
+
+  if (refreshSeoExtensionSummaryBtn) {
+    refreshSeoExtensionSummaryBtn.addEventListener("click", async function () {
+      await loadSeoExtensionSummary();
     });
   }
 
