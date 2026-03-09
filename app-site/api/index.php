@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.24-seo-latest-compare',
+        'phase' => '2.25-seo-link-schema-baseline',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4564,6 +4564,60 @@ function save_automation_settings($settings)
     return $payload;
 }
 
+function seo_default_page_signals()
+{
+    return [
+        'title' => '',
+        'title_length' => 0,
+        'meta_description_length' => 0,
+        'canonical_url' => '',
+        'robots' => '',
+        'h1_count' => 0,
+        'images_missing_alt' => 0,
+        'word_count' => 0,
+        'heading_counts' => [
+            'h1' => 0,
+            'h2' => 0,
+            'h3' => 0,
+            'h4' => 0,
+            'h5' => 0,
+            'h6' => 0,
+        ],
+        'internal_link_count' => 0,
+        'external_link_count' => 0,
+        'unique_external_hosts' => 0,
+        'schema_count' => 0,
+        'schema_types' => [],
+    ];
+}
+
+function seo_normalize_page_signals($signals)
+{
+    $defaults = seo_default_page_signals();
+    if (!is_array($signals)) {
+        return $defaults;
+    }
+    $normalized = array_merge($defaults, $signals);
+    $headingCounts = isset($signals['heading_counts']) && is_array($signals['heading_counts']) ? $signals['heading_counts'] : [];
+    $normalized['heading_counts'] = array_merge($defaults['heading_counts'], $headingCounts);
+    foreach (['title_length', 'meta_description_length', 'h1_count', 'images_missing_alt', 'word_count', 'internal_link_count', 'external_link_count', 'unique_external_hosts', 'schema_count'] as $key) {
+        $normalized[$key] = max(0, (int) ($normalized[$key] ?? 0));
+    }
+    foreach (array_keys($defaults['heading_counts']) as $tag) {
+        $normalized['heading_counts'][$tag] = max(0, (int) ($normalized['heading_counts'][$tag] ?? 0));
+    }
+    $schemaTypes = isset($normalized['schema_types']) && is_array($normalized['schema_types']) ? $normalized['schema_types'] : [];
+    $normalized['schema_types'] = array_values(array_unique(array_filter(array_map(static function ($value) {
+        return trim((string) $value);
+    }, $schemaTypes), static function ($value) {
+        return $value !== '';
+    })));
+    $normalized['title'] = trim((string) ($normalized['title'] ?? ''));
+    $normalized['canonical_url'] = trim((string) ($normalized['canonical_url'] ?? ''));
+    $normalized['robots'] = trim((string) ($normalized['robots'] ?? ''));
+    return $normalized;
+}
+
 function seo_extract_title($html)
 {
     if (!is_string($html) || $html === '') {
@@ -4633,6 +4687,111 @@ function seo_count_images_missing_alt($html)
         }
     }
     return $missing;
+}
+
+function seo_heading_counts($html)
+{
+    $counts = [];
+    foreach (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as $tag) {
+        $counts[$tag] = seo_count_tag($html, $tag);
+    }
+    return $counts;
+}
+
+function seo_visible_word_count($html)
+{
+    if (!is_string($html) || $html === '') {
+        return 0;
+    }
+    $clean = preg_replace('/<script\b[^>]*>.*?<\/script>/is', ' ', $html);
+    $clean = preg_replace('/<style\b[^>]*>.*?<\/style>/is', ' ', (string) $clean);
+    $text = html_entity_decode(strip_tags((string) $clean), ENT_QUOTES | ENT_HTML5);
+    $text = preg_replace('/\s+/u', ' ', trim((string) $text));
+    if ($text === '') {
+        return 0;
+    }
+    $parts = preg_split('/\s+/u', $text);
+    return is_array($parts) ? count(array_filter($parts, static function ($part) {
+        return trim((string) $part) !== '';
+    })) : 0;
+}
+
+function seo_link_summary($html, $baseUrl)
+{
+    $summary = [
+        'internal_link_count' => 0,
+        'external_link_count' => 0,
+        'unique_external_hosts' => 0,
+        'external_hosts' => [],
+    ];
+    if (!is_string($html) || $html === '') {
+        return $summary;
+    }
+    $baseHost = strtolower((string) parse_url((string) $baseUrl, PHP_URL_HOST));
+    if (!preg_match_all('/<a\b[^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
+        return $summary;
+    }
+    $externalHosts = [];
+    foreach ((array) ($matches[1] ?? []) as $hrefRaw) {
+        $href = trim(html_entity_decode((string) $hrefRaw, ENT_QUOTES | ENT_HTML5));
+        if ($href === '' || strpos($href, '#') === 0) {
+            continue;
+        }
+        $lowerHref = strtolower($href);
+        if (strpos($lowerHref, 'javascript:') === 0 || strpos($lowerHref, 'mailto:') === 0 || strpos($lowerHref, 'tel:') === 0) {
+            continue;
+        }
+        $hrefHost = strtolower((string) parse_url($href, PHP_URL_HOST));
+        $isAbsolute = preg_match('/^https?:\/\//i', $href) === 1;
+        $isInternal = false;
+        if (!$isAbsolute) {
+            $isInternal = true;
+        } elseif ($hrefHost !== '' && $baseHost !== '' && $hrefHost === $baseHost) {
+            $isInternal = true;
+        }
+
+        if ($isInternal) {
+            $summary['internal_link_count']++;
+            continue;
+        }
+
+        $summary['external_link_count']++;
+        if ($hrefHost !== '') {
+            $externalHosts[$hrefHost] = true;
+        }
+    }
+    $summary['external_hosts'] = array_values(array_keys($externalHosts));
+    $summary['unique_external_hosts'] = count($summary['external_hosts']);
+    return $summary;
+}
+
+function seo_schema_summary($html)
+{
+    $summary = [
+        'schema_count' => 0,
+        'schema_types' => [],
+    ];
+    if (!is_string($html) || $html === '') {
+        return $summary;
+    }
+    $types = [];
+    if (preg_match_all('/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $matches)) {
+        $summary['schema_count'] += count($matches[0]);
+        foreach ((array) ($matches[1] ?? []) as $payload) {
+            if (preg_match_all('/"@type"\s*:\s*"([^"]+)"/i', (string) $payload, $typeMatches)) {
+                foreach ((array) ($typeMatches[1] ?? []) as $type) {
+                    $types[] = trim((string) $type);
+                }
+            }
+        }
+    }
+    if (preg_match_all('/\bitemscope\b/i', $html, $microdataMatches)) {
+        $summary['schema_count'] += count($microdataMatches[0]);
+    }
+    $summary['schema_types'] = array_values(array_unique(array_filter($types, static function ($value) {
+        return trim((string) $value) !== '';
+    })));
+    return $summary;
 }
 
 function seo_check_priority($check)
@@ -4750,15 +4909,7 @@ function run_seo_audit_for_project($project)
     $critical = 0;
     $warnings = 0;
     $score = 100;
-    $pageSignals = [
-        'title' => '',
-        'title_length' => 0,
-        'meta_description_length' => 0,
-        'canonical_url' => '',
-        'robots' => '',
-        'h1_count' => 0,
-        'images_missing_alt' => 0,
-    ];
+    $pageSignals = seo_default_page_signals();
 
     if ($base === '') {
         $checks[] = ['check' => 'target_url', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Project domain is missing.'];
@@ -4788,6 +4939,15 @@ function run_seo_audit_for_project($project)
             $pageSignals['robots'] = strtolower(seo_extract_meta_content($html, 'robots'));
             $pageSignals['h1_count'] = seo_count_tag($html, 'h1');
             $pageSignals['images_missing_alt'] = seo_count_images_missing_alt($html);
+            $pageSignals['heading_counts'] = seo_heading_counts($html);
+            $pageSignals['word_count'] = seo_visible_word_count($html);
+            $linkSummary = seo_link_summary($html, $base);
+            $pageSignals['internal_link_count'] = (int) ($linkSummary['internal_link_count'] ?? 0);
+            $pageSignals['external_link_count'] = (int) ($linkSummary['external_link_count'] ?? 0);
+            $pageSignals['unique_external_hosts'] = (int) ($linkSummary['unique_external_hosts'] ?? 0);
+            $schemaSummary = seo_schema_summary($html);
+            $pageSignals['schema_count'] = (int) ($schemaSummary['schema_count'] ?? 0);
+            $pageSignals['schema_types'] = isset($schemaSummary['schema_types']) && is_array($schemaSummary['schema_types']) ? $schemaSummary['schema_types'] : [];
 
             if ($pageSignals['title_length'] === 0) {
                 $checks[] = ['check' => 'title_tag', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Title tag missing.'];
@@ -4833,8 +4993,20 @@ function run_seo_audit_for_project($project)
                 $checks[] = ['check' => 'h1', 'status' => 'warn', 'severity' => 'warning', 'message' => 'No H1 tag detected.'];
                 $warnings++;
                 $score -= 8;
+            } elseif ($pageSignals['h1_count'] > 1) {
+                $checks[] = ['check' => 'h1', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Multiple H1 tags detected.'];
+                $warnings++;
+                $score -= 5;
             } else {
                 $checks[] = ['check' => 'h1', 'status' => 'pass', 'severity' => 'info', 'message' => 'H1 tag detected.'];
+            }
+
+            if ((int) ($pageSignals['heading_counts']['h2'] ?? 0) === 0) {
+                $checks[] = ['check' => 'heading_structure', 'status' => 'warn', 'severity' => 'warning', 'message' => 'No H2 tags detected for section structure.'];
+                $warnings++;
+                $score -= 6;
+            } else {
+                $checks[] = ['check' => 'heading_structure', 'status' => 'pass', 'severity' => 'info', 'message' => 'Heading structure includes H2 sections.'];
             }
 
             if ($pageSignals['images_missing_alt'] > 0) {
@@ -4843,6 +5015,30 @@ function run_seo_audit_for_project($project)
                 $score -= min(12, $pageSignals['images_missing_alt']);
             } else {
                 $checks[] = ['check' => 'image_alt', 'status' => 'pass', 'severity' => 'info', 'message' => 'Image alt coverage looks good.'];
+            }
+
+            if ($pageSignals['word_count'] < 250) {
+                $checks[] = ['check' => 'content_depth', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Visible content appears thin (' . $pageSignals['word_count'] . ' words).'];
+                $warnings++;
+                $score -= 8;
+            } else {
+                $checks[] = ['check' => 'content_depth', 'status' => 'pass', 'severity' => 'info', 'message' => 'Visible content depth looks acceptable.'];
+            }
+
+            if ($pageSignals['internal_link_count'] < 3) {
+                $checks[] = ['check' => 'internal_links', 'status' => 'warn', 'severity' => 'warning', 'message' => 'Low internal link coverage detected (' . $pageSignals['internal_link_count'] . ').'];
+                $warnings++;
+                $score -= 6;
+            } else {
+                $checks[] = ['check' => 'internal_links', 'status' => 'pass', 'severity' => 'info', 'message' => 'Internal link coverage detected.'];
+            }
+
+            if ($pageSignals['schema_count'] === 0) {
+                $checks[] = ['check' => 'schema_markup', 'status' => 'warn', 'severity' => 'warning', 'message' => 'No structured data detected on the page.'];
+                $warnings++;
+                $score -= 6;
+            } else {
+                $checks[] = ['check' => 'schema_markup', 'status' => 'pass', 'severity' => 'info', 'message' => 'Structured data detected (' . $pageSignals['schema_count'] . ').'];
             }
         } else {
             $checks[] = ['check' => 'home_reachable', 'status' => 'fail', 'severity' => 'critical', 'message' => 'Homepage unreachable (' . $homeStatus . ').'];
@@ -5830,7 +6026,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.24-seo-latest-compare',
+        'phase' => '2.25-seo-link-schema-baseline',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8705,6 +8901,11 @@ if ($action === 'seo.extension.intake') {
         'source' => 'browser_extension',
         'created_at' => gmdate('c'),
     ];
+    $event['page_signals'] = seo_normalize_page_signals(isset($data['page_signals']) && is_array($data['page_signals']) ? $data['page_signals'] : []);
+    if ($event['title'] !== '' && (string) ($event['page_signals']['title'] ?? '') === '') {
+        $event['page_signals']['title'] = $event['title'];
+        $event['page_signals']['title_length'] = strlen($event['title']);
+    }
     $eventRollup = seo_issue_rollup_from_checks(is_array($event['issues']) ? $event['issues'] : []);
     $event['priority_summary'] = $eventRollup['priority_summary'];
     $event['issue_rollup'] = $eventRollup['issues'];
@@ -8739,6 +8940,7 @@ if ($action === 'seo.extension.intake') {
             'score' => (int) $event['score'],
             'critical_issues' => (int) ($eventRollup['priority_summary']['critical'] ?? 0),
             'warnings' => is_array($event['issues']) ? count($event['issues']) : 0,
+            'page_signals' => $event['page_signals'],
             'priority_summary' => $eventRollup['priority_summary'],
             'issue_rollup' => $eventRollup['issues'],
             'checks' => is_array($event['issues']) ? $event['issues'] : [],
