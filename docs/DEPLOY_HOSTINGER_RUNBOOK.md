@@ -78,6 +78,7 @@
 25. After sustained healthy watchdog checks, verify auto-resolution entries appear in watchdog runs/state before final cutover approval.
 26. Configure `Save Watchdogs Policy` thresholds to match operational tolerance (critical escalation streak and healthy auto-resolve streak).
 27. Review `Refresh Watchdogs Policy History` before launch to confirm threshold changes and actor/source audit trail.
+28. If needed, use `Restore Watchdogs Policy` (with optional history ID + mode) to roll back thresholds quickly and log the restore action.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

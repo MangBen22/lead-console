@@ -545,8 +545,16 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <label>Watchdogs incident note<input id="watchdogsIncidentNoteInput" type="text" placeholder="Optional note for resolve/reopen watchdog incident actions..." /></label>
                 <label>Auto-incident threshold (critical streak)<input id="watchdogsAutoIncidentThresholdInput" type="number" min="1" max="10" value="2" /></label>
                 <label>Auto-resolve threshold (OK streak)<input id="watchdogsAutoResolveThresholdInput" type="number" min="1" max="10" value="2" /></label>
+                <label>Policy history ID (optional for restore)<input id="watchdogsPolicyHistoryIdInput" type="text" placeholder="watchdogs_policy_YYYYMMDD_HHMMSS_xxxxxx" /></label>
+                <label>Restore mode
+                    <select id="watchdogsPolicyRestoreMode">
+                        <option value="previous">previous</option>
+                        <option value="current">current</option>
+                    </select>
+                </label>
                 <div class="actions">
                     <button id="saveWatchdogsPolicyBtn" type="button">Save Watchdogs Policy</button>
+                    <button id="restoreWatchdogsPolicyBtn" type="button">Restore Watchdogs Policy</button>
                     <button id="refreshWatchdogsPolicyHistoryBtn" type="button">Refresh Watchdogs Policy History</button>
                 </div>
                 <pre id="goLiveStatusView">Loading...</pre>
