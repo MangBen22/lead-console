@@ -126,6 +126,8 @@
   const releaseGateRunsSourceGroupFilter = document.getElementById("releaseGateRunsSourceGroupFilter");
   const releaseGateRunsSourceFilter = document.getElementById("releaseGateRunsSourceFilter");
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
+  const releaseGateRunsReasonMinInput = document.getElementById("releaseGateRunsReasonMinInput");
+  const releaseGateRunsReasonMaxInput = document.getElementById("releaseGateRunsReasonMaxInput");
   const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
@@ -526,6 +528,14 @@
     const failedItem = releaseGateRunsFailedItemFilter && releaseGateRunsFailedItemFilter.value
       ? releaseGateRunsFailedItemFilter.value.trim()
       : "";
+    const reasonMinRaw = releaseGateRunsReasonMinInput && releaseGateRunsReasonMinInput.value !== ""
+      ? Number(releaseGateRunsReasonMinInput.value)
+      : null;
+    const reasonMaxRaw = releaseGateRunsReasonMaxInput && releaseGateRunsReasonMaxInput.value !== ""
+      ? Number(releaseGateRunsReasonMaxInput.value)
+      : null;
+    const reasonMin = reasonMinRaw === null || !Number.isFinite(reasonMinRaw) ? null : Math.max(0, Math.min(50, Math.round(reasonMinRaw)));
+    const reasonMax = reasonMaxRaw === null || !Number.isFinite(reasonMaxRaw) ? null : Math.max(0, Math.min(50, Math.round(reasonMaxRaw)));
     const transitionLimitRaw = releaseGateRunsTransitionLimitInput && releaseGateRunsTransitionLimitInput.value
       ? Number(releaseGateRunsTransitionLimitInput.value)
       : 12;
@@ -540,6 +550,8 @@
       source_group: sourceGroup,
       source: source,
       failed_item: failedItem,
+      reason_count_min: reasonMin,
+      reason_count_max: reasonMax,
       transition_limit: transitionLimit,
     };
     try {
@@ -621,6 +633,8 @@
       + ", source_group=" + String(f.source_group || "all")
       + ", source=" + String(f.source || "(any)")
       + ", failed_item=" + String(f.failed_item || "(any)")
+      + ", reason_count_min=" + (f.reason_count_min === null || f.reason_count_min === undefined ? "(any)" : String(f.reason_count_min))
+      + ", reason_count_max=" + (f.reason_count_max === null || f.reason_count_max === undefined ? "(any)" : String(f.reason_count_max))
       + ", transition_limit=" + String(f.transition_limit || 12));
     lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
     lines.push("Ratios: allowed=" + String(allowedRatio) + "%, blocked=" + String(blockedRatio) + "%");
@@ -746,6 +760,12 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
+    }
     if (releaseGateRunsTransitionLimitInput) {
       releaseGateRunsTransitionLimitInput.value = "12";
     }
@@ -799,6 +819,18 @@
       if (releaseGateRunsFailedItemFilter && typeof stored.failed_item === "string") {
         releaseGateRunsFailedItemFilter.value = stored.failed_item;
       }
+      if (releaseGateRunsReasonMinInput && stored.reason_count_min !== undefined && stored.reason_count_min !== null) {
+        const parsed = Number(stored.reason_count_min);
+        if (Number.isFinite(parsed)) {
+          releaseGateRunsReasonMinInput.value = String(Math.max(0, Math.min(50, Math.round(parsed))));
+        }
+      }
+      if (releaseGateRunsReasonMaxInput && stored.reason_count_max !== undefined && stored.reason_count_max !== null) {
+        const parsed = Number(stored.reason_count_max);
+        if (Number.isFinite(parsed)) {
+          releaseGateRunsReasonMaxInput.value = String(Math.max(0, Math.min(50, Math.round(parsed))));
+        }
+      }
       if (releaseGateRunsTransitionLimitInput && stored.transition_limit !== undefined && stored.transition_limit !== null) {
         const parsed = Number(stored.transition_limit);
         const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(50, Math.round(parsed))) : 12;
@@ -825,6 +857,12 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = failedItem || "";
+    }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
@@ -862,6 +900,12 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
+    }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
@@ -894,6 +938,12 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
@@ -928,6 +978,12 @@
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
     }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
+    }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
@@ -960,6 +1016,12 @@
     }
     if (releaseGateRunsFailedItemFilter) {
       releaseGateRunsFailedItemFilter.value = "";
+    }
+    if (releaseGateRunsReasonMinInput) {
+      releaseGateRunsReasonMinInput.value = "";
+    }
+    if (releaseGateRunsReasonMaxInput) {
+      releaseGateRunsReasonMaxInput.value = "";
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";

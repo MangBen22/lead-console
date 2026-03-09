@@ -1858,6 +1858,15 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
     $sourceFilter = trim((string) ($query['source'] ?? ''));
     $failedItemFilterRaw = trim((string) ($query['failed_item'] ?? ''));
     $failedItemFilter = strtolower($failedItemFilterRaw);
+    $reasonCountMinRaw = isset($query['reason_count_min']) ? trim((string) $query['reason_count_min']) : '';
+    $reasonCountMaxRaw = isset($query['reason_count_max']) ? trim((string) $query['reason_count_max']) : '';
+    $reasonCountMin = ($reasonCountMinRaw === '') ? null : max(0, min(50, (int) $reasonCountMinRaw));
+    $reasonCountMax = ($reasonCountMaxRaw === '') ? null : max(0, min(50, (int) $reasonCountMaxRaw));
+    if ($reasonCountMin !== null && $reasonCountMax !== null && $reasonCountMin > $reasonCountMax) {
+        $swap = $reasonCountMin;
+        $reasonCountMin = $reasonCountMax;
+        $reasonCountMax = $swap;
+    }
 
     $sourceRows = ($window > 0) ? array_slice($runs, 0, $window) : $runs;
     $filtered = [];
@@ -1904,6 +1913,13 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         if ($sourceFilter !== '' && !hash_equals(strtolower(trim((string) ($row['source'] ?? ''))), strtolower($sourceFilter))) {
             continue;
         }
+        $reasonCount = isset($row['reason_count']) ? (int) $row['reason_count'] : 0;
+        if ($reasonCountMin !== null && $reasonCount < $reasonCountMin) {
+            continue;
+        }
+        if ($reasonCountMax !== null && $reasonCount > $reasonCountMax) {
+            continue;
+        }
         if ($failedItemFilter !== '') {
             $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
             $matched = false;
@@ -1936,6 +1952,8 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'source_group' => $sourceGroupFilter,
             'source' => $sourceFilter,
             'failed_item' => $failedItemFilterRaw,
+            'reason_count_min' => $reasonCountMin,
+            'reason_count_max' => $reasonCountMax,
         ],
     ];
 }
@@ -3379,7 +3397,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.87-release-gate-source-group-filter',
+        'phase' => '1.88-release-gate-reason-count-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4707,7 +4725,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.87-release-gate-source-group-filter',
+        'phase' => '1.88-release-gate-reason-count-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
