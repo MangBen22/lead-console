@@ -2254,7 +2254,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.40-deployment-watchdogs-status',
+        'phase' => '1.41-pipeline-watchdogs-gate',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2736,6 +2736,10 @@ function deployment_pipeline_run_snapshot($note = '')
     $verify = deployment_verify_snapshot();
     $goLive = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
+    $watchdogWindow = isset($guardEval['guard']['release_gate_freshness_minutes'])
+        ? (int) $guardEval['guard']['release_gate_freshness_minutes']
+        : null;
+    $watchdogs = deployment_watchdogs_status_snapshot($watchdogWindow);
 
     $status = 'ready';
     if ((string) ($install['status'] ?? 'warning') === 'critical') {
@@ -2753,6 +2757,9 @@ function deployment_pipeline_run_snapshot($note = '')
     if (empty($guardEval['allowed'])) {
         $status = 'blocked';
     }
+    if ((string) ($watchdogs['status'] ?? 'warning') === 'critical') {
+        $status = 'blocked';
+    }
 
     $run = [
         'run_id' => 'pipeline_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
@@ -2765,8 +2772,13 @@ function deployment_pipeline_run_snapshot($note = '')
             'verify_status' => (string) ($verify['status'] ?? 'warning'),
             'go_live_status' => (string) ($goLive['status'] ?? 'review_required'),
             'guard_allowed' => !empty($guardEval['allowed']) ? 1 : 0,
+            'watchdogs_status' => (string) ($watchdogs['status'] ?? 'warning'),
         ],
         'guard_reasons' => $guardEval['reasons'],
+        'watchdogs' => [
+            'status' => (string) ($watchdogs['status'] ?? 'warning'),
+            'summary' => isset($watchdogs['summary']) && is_array($watchdogs['summary']) ? $watchdogs['summary'] : [],
+        ],
     ];
 
     $rows = app_read_json_file(deployment_pipeline_runs_path(), []);
@@ -2781,6 +2793,7 @@ function deployment_pipeline_run_snapshot($note = '')
         'verify' => $verify,
         'go_live' => $goLive,
         'guard' => $guardEval,
+        'watchdogs' => $watchdogs,
     ];
 }
 
@@ -3551,7 +3564,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.40-deployment-watchdogs-status',
+        'phase' => '1.41-pipeline-watchdogs-gate',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
