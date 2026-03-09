@@ -465,6 +465,7 @@ function default_deployment_guard()
         'release_gate_require_readiness' => 1,
         'release_gate_require_public_smoke' => 1,
         'release_gate_require_auth_smoke' => 1,
+        'release_gate_require_cutover_signoff' => 0,
         'updated_at' => gmdate('c'),
     ];
 }
@@ -1129,8 +1130,10 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
     $requireReadiness = !empty($guardCfg['release_gate_require_readiness']) ? 1 : 0;
     $requirePublic = !empty($guardCfg['release_gate_require_public_smoke']) ? 1 : 0;
     $requireAuth = !empty($guardCfg['release_gate_require_auth_smoke']) ? 1 : 0;
+    $requireSignoff = !empty($guardCfg['release_gate_require_cutover_signoff']) ? 1 : 0;
     $readiness = deployment_cutover_readiness_snapshot();
     $history = deployment_smoke_history_snapshot();
+    $latestSignoff = deployment_cutover_signoff_latest_snapshot();
     $now = time();
     $latestPublicPass = null;
     $latestAuthPass = null;
@@ -1188,6 +1191,14 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             ? ('Latest passing auth smoke age: ' . (int) $authAge . ' minute(s).')
             : 'No passing auth smoke run found.',
     ];
+    $checks[] = [
+        'item' => 'cutover_signoff_fresh',
+        'required' => $requireSignoff,
+        'ok' => !$requireSignoff || !empty($latestSignoff['is_fresh']),
+        'message' => !empty($latestSignoff['latest'])
+            ? ('Latest cutover signoff age: ' . (int) ($latestSignoff['age_minutes'] ?? 0) . ' minute(s).')
+            : 'No cutover signoff found.',
+    ];
 
     $reasons = [];
     foreach ($checks as $check) {
@@ -1204,6 +1215,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
             'require_readiness' => $requireReadiness,
             'require_public_smoke' => $requirePublic,
             'require_auth_smoke' => $requireAuth,
+            'require_cutover_signoff' => $requireSignoff,
         ],
         'reasons' => $reasons,
         'checks' => $checks,
@@ -1211,6 +1223,7 @@ function deployment_release_gate_snapshot($freshnessMinutes = null)
         'latest_auth_pass' => $latestAuthPass,
         'latest_public_pass_age_minutes' => $publicAge,
         'latest_auth_pass_age_minutes' => $authAge,
+        'latest_cutover_signoff' => $latestSignoff,
         'readiness' => [
             'status' => (string) ($readiness['status'] ?? 'review_required'),
             'summary' => isset($readiness['summary']) && is_array($readiness['summary']) ? $readiness['summary'] : [],
@@ -2060,7 +2073,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.33-cutover-signoff-workflow',
+        'phase' => '1.34-release-gate-signoff-requirement',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3126,6 +3139,7 @@ if ($action === 'deployment.release.gate.settings.get') {
         'require_readiness' => !empty($guard['release_gate_require_readiness']) ? 1 : 0,
         'require_public_smoke' => !empty($guard['release_gate_require_public_smoke']) ? 1 : 0,
         'require_auth_smoke' => !empty($guard['release_gate_require_auth_smoke']) ? 1 : 0,
+        'require_cutover_signoff' => !empty($guard['release_gate_require_cutover_signoff']) ? 1 : 0,
     ];
     out_json([
         'ok' => true,
@@ -3149,6 +3163,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'release_gate_require_readiness' => !empty($data['require_readiness']) ? 1 : 0,
         'release_gate_require_public_smoke' => !empty($data['require_public_smoke']) ? 1 : 0,
         'release_gate_require_auth_smoke' => !empty($data['require_auth_smoke']) ? 1 : 0,
+        'release_gate_require_cutover_signoff' => !empty($data['require_cutover_signoff']) ? 1 : 0,
     ];
     $saved = save_deployment_guard($settings);
     push_notification('info', 'Release gate settings updated.', [
@@ -3159,6 +3174,7 @@ if ($action === 'deployment.release.gate.settings.save') {
         'require_readiness' => !empty($saved['release_gate_require_readiness']) ? 1 : 0,
         'require_public_smoke' => !empty($saved['release_gate_require_public_smoke']) ? 1 : 0,
         'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
+        'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
     ]);
     out_json([
         'ok' => true,
@@ -3167,6 +3183,7 @@ if ($action === 'deployment.release.gate.settings.save') {
             'require_readiness' => !empty($saved['release_gate_require_readiness']) ? 1 : 0,
             'require_public_smoke' => !empty($saved['release_gate_require_public_smoke']) ? 1 : 0,
             'require_auth_smoke' => !empty($saved['release_gate_require_auth_smoke']) ? 1 : 0,
+            'require_cutover_signoff' => !empty($saved['release_gate_require_cutover_signoff']) ? 1 : 0,
         ],
         'gate' => deployment_release_gate_snapshot(null),
         'time' => gmdate('c'),
