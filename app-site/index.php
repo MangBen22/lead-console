@@ -541,6 +541,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="resolveWatchdogsIncidentBtn" type="button">Resolve Watchdogs Incident</button>
                     <button id="reopenWatchdogsIncidentBtn" type="button">Reopen Watchdogs Incident</button>
                 </div>
+                <label>Watchdogs incident note<input id="watchdogsIncidentNoteInput" type="text" placeholder="Optional note for resolve/reopen watchdog incident actions..." /></label>
                 <pre id="goLiveStatusView">Loading...</pre>
                 <pre id="releaseGateSettingsView">Loading release gate settings...</pre>
                 <pre id="releaseGateView">Loading release gate...</pre>

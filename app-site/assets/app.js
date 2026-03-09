@@ -92,6 +92,7 @@
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
   const watchdogsRunsView = document.getElementById("watchdogsRunsView");
   const watchdogsIncidentView = document.getElementById("watchdogsIncidentView");
+  const watchdogsIncidentNoteInput = document.getElementById("watchdogsIncidentNoteInput");
   const releaseCandidateView = document.getElementById("releaseCandidateView");
   const artifactManifestView = document.getElementById("artifactManifestView");
   const artifactBaselineInput = document.getElementById("artifactBaselineInput");
@@ -470,7 +471,8 @@
   }
 
   async function resolveWatchdogsIncident() {
-    const result = await apiPost("deployment.watchdogs.incident.resolve", {});
+    const note = watchdogsIncidentNoteInput && watchdogsIncidentNoteInput.value ? watchdogsIncidentNoteInput.value.trim() : "";
+    const result = await apiPost("deployment.watchdogs.incident.resolve", { note: note });
     if (watchdogsIncidentView) {
       watchdogsIncidentView.textContent = JSON.stringify(result, null, 2);
     }
@@ -486,7 +488,8 @@
   }
 
   async function reopenWatchdogsIncident() {
-    const result = await apiPost("deployment.watchdogs.incident.reopen", {});
+    const note = watchdogsIncidentNoteInput && watchdogsIncidentNoteInput.value ? watchdogsIncidentNoteInput.value.trim() : "";
+    const result = await apiPost("deployment.watchdogs.incident.reopen", { note: note });
     if (watchdogsIncidentView) {
       watchdogsIncidentView.textContent = JSON.stringify(result, null, 2);
     }
