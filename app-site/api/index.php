@@ -3472,7 +3472,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.98-release-gate-meta-breakdowns',
+        'phase' => '1.99-release-gate-quickstats-digest',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4800,7 +4800,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.98-release-gate-meta-breakdowns',
+        'phase' => '1.99-release-gate-quickstats-digest',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5147,6 +5147,18 @@ if ($action === 'deployment.release.gate.runs.quickstats') {
     $sustainedState = deployment_release_gate_sustained_state_snapshot($state);
     $transitionLimit = deployment_release_gate_sustained_transition_limit_from_query($_GET, 12);
     $sustainedTimeline = deployment_release_gate_sustained_timeline_snapshot($items, $transitionLimit);
+    $blockedRatio = isset($summary['blocked_ratio_percent']) ? (float) $summary['blocked_ratio_percent'] : 0.0;
+    $statusChangedRatio = isset($summary['status_changed_ratio_percent']) ? (float) $summary['status_changed_ratio_percent'] : 0.0;
+    $sustainedActive = !empty($sustainedState['active']) ? 1 : 0;
+    $sustainedRecentRatio = isset($sustainedState['recent_ratio_percent']) ? (float) $sustainedState['recent_ratio_percent'] : 0.0;
+    $quickDigestLines = [];
+    $quickDigestLines[] = 'count=' . count($items)
+        . ', blocked_ratio=' . $blockedRatio . '%'
+        . ', status_changed_ratio=' . $statusChangedRatio . '%';
+    $quickDigestLines[] = 'sustained=' . ($sustainedActive === 1 ? 'active' : 'clear')
+        . ', recent_ratio=' . $sustainedRecentRatio . '%'
+        . ', transition_count=' . (int) ($sustainedTimeline['transition_count'] ?? 0);
+    $quickDigest = implode("\n", $quickDigestLines);
     out_json([
         'ok' => true,
         'count' => count($items),
@@ -5155,6 +5167,7 @@ if ($action === 'deployment.release.gate.runs.quickstats') {
         'sustained_state' => $sustainedState,
         'sustained_timeline' => $sustainedTimeline,
         'sustained_transition_limit' => $transitionLimit,
+        'quick_digest' => $quickDigest,
         'time' => gmdate('c'),
     ]);
 }

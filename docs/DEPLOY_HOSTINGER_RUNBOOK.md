@@ -125,6 +125,7 @@
 72. Use summary pointers (`latest_allowed_run`, `latest_status_change_run`) for faster recovery/regression timeline reads.
 73. Use `Refresh Quickstats` for fast, filtered summary checks without reading the full gate runs payload.
 74. Use Gate Meta breakdowns (`source_group_counts`, `status_change_counts`, `transition_to_counts`) to choose filters before deep dives.
+75. Use `quick_digest` from quickstats when you need a compact status line for handoff notes.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
