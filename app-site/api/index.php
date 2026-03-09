@@ -2073,7 +2073,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.34-release-gate-signoff-requirement',
+        'phase' => '1.35-cutover-signoff-integrity',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -2139,7 +2139,9 @@ function deployment_cutover_signoff_create_snapshot($note = '')
         'status' => 'approved',
         'note' => trim((string) $note),
         'evidence_bundle_id' => (string) ($evidence['bundle_id'] ?? ''),
+        'evidence_digest_version' => 'sha256_json_v1',
         'evidence_sha256' => hash('sha256', json_encode($evidence, JSON_UNESCAPED_SLASHES)),
+        'evidence_bundle' => $evidence,
         'summary' => [
             'readiness_status' => (string) ($evidence['summary']['readiness_status'] ?? 'review_required'),
             'release_gate_allowed' => !empty($evidence['summary']['release_gate_allowed']) ? 1 : 0,
@@ -2187,6 +2189,120 @@ function deployment_cutover_signoff_latest_snapshot()
         'freshness_window_minutes' => $window,
         'age_minutes' => $age,
         'is_fresh' => $isFresh ? 1 : 0,
+    ];
+}
+
+function deployment_cutover_signoff_verify_item($row)
+{
+    if (!is_array($row)) {
+        return [
+            'signoff_id' => '',
+            'created_at' => '',
+            'verifiable' => 0,
+            'valid' => 0,
+            'reason' => 'invalid_signoff_row',
+            'bundle_id_match' => 0,
+            'hash_match' => 0,
+        ];
+    }
+    $signoffId = (string) ($row['signoff_id'] ?? '');
+    $createdAt = (string) ($row['created_at'] ?? '');
+    $expectedHash = (string) ($row['evidence_sha256'] ?? '');
+    $expectedBundleId = (string) ($row['evidence_bundle_id'] ?? '');
+    $evidence = isset($row['evidence_bundle']) && is_array($row['evidence_bundle']) ? $row['evidence_bundle'] : null;
+
+    if (!is_array($evidence)) {
+        return [
+            'signoff_id' => $signoffId,
+            'created_at' => $createdAt,
+            'verifiable' => 0,
+            'valid' => 0,
+            'reason' => 'legacy_signoff_missing_embedded_evidence',
+            'bundle_id_match' => 0,
+            'hash_match' => 0,
+        ];
+    }
+
+    $actualHash = hash('sha256', json_encode($evidence, JSON_UNESCAPED_SLASHES));
+    $actualBundleId = (string) ($evidence['bundle_id'] ?? '');
+    $bundleIdMatch = ($expectedBundleId !== '' && $actualBundleId !== '' && $expectedBundleId === $actualBundleId) ? 1 : 0;
+    $hashMatch = ($expectedHash !== '' && hash_equals($expectedHash, $actualHash)) ? 1 : 0;
+    $valid = ($bundleIdMatch === 1 && $hashMatch === 1) ? 1 : 0;
+    $reason = $valid === 1 ? 'ok' : (($bundleIdMatch === 0) ? 'bundle_id_mismatch' : 'hash_mismatch');
+
+    return [
+        'signoff_id' => $signoffId,
+        'created_at' => $createdAt,
+        'verifiable' => 1,
+        'valid' => $valid,
+        'reason' => $reason,
+        'bundle_id_match' => $bundleIdMatch,
+        'hash_match' => $hashMatch,
+        'expected_bundle_id' => $expectedBundleId,
+        'actual_bundle_id' => $actualBundleId,
+        'expected_sha256' => $expectedHash,
+        'actual_sha256' => $actualHash,
+    ];
+}
+
+function deployment_cutover_signoff_verify_snapshot($signoffId = '')
+{
+    $rows = deployment_cutover_signoff_list_snapshot();
+    $target = null;
+    if ($signoffId === '') {
+        $target = (!empty($rows) && is_array($rows[0])) ? $rows[0] : null;
+    } else {
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if ((string) ($row['signoff_id'] ?? '') === (string) $signoffId) {
+                $target = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($target)) {
+        return [
+            'ok' => false,
+            'error' => 'Cutover signoff not found.',
+            'signoff_id' => (string) $signoffId,
+        ];
+    }
+    return [
+        'ok' => true,
+        'check' => deployment_cutover_signoff_verify_item($target),
+    ];
+}
+
+function deployment_cutover_signoff_verify_all_snapshot($limit = 100)
+{
+    $max = max(1, min(500, (int) $limit));
+    $rows = array_slice(deployment_cutover_signoff_list_snapshot(), 0, $max);
+    $items = [];
+    $summary = [
+        'total' => 0,
+        'valid' => 0,
+        'invalid' => 0,
+        'legacy_unverifiable' => 0,
+    ];
+    foreach ($rows as $row) {
+        $check = deployment_cutover_signoff_verify_item($row);
+        $items[] = $check;
+        $summary['total']++;
+        if (empty($check['verifiable'])) {
+            $summary['legacy_unverifiable']++;
+            continue;
+        }
+        if (!empty($check['valid'])) {
+            $summary['valid']++;
+        } else {
+            $summary['invalid']++;
+        }
+    }
+    return [
+        'summary' => $summary,
+        'items' => $items,
     ];
 }
 
@@ -3825,6 +3941,34 @@ if ($action === 'deployment.cutover.signoff.latest') {
         'latest' => deployment_cutover_signoff_latest_snapshot(),
         'time' => gmdate('c'),
     ]);
+}
+
+if ($action === 'deployment.cutover.signoff.verify') {
+    $signoffId = isset($_GET['signoff_id']) ? (string) $_GET['signoff_id'] : '';
+    $snap = deployment_cutover_signoff_verify_snapshot($signoffId);
+    if (empty($snap['ok'])) {
+        out_json([
+            'ok' => false,
+            'error' => (string) ($snap['error'] ?? 'Verification failed.'),
+            'signoff_id' => (string) ($snap['signoff_id'] ?? $signoffId),
+            'time' => gmdate('c'),
+        ], 404);
+    }
+    out_json([
+        'ok' => true,
+        'check' => $snap['check'],
+        'time' => gmdate('c'),
+    ], !empty($snap['check']['valid']) ? 200 : 409);
+}
+
+if ($action === 'deployment.cutover.signoff.verify_all') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 100;
+    $snap = deployment_cutover_signoff_verify_all_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'verification' => $snap,
+        'time' => gmdate('c'),
+    ], ((int) ($snap['summary']['invalid'] ?? 0) === 0) ? 200 : 409);
 }
 
 if ($action === 'deployment.cutover.readiness') {

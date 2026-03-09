@@ -60,6 +60,7 @@
 12. Run `Run Gate Watch` and archive gate watch runs (`Refresh Gate Runs`) as part of cutover evidence.
 13. Click `Download Cutover Evidence` and archive the bundle JSON with deployment records.
 14. Click `Create Cutover Signoff` (requires gate allowed), then `Download Latest Signoff` and archive it with the evidence bundle.
+15. Run `Verify Latest Signoff` (and optionally `Verify All Signoffs`) to confirm signoff evidence hash integrity before final launch.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

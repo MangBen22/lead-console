@@ -588,6 +588,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="createCutoverSignoffBtn" type="button">Create Cutover Signoff</button>
                     <button id="refreshCutoverSignoffsBtn" type="button">Refresh Signoffs</button>
                     <button id="downloadLatestSignoffBtn" type="button">Download Latest Signoff</button>
+                    <button id="verifyLatestSignoffBtn" type="button">Verify Latest Signoff</button>
+                    <button id="verifyAllSignoffsBtn" type="button">Verify All Signoffs</button>
                     <button id="recordPublicSmokePassBtn" type="button">Record Public Smoke Pass</button>
                     <button id="recordPublicSmokeFailBtn" type="button">Record Public Smoke Fail</button>
                     <button id="recordAuthSmokePassBtn" type="button">Record Auth Smoke Pass</button>
@@ -598,6 +600,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="cutoverSmokeRecordView">No smoke record action yet.</pre>
                 <pre id="cutoverSignoffResultView">No cutover signoff action yet.</pre>
                 <pre id="cutoverSignoffListView">Loading cutover signoffs...</pre>
+                <pre id="cutoverSignoffVerifyView">No signoff verification yet.</pre>
                 <h3>Install Check</h3>
                 <pre id="installCheckView">Loading...</pre>
                 <h3>Post-Deploy Verify</h3>
