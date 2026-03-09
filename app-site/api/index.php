@@ -1779,6 +1779,7 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
     }
     $failedItems = deployment_release_gate_failed_items($gate);
     sort($failedItems);
+    $blockerDigest = empty($failedItems) ? 'none' : implode(', ', array_slice($failedItems, 0, 3));
     $previousFailedItems = isset($state['last_failed_items']) && is_array($state['last_failed_items']) ? $state['last_failed_items'] : [];
     sort($previousFailedItems);
     $failedItemsChanged = ($failedItems !== $previousFailedItems) ? 1 : 0;
@@ -1822,6 +1823,7 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
             'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
             'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
             'failed_items' => $failedItems,
+            'blocker_digest' => $blockerDigest,
             'blocker_flags' => [
                 'baseline_match_blocked' => $baselineMatchBlocked,
                 'baseline_check_blocked' => $baselineCheckBlocked,
@@ -1835,6 +1837,7 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
             'source' => (string) $source,
             'freshness_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
             'failed_items' => $failedItems,
+            'blocker_digest' => $blockerDigest,
             'blocker_flags' => [
                 'baseline_match_blocked' => $baselineMatchBlocked,
                 'baseline_check_blocked' => $baselineCheckBlocked,
@@ -1862,6 +1865,7 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
         'reason_count' => isset($gate['reasons']) && is_array($gate['reasons']) ? count($gate['reasons']) : 0,
         'reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
         'failed_items' => $failedItems,
+        'blocker_digest' => $blockerDigest,
         'failed_items_changed' => $failedItemsChanged,
         'blocker_flags' => [
             'baseline_match_blocked' => $baselineMatchBlocked,
@@ -1879,6 +1883,7 @@ function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMi
         'last_allowed' => $allowed,
         'last_reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
         'last_failed_items' => $failedItems,
+        'last_blocker_digest' => $blockerDigest,
         'last_run_id' => (string) ($run['run_id'] ?? ''),
         'last_source' => (string) $source,
         'last_alert_at' => $alertSent === 1 ? $now : (string) ($state['last_alert_at'] ?? ''),
@@ -3141,7 +3146,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.70-release-gate-digest-panel',
+        'phase' => '1.71-release-gate-notification-digest',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4469,7 +4474,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.70-release-gate-digest-panel',
+        'phase' => '1.71-release-gate-notification-digest',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

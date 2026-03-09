@@ -97,6 +97,7 @@
 44. Use `Scheduler Gate Summary` panel to monitor gate blocker trends during cron-only windows without opening raw scheduler JSON.
 45. Use `Download Blocker Report` to capture gate snapshot + filtered run analytics for escalation or launch review sign-off.
 46. Use `gate watch digest` panel for a quick plain-language summary of blocked trends and top failing checks.
+47. Gate-watch notifications now include `blocker_digest`; use it for quick triage before opening full run payloads.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
