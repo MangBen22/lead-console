@@ -49,6 +49,9 @@
 3. Verify `backup.export` and `backup.import` both work.
 4. Run deployment public-endpoint smoke test from repo root:
    - `powershell -ExecutionPolicy Bypass -File scripts\smoke-deploy.ps1 -BaseUrl https://app.5n2digital.com`
+5. Run authenticated smoke test from repo root:
+   - `powershell -ExecutionPolicy Bypass -File scripts\smoke-auth.ps1 -BaseUrl https://app.5n2digital.com -Email owner@yourdomain.com -Password "your-strong-password"`
+6. Confirm all authenticated checks return `ok=True` and no endpoint reports HTTP 5xx.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
