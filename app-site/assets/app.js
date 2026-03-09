@@ -30,6 +30,7 @@
   const refreshReleaseGateRunsBtn = document.getElementById("refreshReleaseGateRunsBtn");
   const applyReleaseGateRunsFilterBtn = document.getElementById("applyReleaseGateRunsFilterBtn");
   const clearReleaseGateRunsFilterBtn = document.getElementById("clearReleaseGateRunsFilterBtn");
+  const refreshReleaseGateRunsMetaBtn = document.getElementById("refreshReleaseGateRunsMetaBtn");
   const downloadReleaseGateRunsBtn = document.getElementById("downloadReleaseGateRunsBtn");
   const downloadReleaseGateBlockerReportBtn = document.getElementById("downloadReleaseGateBlockerReportBtn");
   const applyGatePresetBaselineMatchBtn = document.getElementById("applyGatePresetBaselineMatchBtn");
@@ -118,6 +119,7 @@
   const releaseGateRunsView = document.getElementById("releaseGateRunsView");
   const releaseGateRunSummaryView = document.getElementById("releaseGateRunSummaryView");
   const releaseGateRunDigestView = document.getElementById("releaseGateRunDigestView");
+  const releaseGateRunsMetaView = document.getElementById("releaseGateRunsMetaView");
   const releaseGateSustainedView = document.getElementById("releaseGateSustainedView");
   const releaseGateRunsLimitInput = document.getElementById("releaseGateRunsLimitInput");
   const releaseGateRunsWindowInput = document.getElementById("releaseGateRunsWindowInput");
@@ -728,6 +730,7 @@
           sustained_transition_limit: sustainedTransitionLimit,
         }, null, 2);
       }
+      await loadReleaseGateRunsMeta(params);
     } catch (err) {
       releaseGateRunsView.textContent = "Failed to load release gate runs.";
       if (releaseGateRunSummaryView) {
@@ -739,6 +742,20 @@
       if (releaseGateSustainedView) {
         releaseGateSustainedView.textContent = "Failed to load sustained gate trend.";
       }
+      if (releaseGateRunsMetaView) {
+        releaseGateRunsMetaView.textContent = "Failed to load gate filter metadata.";
+      }
+    }
+  }
+
+  async function loadReleaseGateRunsMeta(existingParams) {
+    if (!releaseGateRunsMetaView) return;
+    const params = existingParams && typeof existingParams === "object" ? existingParams : collectReleaseGateRunsFilters();
+    try {
+      const data = await apiGetWithParams("deployment.release.gate.runs.meta", params);
+      releaseGateRunsMetaView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseGateRunsMetaView.textContent = "Failed to load gate filter metadata.";
     }
   }
 
@@ -2609,6 +2626,12 @@
     clearReleaseGateRunsFilterBtn.addEventListener("click", async function () {
       resetReleaseGateRunsFilters();
       await loadReleaseGateRuns();
+    });
+  }
+
+  if (refreshReleaseGateRunsMetaBtn) {
+    refreshReleaseGateRunsMetaBtn.addEventListener("click", async function () {
+      await loadReleaseGateRunsMeta();
     });
   }
 

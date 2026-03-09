@@ -3433,7 +3433,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.93-release-gate-source-contains-filter',
+        'phase' => '1.94-release-gate-runs-meta',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4761,7 +4761,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.93-release-gate-source-contains-filter',
+        'phase' => '1.94-release-gate-runs-meta',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -5010,6 +5010,66 @@ if ($action === 'deployment.release.gate.runs') {
         'sustained_state' => $sustainedState,
         'sustained_timeline' => $sustainedTimeline,
         'sustained_transition_limit' => $transitionLimit,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.gate.runs.meta') {
+    $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $metaQuery = is_array($_GET) ? $_GET : [];
+    $metaQuery['source'] = '';
+    $metaQuery['source_contains'] = '';
+    $metaQuery['failed_item'] = '';
+    $metaQuery['failed_item_mode'] = 'exact';
+    $metaQuery['limit'] = 400;
+    $filter = deployment_release_gate_runs_apply_filters($runs, $metaQuery);
+    $items = isset($filter['items']) && is_array($filter['items']) ? $filter['items'] : [];
+
+    $sourceCounts = [];
+    $failedCounts = [];
+    foreach ($items as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $source = trim((string) ($row['source'] ?? ''));
+        if ($source === '') {
+            $source = '(unknown)';
+        }
+        if (!isset($sourceCounts[$source])) {
+            $sourceCounts[$source] = 0;
+        }
+        $sourceCounts[$source]++;
+
+        $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
+        foreach ($failedItems as $item) {
+            $key = trim((string) $item);
+            if ($key === '') {
+                continue;
+            }
+            if (!isset($failedCounts[$key])) {
+                $failedCounts[$key] = 0;
+            }
+            $failedCounts[$key]++;
+        }
+    }
+    if (!empty($sourceCounts)) {
+        arsort($sourceCounts);
+    }
+    if (!empty($failedCounts)) {
+        arsort($failedCounts);
+    }
+
+    out_json([
+        'ok' => true,
+        'items_considered' => count($items),
+        'applied_filters' => isset($filter['applied_filters']) && is_array($filter['applied_filters']) ? $filter['applied_filters'] : [],
+        'source_options' => array_slice($sourceCounts, 0, 50, true),
+        'failed_item_options' => array_slice($failedCounts, 0, 50, true),
+        'source_group_options' => ['all', 'scheduler', 'manual'],
+        'failed_item_mode_options' => ['exact', 'contains'],
         'time' => gmdate('c'),
     ]);
 }

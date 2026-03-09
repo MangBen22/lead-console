@@ -608,6 +608,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="applyReleaseGateRunsFilterBtn" type="button">Apply Gate Filters</button>
                     <button id="clearReleaseGateRunsFilterBtn" type="button">Clear Gate Filters</button>
+                    <button id="refreshReleaseGateRunsMetaBtn" type="button">Refresh Gate Meta</button>
                     <button id="downloadReleaseGateRunsBtn" type="button">Download Gate Runs</button>
                     <button id="downloadReleaseGateBlockerReportBtn" type="button">Download Blocker Report</button>
                 </div>
@@ -654,6 +655,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="releaseGateRunsView">Loading gate watch runs...</pre>
                 <pre id="releaseGateRunSummaryView">Loading gate watch summary...</pre>
                 <pre id="releaseGateRunDigestView">Loading gate watch digest...</pre>
+                <pre id="releaseGateRunsMetaView">Loading gate filter metadata...</pre>
                 <pre id="releaseGateSustainedView">Loading sustained gate trend...</pre>
                 <pre id="watchdogsStatusView">Loading watchdogs status...</pre>
                 <pre id="watchdogsCheckView">No watchdogs check run yet.</pre>

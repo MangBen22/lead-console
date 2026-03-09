@@ -120,6 +120,7 @@
 67. Use `Scheduler Group` and `Manual Group` presets for one-click source-group segmentation.
 68. Use `failed_item_mode=contains` when you need partial-text failed-item matching, otherwise keep `exact` for strict checks.
 69. Use `source_contains` for fuzzy source matching when exact source IDs are not known.
+70. Use `Refresh Gate Meta` to inspect top source and failed-item options before setting deep filters.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
