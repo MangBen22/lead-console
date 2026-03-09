@@ -126,6 +126,7 @@
 73. Use `Refresh Quickstats` for fast, filtered summary checks without reading the full gate runs payload.
 74. Use Gate Meta breakdowns (`source_group_counts`, `status_change_counts`, `transition_to_counts`) to choose filters before deep dives.
 75. Use `quick_digest` from quickstats when you need a compact status line for handoff notes.
+76. Use `High Noise` and `Low Noise` presets to jump to broad blocker-density segments quickly.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
