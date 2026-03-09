@@ -319,6 +319,11 @@ function deployment_watchdogs_runs_path()
     return app_storage_path('deployment_watchdogs_runs.json');
 }
 
+function deployment_watchdogs_policy_history_path()
+{
+    return app_storage_path('deployment_watchdogs_policy_history.json');
+}
+
 function deployment_cutover_signoffs_path()
 {
     return app_storage_path('deployment_cutover_signoffs.json');
@@ -369,6 +374,7 @@ function module_storage_map()
         'deployment_cutover_signoff_integrity_runs' => deployment_cutover_signoff_integrity_runs_path(),
         'deployment_watchdogs_state' => deployment_watchdogs_state_path(),
         'deployment_watchdogs_runs' => deployment_watchdogs_runs_path(),
+        'deployment_watchdogs_policy_history' => deployment_watchdogs_policy_history_path(),
         'deployment_cutover_signoffs' => deployment_cutover_signoffs_path(),
     ];
 }
@@ -1630,6 +1636,30 @@ function deployment_watchdogs_incident_summary_snapshot()
     ];
 }
 
+function deployment_watchdogs_policy_history_append($previous, $current, $source = 'dashboard_manual')
+{
+    $src = trim((string) $source);
+    if ($src === '') {
+        $src = 'dashboard_manual';
+    }
+    $entry = [
+        'history_id' => 'watchdogs_policy_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'actor' => current_actor(),
+        'source' => $src,
+        'previous' => is_array($previous) ? $previous : [],
+        'current' => is_array($current) ? $current : [],
+    ];
+    $rows = app_read_json_file(deployment_watchdogs_policy_history_path(), []);
+    if (!is_array($rows)) {
+        $rows = [];
+    }
+    array_unshift($rows, $entry);
+    $rows = array_slice($rows, 0, 400);
+    app_write_json_file(deployment_watchdogs_policy_history_path(), $rows);
+    return $entry;
+}
+
 function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $src = trim((string) $source);
@@ -2581,7 +2611,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.50-watchdogs-policy-settings',
+        'phase' => '1.51-watchdogs-policy-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3899,7 +3929,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.50-watchdogs-policy-settings',
+        'phase' => '1.51-watchdogs-policy-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4189,6 +4219,19 @@ if ($action === 'deployment.watchdogs.policy.get') {
     ]);
 }
 
+if ($action === 'deployment.watchdogs.policy.history') {
+    $rows = app_read_json_file(deployment_watchdogs_policy_history_path(), []);
+    if (!is_array($rows)) {
+        $rows = [];
+    }
+    out_json([
+        'ok' => true,
+        'count' => count($rows),
+        'items' => $rows,
+        'time' => gmdate('c'),
+    ]);
+}
+
 if ($action === 'deployment.watchdogs.policy.save') {
     app_require_owner();
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -4199,6 +4242,11 @@ if ($action === 'deployment.watchdogs.policy.save') {
     if (!is_array($data)) {
         $data = [];
     }
+    $guardBefore = get_deployment_guard();
+    $previous = [
+        'auto_incident_threshold' => max(1, min(10, (int) ($guardBefore['watchdogs_auto_incident_threshold'] ?? 2))),
+        'auto_resolve_ok_streak' => max(1, min(10, (int) ($guardBefore['watchdogs_auto_resolve_ok_streak'] ?? 2))),
+    ];
     $settings = [
         'watchdogs_auto_incident_threshold' => max(1, min(10, (int) ($data['auto_incident_threshold'] ?? 2))),
         'watchdogs_auto_resolve_ok_streak' => max(1, min(10, (int) ($data['auto_resolve_ok_streak'] ?? 2))),
@@ -4208,11 +4256,19 @@ if ($action === 'deployment.watchdogs.policy.save') {
         'auto_incident_threshold' => max(1, min(10, (int) ($saved['watchdogs_auto_incident_threshold'] ?? 2))),
         'auto_resolve_ok_streak' => max(1, min(10, (int) ($saved['watchdogs_auto_resolve_ok_streak'] ?? 2))),
     ];
-    audit_event('deployment', 'watchdogs.policy.save', $response);
+    $source = isset($data['source']) ? (string) $data['source'] : 'dashboard_manual';
+    $history = deployment_watchdogs_policy_history_append($previous, $response, $source);
+    audit_event('deployment', 'watchdogs.policy.save', [
+        'previous' => $previous,
+        'current' => $response,
+        'history_id' => (string) ($history['history_id'] ?? ''),
+        'source' => (string) ($history['source'] ?? ''),
+    ]);
     push_notification('info', 'Watchdogs policy settings updated.', $response);
     out_json([
         'ok' => true,
         'settings' => $response,
+        'history' => $history,
         'time' => gmdate('c'),
     ]);
 }

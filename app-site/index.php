@@ -547,6 +547,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <label>Auto-resolve threshold (OK streak)<input id="watchdogsAutoResolveThresholdInput" type="number" min="1" max="10" value="2" /></label>
                 <div class="actions">
                     <button id="saveWatchdogsPolicyBtn" type="button">Save Watchdogs Policy</button>
+                    <button id="refreshWatchdogsPolicyHistoryBtn" type="button">Refresh Watchdogs Policy History</button>
                 </div>
                 <pre id="goLiveStatusView">Loading...</pre>
                 <pre id="releaseGateSettingsView">Loading release gate settings...</pre>
@@ -559,6 +560,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="watchdogsIncidentView">Loading watchdogs incident...</pre>
                 <pre id="watchdogsIncidentSummaryView">Loading watchdogs incident summary...</pre>
                 <pre id="watchdogsPolicyView">Loading watchdogs policy...</pre>
+                <pre id="watchdogsPolicyHistoryView">Loading watchdogs policy history...</pre>
             </section>
 
             <section class="api-status">

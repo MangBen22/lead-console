@@ -77,6 +77,7 @@
 24. Use `Refresh Watchdogs Incident Summary` to confirm watchdog incident counts and latest open state are back within expected levels.
 25. After sustained healthy watchdog checks, verify auto-resolution entries appear in watchdog runs/state before final cutover approval.
 26. Configure `Save Watchdogs Policy` thresholds to match operational tolerance (critical escalation streak and healthy auto-resolve streak).
+27. Review `Refresh Watchdogs Policy History` before launch to confirm threshold changes and actor/source audit trail.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
