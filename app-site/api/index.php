@@ -3894,7 +3894,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.18-seo-issues-summary',
+        'phase' => '2.19-seo-history-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5784,7 +5784,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.18-seo-issues-summary',
+        'phase' => '2.19-seo-history-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8076,6 +8076,76 @@ if ($action === 'seo.issues.summary') {
         'audit_count' => count($rows),
         'priority_summary' => $prioritySummary,
         'issues' => $issues,
+        'project_id' => $projectId,
+    ]);
+}
+
+if ($action === 'seo.history.summary') {
+    $rows = app_read_json_file(seo_audits_path(), []);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    if ($projectId !== '') {
+        $rows = array_values(array_filter($rows, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $scores = [];
+    $projects = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $score = (int) ($row['score'] ?? 0);
+        $scores[] = $score;
+        $pid = (string) ($row['project_id'] ?? '');
+        if ($pid !== '') {
+            if (!isset($projects[$pid])) {
+                $projects[$pid] = [
+                    'project_id' => $pid,
+                    'project_name' => (string) ($row['project_name'] ?? ''),
+                    'audit_count' => 0,
+                    'latest_score' => $score,
+                    'best_score' => $score,
+                    'worst_score' => $score,
+                ];
+            }
+            $projects[$pid]['audit_count']++;
+            $projects[$pid]['latest_score'] = $score;
+            $projects[$pid]['best_score'] = max((int) $projects[$pid]['best_score'], $score);
+            $projects[$pid]['worst_score'] = min((int) $projects[$pid]['worst_score'], $score);
+        }
+    }
+    $average = empty($scores) ? 0 : round(array_sum($scores) / count($scores), 2);
+    $latestScore = isset($rows[0]) && is_array($rows[0]) ? (int) ($rows[0]['score'] ?? 0) : 0;
+    $previousScore = isset($rows[1]) && is_array($rows[1]) ? (int) ($rows[1]['score'] ?? 0) : null;
+    $trend = 'flat';
+    if ($previousScore !== null) {
+        if ($latestScore > $previousScore) {
+            $trend = 'up';
+        } elseif ($latestScore < $previousScore) {
+            $trend = 'down';
+        }
+    }
+    out_json([
+        'ok' => true,
+        'audit_count' => count($rows),
+        'summary' => [
+            'average_score' => $average,
+            'latest_score' => $latestScore,
+            'previous_score' => $previousScore,
+            'best_score' => empty($scores) ? 0 : max($scores),
+            'worst_score' => empty($scores) ? 0 : min($scores),
+            'trend' => $trend,
+        ],
+        'recent_scores' => array_values(array_map(static function ($row) {
+            return [
+                'audit_id' => (string) ($row['audit_id'] ?? ''),
+                'project_id' => (string) ($row['project_id'] ?? ''),
+                'score' => (int) ($row['score'] ?? 0),
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'source' => (string) ($row['source'] ?? ''),
+            ];
+        }, array_slice($rows, 0, 12))),
+        'projects' => array_values($projects),
         'project_id' => $projectId,
     ]);
 }

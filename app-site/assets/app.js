@@ -259,7 +259,9 @@
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
+  const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
+  const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   let lastNotificationToneKey = "";
@@ -2380,6 +2382,16 @@
     }
   }
 
+  async function loadSeoHistorySummary() {
+    if (!seoHistorySummary) return;
+    try {
+      const data = await apiGet("seo.history.summary");
+      seoHistorySummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoHistorySummary.textContent = "Failed to load SEO history summary.";
+    }
+  }
+
   async function loadSeoExtensionEvents() {
     if (!seoExtensionEvents) return;
     try {
@@ -2412,6 +2424,7 @@
     await loadWebopsRetryQueue();
     await loadSeoProjects();
     await loadSeoIssuesSummary();
+    await loadSeoHistorySummary();
     await loadSeoAudits();
     await loadSeoExtensionEvents();
     await loadNotifications();
@@ -4048,6 +4061,7 @@
         }
         await loadSeoProjects();
         await loadSeoIssuesSummary();
+        await loadSeoHistorySummary();
       });
     }
 
@@ -4066,6 +4080,7 @@
         }
         await loadSeoProjects();
         await loadSeoIssuesSummary();
+        await loadSeoHistorySummary();
       });
     }
 
@@ -4083,6 +4098,7 @@
           seoResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSeoIssuesSummary();
+        await loadSeoHistorySummary();
         await loadSeoAudits();
         const data = await apiGet("seo.summary");
         const panel = document.getElementById("modSeo");
@@ -4096,6 +4112,12 @@
   if (refreshSeoIssuesBtn) {
     refreshSeoIssuesBtn.addEventListener("click", async function () {
       await loadSeoIssuesSummary();
+    });
+  }
+
+  if (refreshSeoHistoryBtn) {
+    refreshSeoHistoryBtn.addEventListener("click", async function () {
+      await loadSeoHistorySummary();
     });
   }
 })();
