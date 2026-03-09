@@ -716,11 +716,15 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="refreshSeoProjectSnapshotBtn" type="button">Refresh Project Snapshot</button>
                     <button id="refreshSeoActionPlanBtn" type="button">Refresh Action Plan</button>
+                    <button id="refreshSeoUrlHistoryBtn" type="button">Refresh URL History</button>
                     <button id="refreshSeoCompareBtn" type="button">Refresh Audit Compare</button>
                 </div>
+                <label>URL history filter<input id="seoHistoryUrlFilter" type="text" placeholder="https://example.com/service-page"></label>
                 <pre id="seoProjectSnapshot">Loading...</pre>
                 <h3>Action Plan</h3>
                 <pre id="seoActionPlanView">Loading...</pre>
+                <h3>URL History</h3>
+                <pre id="seoUrlHistoryView">Loading...</pre>
                 <h3>Latest Audit Compare</h3>
                 <pre id="seoCompareView">Loading...</pre>
             </section>

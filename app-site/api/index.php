@@ -3900,7 +3900,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.26-seo-action-plan',
+        'phase' => '2.27-seo-url-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -5090,6 +5090,35 @@ function seo_action_plan_from_audits($project, $latestAudit, $previousAudit)
     ];
 }
 
+function seo_normalize_history_url($url)
+{
+    $raw = trim((string) $url);
+    if ($raw === '') {
+        return '';
+    }
+    if (!preg_match('/^https?:\/\//i', $raw)) {
+        $raw = 'https://' . ltrim($raw, '/');
+    }
+    $parts = parse_url($raw);
+    if (!is_array($parts) || empty($parts['host'])) {
+        return trim((string) $url);
+    }
+    $scheme = strtolower((string) ($parts['scheme'] ?? 'https'));
+    $host = strtolower((string) ($parts['host'] ?? ''));
+    $path = isset($parts['path']) ? (string) $parts['path'] : '/';
+    if ($path === '') {
+        $path = '/';
+    }
+    if ($path !== '/') {
+        $path = rtrim($path, '/');
+        if ($path === '') {
+            $path = '/';
+        }
+    }
+    $query = isset($parts['query']) && trim((string) $parts['query']) !== '' ? '?' . trim((string) $parts['query']) : '';
+    return $scheme . '://' . $host . $path . $query;
+}
+
 function seo_extension_mask_session($session)
 {
     if (!is_array($session)) {
@@ -6249,7 +6278,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.26-seo-action-plan',
+        'phase' => '2.27-seo-url-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9419,6 +9448,132 @@ if ($action === 'seo.actions.plan') {
         'summary' => $plan['summary'],
         'actions' => $plan['actions'],
         'message' => is_array($latest) ? '' : 'No SEO audit available yet for action planning.',
+    ]);
+}
+
+if ($action === 'seo.url.history') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $urlFilter = isset($_GET['url']) ? seo_normalize_history_url((string) $_GET['url']) : '';
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $project = null;
+    if ($projectId !== '') {
+        foreach ($projects as $row) {
+            if (is_array($row) && (string) ($row['project_id'] ?? '') === $projectId) {
+                $project = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($project)) {
+        $project = isset($projects[0]) && is_array($projects[0]) ? $projects[0] : null;
+    }
+    if (!is_array($project)) {
+        out_json([
+            'ok' => true,
+            'project' => null,
+            'summary' => ['url_count' => 0, 'audit_count' => 0],
+            'items' => [],
+            'timeline' => [],
+            'message' => 'No SEO project configured.',
+        ]);
+    }
+
+    $selectedProjectId = (string) ($project['project_id'] ?? '');
+    $audits = array_values(array_filter(app_read_json_file(seo_audits_path(), []), static function ($row) use ($selectedProjectId) {
+        return (string) ($row['project_id'] ?? '') === $selectedProjectId;
+    }));
+    $items = [];
+    $timeline = [];
+    $normalizedProjectDomain = seo_normalize_history_url((string) ($project['domain'] ?? ''));
+
+    foreach ($audits as $audit) {
+        if (!is_array($audit)) {
+            continue;
+        }
+        $candidateUrl = seo_normalize_history_url((string) ($audit['domain'] ?? ''));
+        if ($candidateUrl === '') {
+            $candidateUrl = $normalizedProjectDomain;
+        }
+        if ($candidateUrl === '') {
+            continue;
+        }
+        if ($urlFilter !== '' && $candidateUrl !== $urlFilter) {
+            continue;
+        }
+        if (!isset($items[$candidateUrl])) {
+            $items[$candidateUrl] = [
+                'url' => $candidateUrl,
+                'audit_count' => 0,
+                'latest_audit_id' => '',
+                'latest_audited_at' => '',
+                'latest_score' => null,
+                'previous_score' => null,
+                'score_delta' => null,
+                'latest_source' => '',
+                'latest_priority_summary' => ['critical' => 0, 'fix_soon' => 0, 'nice_to_have' => 0],
+                'latest_page_signals' => seo_default_page_signals(),
+                'sources' => [],
+            ];
+        }
+        $item = $items[$candidateUrl];
+        if ($item['audit_count'] === 0) {
+            $item['latest_audit_id'] = (string) ($audit['audit_id'] ?? '');
+            $item['latest_audited_at'] = (string) ($audit['created_at'] ?? '');
+            $item['latest_score'] = isset($audit['score']) ? (int) $audit['score'] : null;
+            $item['latest_source'] = (string) ($audit['source'] ?? '');
+            $item['latest_priority_summary'] = isset($audit['priority_summary']) && is_array($audit['priority_summary'])
+                ? $audit['priority_summary']
+                : seo_issue_rollup_from_checks(isset($audit['checks']) && is_array($audit['checks']) ? $audit['checks'] : [])['priority_summary'];
+            $item['latest_page_signals'] = seo_normalize_page_signals(isset($audit['page_signals']) && is_array($audit['page_signals']) ? $audit['page_signals'] : []);
+        } elseif ($item['audit_count'] === 1) {
+            $item['previous_score'] = isset($audit['score']) ? (int) $audit['score'] : null;
+            if ($item['latest_score'] !== null && $item['previous_score'] !== null) {
+                $item['score_delta'] = $item['latest_score'] - $item['previous_score'];
+            }
+        }
+        $sourceKey = (string) ($audit['source'] ?? 'unknown');
+        if (!isset($item['sources'][$sourceKey])) {
+            $item['sources'][$sourceKey] = 0;
+        }
+        $item['sources'][$sourceKey]++;
+        $item['audit_count']++;
+        $items[$candidateUrl] = $item;
+
+        if ($urlFilter !== '') {
+            $timeline[] = [
+                'audit_id' => (string) ($audit['audit_id'] ?? ''),
+                'url' => $candidateUrl,
+                'score' => isset($audit['score']) ? (int) $audit['score'] : null,
+                'source' => (string) ($audit['source'] ?? ''),
+                'critical_issues' => (int) ($audit['critical_issues'] ?? 0),
+                'warnings' => (int) ($audit['warnings'] ?? 0),
+                'priority_summary' => isset($audit['priority_summary']) && is_array($audit['priority_summary'])
+                    ? $audit['priority_summary']
+                    : seo_issue_rollup_from_checks(isset($audit['checks']) && is_array($audit['checks']) ? $audit['checks'] : [])['priority_summary'],
+                'page_signals' => seo_normalize_page_signals(isset($audit['page_signals']) && is_array($audit['page_signals']) ? $audit['page_signals'] : []),
+                'created_at' => (string) ($audit['created_at'] ?? ''),
+            ];
+        }
+    }
+
+    $items = array_values($items);
+    usort($items, static function ($left, $right) {
+        return strcmp((string) ($right['latest_audited_at'] ?? ''), (string) ($left['latest_audited_at'] ?? ''));
+    });
+
+    out_json([
+        'ok' => true,
+        'project' => $project,
+        'filter_url' => $urlFilter,
+        'summary' => [
+            'url_count' => count($items),
+            'audit_count' => array_sum(array_map(static function ($item) {
+                return (int) ($item['audit_count'] ?? 0);
+            }, $items)),
+        ],
+        'items' => $items,
+        'timeline' => array_slice($timeline, 0, 25),
+        'message' => empty($items) ? 'No matching URL history found yet.' : '',
     ]);
 }
 
