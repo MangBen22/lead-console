@@ -115,6 +115,7 @@
 62. Use Gate runs summary sustained counters/ratios (`sustained_active_runs`, `sustained_alert_sent_runs`, `status_changed_ratio_percent`) for quick severity scoring.
 63. Use `source_group` filter (`scheduler` / `manual`) to split cron-driven behavior from operator-triggered runs without typing exact sources.
 64. Use `reason_count_min` / `reason_count_max` to focus only high-noise or low-noise gate runs during analysis.
+65. Use `recent_ratio_min` to isolate runs where recent blocked trend severity crosses your investigation threshold.
 
 ## 8) Rollback Plan
 1. Restore previous app files.

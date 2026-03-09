@@ -1867,6 +1867,8 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         $reasonCountMin = $reasonCountMax;
         $reasonCountMax = $swap;
     }
+    $recentRatioMinRaw = isset($query['recent_ratio_min']) ? trim((string) $query['recent_ratio_min']) : '';
+    $recentRatioMin = ($recentRatioMinRaw === '') ? null : max(0, min(100, (float) $recentRatioMinRaw));
 
     $sourceRows = ($window > 0) ? array_slice($runs, 0, $window) : $runs;
     $filtered = [];
@@ -1920,6 +1922,10 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
         if ($reasonCountMax !== null && $reasonCount > $reasonCountMax) {
             continue;
         }
+        $recentRatio = isset($row['recent_blocked_ratio_percent']) ? (float) $row['recent_blocked_ratio_percent'] : 0.0;
+        if ($recentRatioMin !== null && $recentRatio < $recentRatioMin) {
+            continue;
+        }
         if ($failedItemFilter !== '') {
             $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
             $matched = false;
@@ -1954,6 +1960,7 @@ function deployment_release_gate_runs_apply_filters($runs, $query)
             'failed_item' => $failedItemFilterRaw,
             'reason_count_min' => $reasonCountMin,
             'reason_count_max' => $reasonCountMax,
+            'recent_ratio_min' => $recentRatioMin,
         ],
     ];
 }
@@ -3397,7 +3404,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.88-release-gate-reason-count-filter',
+        'phase' => '1.89-release-gate-recent-ratio-filter',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4725,7 +4732,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.88-release-gate-reason-count-filter',
+        'phase' => '1.89-release-gate-recent-ratio-filter',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

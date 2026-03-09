@@ -128,6 +128,7 @@
   const releaseGateRunsFailedItemFilter = document.getElementById("releaseGateRunsFailedItemFilter");
   const releaseGateRunsReasonMinInput = document.getElementById("releaseGateRunsReasonMinInput");
   const releaseGateRunsReasonMaxInput = document.getElementById("releaseGateRunsReasonMaxInput");
+  const releaseGateRunsRecentRatioMinInput = document.getElementById("releaseGateRunsRecentRatioMinInput");
   const releaseGateRunsTransitionLimitInput = document.getElementById("releaseGateRunsTransitionLimitInput");
   const watchdogsStatusView = document.getElementById("watchdogsStatusView");
   const watchdogsCheckView = document.getElementById("watchdogsCheckView");
@@ -536,6 +537,12 @@
       : null;
     const reasonMin = reasonMinRaw === null || !Number.isFinite(reasonMinRaw) ? null : Math.max(0, Math.min(50, Math.round(reasonMinRaw)));
     const reasonMax = reasonMaxRaw === null || !Number.isFinite(reasonMaxRaw) ? null : Math.max(0, Math.min(50, Math.round(reasonMaxRaw)));
+    const recentRatioMinRaw = releaseGateRunsRecentRatioMinInput && releaseGateRunsRecentRatioMinInput.value !== ""
+      ? Number(releaseGateRunsRecentRatioMinInput.value)
+      : null;
+    const recentRatioMin = recentRatioMinRaw === null || !Number.isFinite(recentRatioMinRaw)
+      ? null
+      : Math.max(0, Math.min(100, Math.round(recentRatioMinRaw * 10) / 10));
     const transitionLimitRaw = releaseGateRunsTransitionLimitInput && releaseGateRunsTransitionLimitInput.value
       ? Number(releaseGateRunsTransitionLimitInput.value)
       : 12;
@@ -552,6 +559,7 @@
       failed_item: failedItem,
       reason_count_min: reasonMin,
       reason_count_max: reasonMax,
+      recent_ratio_min: recentRatioMin,
       transition_limit: transitionLimit,
     };
     try {
@@ -635,6 +643,7 @@
       + ", failed_item=" + String(f.failed_item || "(any)")
       + ", reason_count_min=" + (f.reason_count_min === null || f.reason_count_min === undefined ? "(any)" : String(f.reason_count_min))
       + ", reason_count_max=" + (f.reason_count_max === null || f.reason_count_max === undefined ? "(any)" : String(f.reason_count_max))
+      + ", recent_ratio_min=" + (f.recent_ratio_min === null || f.recent_ratio_min === undefined ? "(any)" : String(f.recent_ratio_min))
       + ", transition_limit=" + String(f.transition_limit || 12));
     lines.push("Totals: total=" + String(totalRuns) + ", allowed=" + String(allowedRuns) + ", blocked=" + String(blockedRuns));
     lines.push("Ratios: allowed=" + String(allowedRatio) + "%, blocked=" + String(blockedRatio) + "%");
@@ -766,6 +775,9 @@
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
     }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
+    }
     if (releaseGateRunsTransitionLimitInput) {
       releaseGateRunsTransitionLimitInput.value = "12";
     }
@@ -831,6 +843,12 @@
           releaseGateRunsReasonMaxInput.value = String(Math.max(0, Math.min(50, Math.round(parsed))));
         }
       }
+      if (releaseGateRunsRecentRatioMinInput && stored.recent_ratio_min !== undefined && stored.recent_ratio_min !== null) {
+        const parsed = Number(stored.recent_ratio_min);
+        if (Number.isFinite(parsed)) {
+          releaseGateRunsRecentRatioMinInput.value = String(Math.max(0, Math.min(100, Math.round(parsed * 10) / 10)));
+        }
+      }
       if (releaseGateRunsTransitionLimitInput && stored.transition_limit !== undefined && stored.transition_limit !== null) {
         const parsed = Number(stored.transition_limit);
         const safe = Number.isFinite(parsed) ? Math.max(1, Math.min(50, Math.round(parsed))) : 12;
@@ -863,6 +881,9 @@
     }
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
+    }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
     }
     if (releaseGateRunsSourceFilter) {
       releaseGateRunsSourceFilter.value = "";
@@ -906,6 +927,9 @@
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
     }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
+    }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
@@ -944,6 +968,9 @@
     }
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
+    }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
@@ -984,6 +1011,9 @@
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
     }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
+    }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";
     }
@@ -1022,6 +1052,9 @@
     }
     if (releaseGateRunsReasonMaxInput) {
       releaseGateRunsReasonMaxInput.value = "";
+    }
+    if (releaseGateRunsRecentRatioMinInput) {
+      releaseGateRunsRecentRatioMinInput.value = "";
     }
     if (releaseGateRunsLimitInput) {
       releaseGateRunsLimitInput.value = "200";

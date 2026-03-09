@@ -588,6 +588,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <label>Gate failed item filter<input id="releaseGateRunsFailedItemFilter" type="text" placeholder="Optional failed item (e.g. readiness_ready)" /></label>
                     <label>Reason count min<input id="releaseGateRunsReasonMinInput" type="number" min="0" max="50" placeholder="Optional min" /></label>
                     <label>Reason count max<input id="releaseGateRunsReasonMaxInput" type="number" min="0" max="50" placeholder="Optional max" /></label>
+                    <label>Recent ratio min %<input id="releaseGateRunsRecentRatioMinInput" type="number" min="0" max="100" step="0.1" placeholder="Optional min ratio" /></label>
                     <label>Sustained transitions<input id="releaseGateRunsTransitionLimitInput" type="number" min="1" max="50" value="12" /></label>
                 </div>
                 <div class="actions">
