@@ -1797,6 +1797,15 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
     if (!is_array($state)) {
         $state = [];
     }
+    $baseline = deployment_watchdogs_policy_baseline_snapshot();
+    $baselineHasBaseline = !empty($baseline['has_baseline']) ? 1 : 0;
+    $baselineHasChanges = ($baselineHasBaseline && !empty($baseline['has_changes'])) ? 1 : 0;
+    $baselineChangedCount = (int) ($baseline['changed_count'] ?? 0);
+    $prevBaselineHasBaseline = !empty($state['baseline_has_baseline']) ? 1 : 0;
+    $prevBaselineHasChanges = !empty($state['baseline_has_changes']) ? 1 : 0;
+    $baselinePresenceChanged = ($prevBaselineHasBaseline !== $baselineHasBaseline) ? 1 : 0;
+    $baselineDriftStatusChanged = ($prevBaselineHasChanges !== $baselineHasChanges) ? 1 : 0;
+    $baselineAlertSent = 0;
     $prevStatus = isset($state['last_status']) ? strtolower(trim((string) $state['last_status'])) : '';
     $statusChanged = ($prevStatus !== '' && $prevStatus !== $status) ? 1 : 0;
     $prevCriticalStreak = isset($state['critical_streak']) ? (int) $state['critical_streak'] : 0;
@@ -1845,6 +1854,37 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
             'status' => $status,
             'summary' => isset($watchdogs['summary']) && is_array($watchdogs['summary']) ? $watchdogs['summary'] : [],
         ]);
+    }
+
+    if ($baselinePresenceChanged === 1 || ($baselineHasBaseline === 1 && $baselineDriftStatusChanged === 1)) {
+        $baselineAlertType = 'info';
+        $baselineAlertMessage = 'Watchdogs policy baseline is configured.';
+        if ($baselineHasBaseline === 0) {
+            $baselineAlertType = 'warning';
+            $baselineAlertMessage = 'Watchdogs policy baseline is missing.';
+        } elseif ($baselineHasChanges === 1) {
+            $baselineAlertType = 'warning';
+            $baselineAlertMessage = 'Watchdogs policy baseline drift detected.';
+        } elseif ($baselineHasChanges === 0 && $baselineDriftStatusChanged === 1) {
+            $baselineAlertType = 'success';
+            $baselineAlertMessage = 'Watchdogs policy baseline drift cleared.';
+        }
+        push_notification($baselineAlertType, $baselineAlertMessage, [
+            'source' => $src,
+            'has_baseline' => $baselineHasBaseline,
+            'has_changes' => $baselineHasChanges,
+            'changed_count' => $baselineChangedCount,
+            'delta' => isset($baseline['delta']) && is_array($baseline['delta']) ? $baseline['delta'] : [],
+        ]);
+        audit_event('deployment', 'watchdogs.policy.baseline.drift', [
+            'source' => $src,
+            'has_baseline' => $baselineHasBaseline,
+            'has_changes' => $baselineHasChanges,
+            'changed_count' => $baselineChangedCount,
+            'presence_changed' => $baselinePresenceChanged,
+            'drift_status_changed' => $baselineDriftStatusChanged,
+        ]);
+        $baselineAlertSent = 1;
     }
 
     $runId = 'watchdogs_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6);
@@ -1955,6 +1995,11 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         'auto_incident_report_id' => $autoIncidentReportId,
         'auto_incident_existing_open_id' => $autoIncidentExistingOpenId,
         'auto_incident_resolved_report_id' => $autoIncidentResolvedReportId,
+        'baseline_has_baseline' => $baselineHasBaseline,
+        'baseline_has_changes' => $baselineHasChanges,
+        'baseline_changed_count' => $baselineChangedCount,
+        'baseline_alert_sent' => $baselineAlertSent,
+        'baseline_delta' => isset($baseline['delta']) && is_array($baseline['delta']) ? $baseline['delta'] : [],
         'freshness_window_minutes' => (int) ($watchdogs['freshness_window_minutes'] ?? 30),
         'critical_failed' => (int) ($watchdogs['summary']['critical_failed'] ?? 0),
         'warning_failed' => (int) ($watchdogs['summary']['warning_failed'] ?? 0),
@@ -1985,12 +2030,20 @@ function deployment_watchdogs_check_snapshot($source = 'manual', $freshnessMinut
         'last_auto_incident_reopened_at' => $autoIncidentReopened === 1 ? $now : (string) ($state['last_auto_incident_reopened_at'] ?? ''),
         'last_auto_incident_resolved_report_id' => $autoIncidentResolvedReportId !== '' ? $autoIncidentResolvedReportId : (string) ($state['last_auto_incident_resolved_report_id'] ?? ''),
         'last_auto_incident_resolved_at' => $autoIncidentResolved === 1 ? $now : (string) ($state['last_auto_incident_resolved_at'] ?? ''),
+        'baseline_has_baseline' => $baselineHasBaseline,
+        'baseline_has_changes' => $baselineHasChanges,
+        'baseline_changed_count' => $baselineChangedCount,
+        'baseline_last_alert_sent' => $baselineAlertSent,
+        'baseline_last_alert_at' => ($baselineAlertSent === 1) ? $now : (string) ($state['baseline_last_alert_at'] ?? ''),
+        'baseline_last_change_at' => ($baselinePresenceChanged === 1 || $baselineDriftStatusChanged === 1) ? $now : (string) ($state['baseline_last_change_at'] ?? ''),
+        'baseline_source' => isset($baseline['baseline']['source']) ? (string) $baseline['baseline']['source'] : '',
     ];
     app_write_json_file(deployment_watchdogs_state_path(), $nextState);
 
     return [
         'run' => $run,
         'watchdogs' => $watchdogs,
+        'baseline' => $baseline,
         'state' => $nextState,
     ];
 }
@@ -2732,7 +2785,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.55-release-gate-policy-baseline-match',
+        'phase' => '1.56-watchdogs-baseline-drift-alerting',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -4054,7 +4107,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.55-release-gate-policy-baseline-match',
+        'phase' => '1.56-watchdogs-baseline-drift-alerting',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
