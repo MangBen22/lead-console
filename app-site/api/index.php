@@ -1640,6 +1640,76 @@ function deployment_release_gate_failed_items($gate)
     return $failed;
 }
 
+function deployment_release_gate_runs_summary($runs)
+{
+    if (!is_array($runs)) {
+        $runs = [];
+    }
+    $summary = [
+        'total_runs' => 0,
+        'allowed_runs' => 0,
+        'blocked_runs' => 0,
+        'status_changed_runs' => 0,
+        'alert_sent_runs' => 0,
+        'baseline_match_blocked_runs' => 0,
+        'baseline_check_blocked_runs' => 0,
+        'signoff_integrity_watch_blocked_runs' => 0,
+        'failed_item_counts' => [],
+        'latest_blocked_run' => null,
+    ];
+    foreach ($runs as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $summary['total_runs']++;
+        $allowed = !empty($row['allowed']) ? 1 : 0;
+        if ($allowed === 1) {
+            $summary['allowed_runs']++;
+        } else {
+            $summary['blocked_runs']++;
+            if (!is_array($summary['latest_blocked_run'])) {
+                $summary['latest_blocked_run'] = [
+                    'run_id' => (string) ($row['run_id'] ?? ''),
+                    'created_at' => (string) ($row['created_at'] ?? ''),
+                    'failed_items' => isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [],
+                    'reason_count' => isset($row['reason_count']) ? (int) $row['reason_count'] : 0,
+                ];
+            }
+        }
+        if (!empty($row['status_changed'])) {
+            $summary['status_changed_runs']++;
+        }
+        if (!empty($row['alert_sent'])) {
+            $summary['alert_sent_runs']++;
+        }
+        $failedItems = isset($row['failed_items']) && is_array($row['failed_items']) ? $row['failed_items'] : [];
+        if (in_array('watchdogs_policy_baseline_match', $failedItems, true)) {
+            $summary['baseline_match_blocked_runs']++;
+        }
+        if (in_array('watchdogs_policy_baseline_check_ok_and_fresh', $failedItems, true)) {
+            $summary['baseline_check_blocked_runs']++;
+        }
+        if (in_array('cutover_signoff_integrity_watch_valid_and_fresh', $failedItems, true)) {
+            $summary['signoff_integrity_watch_blocked_runs']++;
+        }
+        foreach ($failedItems as $item) {
+            $key = trim((string) $item);
+            if ($key === '') {
+                continue;
+            }
+            if (!isset($summary['failed_item_counts'][$key])) {
+                $summary['failed_item_counts'][$key] = 0;
+            }
+            $summary['failed_item_counts'][$key]++;
+        }
+    }
+    if (!empty($summary['failed_item_counts'])) {
+        arsort($summary['failed_item_counts']);
+    }
+    $summary['top_failed_items'] = array_slice($summary['failed_item_counts'], 0, 10, true);
+    return $summary;
+}
+
 function deployment_release_gate_watch_snapshot($source = 'manual', $freshnessMinutes = null)
 {
     $gate = deployment_release_gate_snapshot($freshnessMinutes);
@@ -2979,6 +3049,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     $gate = deployment_release_gate_snapshot(null);
     $gateState = app_read_json_file(deployment_release_gate_state_path(), []);
     $gateRuns = app_read_json_file(deployment_release_gate_runs_path(), []);
+    $gateRunsSummary = deployment_release_gate_runs_summary($gateRuns);
     $signoffIntegrityState = app_read_json_file(deployment_cutover_signoff_integrity_state_path(), []);
     $signoffIntegrityRuns = app_read_json_file(deployment_cutover_signoff_integrity_runs_path(), []);
     $watchdogsState = app_read_json_file(deployment_watchdogs_state_path(), []);
@@ -3010,7 +3081,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '1.60-release-gate-blocker-classification',
+        'phase' => '1.61-release-gate-runs-analytics',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -3028,6 +3099,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
         'release_gate_watch' => [
             'state' => is_array($gateState) ? $gateState : [],
             'runs' => array_slice(is_array($gateRuns) ? $gateRuns : [], 0, 200),
+            'summary' => $gateRunsSummary,
         ],
         'signoff_integrity_watch' => [
             'state' => is_array($signoffIntegrityState) ? $signoffIntegrityState : [],
@@ -4337,7 +4409,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '1.60-release-gate-blocker-classification',
+        'phase' => '1.61-release-gate-runs-analytics',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -4563,11 +4635,16 @@ if ($action === 'deployment.release.gate.watch') {
 
 if ($action === 'deployment.release.gate.runs') {
     $runs = app_read_json_file(deployment_release_gate_runs_path(), []);
+    if (!is_array($runs)) {
+        $runs = [];
+    }
     $state = app_read_json_file(deployment_release_gate_state_path(), []);
+    $summary = deployment_release_gate_runs_summary($runs);
     out_json([
         'ok' => true,
         'count' => count($runs),
         'items' => $runs,
+        'summary' => $summary,
         'state' => is_array($state) ? $state : [],
         'time' => gmdate('c'),
     ]);

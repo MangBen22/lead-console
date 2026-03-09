@@ -87,6 +87,7 @@
 34. Enable release gate option `Require recent watchdogs baseline check` to enforce fresh baseline validation during launch windows.
 35. Policy save/restore and baseline set/clear actions auto-run a baseline check; verify those runs appear in `Refresh Baseline Checks`.
 36. In `Refresh Gate Runs`, inspect `failed_items` and `blocker_flags` to quickly identify whether baseline requirements are blocking release.
+37. Use gate-runs `summary` (`top_failed_items`, baseline blocker run counts) to prioritize remediation before launch.
 
 ## 8) Rollback Plan
 1. Restore previous app files.
