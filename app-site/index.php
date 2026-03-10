@@ -724,6 +724,47 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runSocialInboxWatchBtn" type="button">Run Inbox Watch</button>
                     <button id="refreshSocialInboxBtn" type="button">Refresh Social Inbox</button>
                 </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialInboxFilterStatus">Inbox Status</label>
+                        <select id="socialInboxFilterStatus">
+                            <option value="">all</option>
+                            <option value="open">open</option>
+                            <option value="pending">pending</option>
+                            <option value="replied">replied</option>
+                            <option value="closed">closed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterPriority">Inbox Priority</label>
+                        <select id="socialInboxFilterPriority">
+                            <option value="">all</option>
+                            <option value="low">low</option>
+                            <option value="normal">normal</option>
+                            <option value="high">high</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterProvider">Inbox Provider</label>
+                        <input id="socialInboxFilterProvider" type="text" placeholder="facebook">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterOwner">Inbox Owner</label>
+                        <input id="socialInboxFilterOwner" type="text" placeholder="Ops team">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterSearch">Inbox Search</label>
+                        <input id="socialInboxFilterSearch" type="text" placeholder="subject, name, thread id">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterPage">Inbox Page</label>
+                        <input id="socialInboxFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxFilterLimit">Inbox Limit</label>
+                        <input id="socialInboxFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                </div>
                 <pre id="socialInboxSummary">Loading...</pre>
                 <pre id="socialInboxWorkload">Loading...</pre>
                 <pre id="socialInboxWatchView">Loading...</pre>

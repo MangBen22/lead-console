@@ -2727,10 +2727,29 @@
     }
   }
 
+  function socialInboxFilters() {
+    const status = document.getElementById("socialInboxFilterStatus");
+    const priority = document.getElementById("socialInboxFilterPriority");
+    const provider = document.getElementById("socialInboxFilterProvider");
+    const owner = document.getElementById("socialInboxFilterOwner");
+    const search = document.getElementById("socialInboxFilterSearch");
+    const page = document.getElementById("socialInboxFilterPage");
+    const limit = document.getElementById("socialInboxFilterLimit");
+    return {
+      status: status && status.value ? status.value : "",
+      priority: priority && priority.value ? priority.value : "",
+      provider: provider && provider.value ? provider.value.trim() : "",
+      owner: owner && owner.value ? owner.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? page.value.trim() : "1",
+      limit: limit && limit.value ? limit.value.trim() : "10",
+    };
+  }
+
   async function loadSocialInboxThreads() {
     if (!socialInboxThreads) return;
     try {
-      const data = await apiGet("social.inbox.list");
+      const data = await apiGetWithParams("social.inbox.list", socialInboxFilters());
       socialInboxThreads.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialInboxThreads.textContent = "Failed to load social inbox.";

@@ -1879,6 +1879,86 @@ function social_inbox_workload_snapshot($limit = 10)
     ];
 }
 
+function social_inbox_list_snapshot($query = [])
+{
+    $rows = social_inbox_threads_rows(true);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $priority = strtolower(trim((string) ($query['priority'] ?? '')));
+    $provider = strtolower(trim((string) ($query['provider'] ?? '')));
+    $owner = strtolower(trim((string) ($query['owner'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = social_normalize_inbox_thread($row);
+        if ($status !== '' && strtolower((string) ($item['status'] ?? '')) !== $status) {
+            continue;
+        }
+        if ($priority !== '' && strtolower((string) ($item['priority'] ?? '')) !== $priority) {
+            continue;
+        }
+        if ($provider !== '' && strpos(strtolower((string) ($item['provider'] ?? '')), $provider) === false) {
+            continue;
+        }
+        if ($owner !== '' && strpos(strtolower((string) ($item['owner'] ?? '')), $owner) === false) {
+            continue;
+        }
+        if ($search !== '') {
+            $haystacks = [
+                (string) ($item['thread_id'] ?? ''),
+                (string) ($item['from_name'] ?? ''),
+                (string) ($item['subject'] ?? ''),
+                (string) ($item['message'] ?? ''),
+                (string) ($item['account_label'] ?? ''),
+                (string) ($item['owner'] ?? ''),
+            ];
+            $matched = false;
+            foreach ($haystacks as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'status' => $status,
+            'priority' => $priority,
+            'provider' => $provider,
+            'owner' => $owner,
+            'search' => $search,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function social_inbox_watch_snapshot($source = 'manual', $emitNotifications = true, $staleAfterHours = 24)
 {
     $rows = social_inbox_threads_rows(true);
@@ -5917,7 +5997,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.72-crm-delivery-watch-automation',
+        'phase' => '2.73-social-inbox-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9311,7 +9391,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.72-crm-delivery-watch-automation',
+        'phase' => '2.73-social-inbox-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12400,11 +12480,12 @@ if ($action === 'social.activity.list') {
 }
 
 if ($action === 'social.inbox.list') {
-    $rows = social_inbox_threads_rows(true);
+    $snapshot = social_inbox_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'summary' => $snapshot['summary'],
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'items' => $snapshot['items'],
     ]);
 }
 
