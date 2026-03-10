@@ -515,6 +515,7 @@
   const seoUrlHistoryView = document.getElementById("seoUrlHistoryView");
   const seoCompareView = document.getElementById("seoCompareView");
   const seoOperationsSnapshotView = document.getElementById("seoOperationsSnapshotView");
+  const downloadSeoOperationsSnapshotBtn = document.getElementById("downloadSeoOperationsSnapshotBtn");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -4932,6 +4933,18 @@
     }
   }
 
+  async function downloadSeoOperationsSnapshot() {
+    const limit = document.getElementById("seoOperationsSnapshotLimit");
+    const data = await apiGetWithParams("seo.operations.export", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("seo-operations-snapshot-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (seoOperationsSnapshotView) {
+      seoOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   (async function initCrm() {
     await loadLeadsInventory();
     await loadLeadsList();
@@ -7859,6 +7872,12 @@
   if (refreshSeoOperationsSnapshotBtn) {
     refreshSeoOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadSeoOperationsSnapshot();
+    });
+  }
+
+  if (downloadSeoOperationsSnapshotBtn) {
+    downloadSeoOperationsSnapshotBtn.addEventListener("click", async function () {
+      await downloadSeoOperationsSnapshot();
     });
   }
 

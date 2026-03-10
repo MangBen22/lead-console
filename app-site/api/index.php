@@ -8221,7 +8221,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.36-seo-operations-snapshot',
+        'phase' => '5.37-seo-operations-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14072,7 +14072,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.36-seo-operations-snapshot',
+        'phase' => '5.37-seo-operations-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17381,6 +17381,23 @@ if ($action === 'seo.operations.snapshot') {
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+    ]);
+}
+
+if ($action === 'seo.operations.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = seo_operations_snapshot($limit);
+    audit_event('seo', 'operations.export', [
+        'limit' => $limit,
+        'project_count' => (int) (($snapshot['summary']['project_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_operations_snapshot_' . gmdate('Ymd_His') . '.json',
+        'export' => $snapshot,
     ]);
 }
 

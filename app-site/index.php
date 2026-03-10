@@ -2100,6 +2100,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="seoOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
                     </div>
                     <button id="refreshSeoOperationsSnapshotBtn" type="button">Refresh SEO Snapshot</button>
+                    <button id="downloadSeoOperationsSnapshotBtn" type="button">Download SEO Snapshot</button>
                 </form>
                 <pre id="seoOperationsSnapshotView">Loading...</pre>
             </section>
