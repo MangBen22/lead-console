@@ -296,6 +296,7 @@
   const loadSocialActivityDetailBtn = document.getElementById("loadSocialActivityDetailBtn");
   const downloadSocialActivityExportBtn = document.getElementById("downloadSocialActivityExportBtn");
   const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
+  const downloadSocialPlatformsExportBtn = document.getElementById("downloadSocialPlatformsExportBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3216,6 +3217,17 @@
     }
   }
 
+  async function downloadSocialPlatformsExport() {
+    const params = socialPlatformFilters();
+    const provider = document.getElementById("socialPlatformDetailProvider");
+    if (provider && provider.value) {
+      params.provider = provider.value.trim();
+    }
+    const data = await apiGetWithParams("social.platforms.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-platforms-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   const renderSocialProviderProfile = function (profile, message) {
     if (!socialProviderProfile) return;
     if (profile) {
@@ -4680,6 +4692,12 @@
   if (loadSocialPlatformDetailBtn) {
     loadSocialPlatformDetailBtn.addEventListener("click", async function () {
       await loadSocialPlatformDetail();
+    });
+  }
+
+  if (downloadSocialPlatformsExportBtn) {
+    downloadSocialPlatformsExportBtn.addEventListener("click", async function () {
+      await downloadSocialPlatformsExport();
     });
   }
 

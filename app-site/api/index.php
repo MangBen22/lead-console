@@ -6390,7 +6390,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.08-social-platform-detail',
+        'phase' => '3.09-social-platform-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11251,7 +11251,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.08-social-platform-detail',
+        'phase' => '3.09-social-platform-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14209,6 +14209,38 @@ if ($action === 'social.platforms.detail') {
     $provider = isset($_GET['provider']) ? (string) $_GET['provider'] : '';
     $snapshot = social_platform_detail_snapshot($provider);
     out_json($snapshot);
+}
+
+if ($action === 'social.platforms.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'family' => isset($_GET['family']) ? (string) $_GET['family'] : '',
+        'auth_mode' => isset($_GET['auth_mode']) ? (string) $_GET['auth_mode'] : '',
+        'capability' => isset($_GET['capability']) ? (string) $_GET['capability'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $provider = isset($_GET['provider']) ? trim((string) $_GET['provider']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'platforms' => social_platforms_list_snapshot($filters),
+    ];
+    if ($provider !== '') {
+        $payload['platform_detail'] = social_platform_detail_snapshot($provider);
+    }
+    audit_event('social', 'platforms.export', [
+        'provider' => $provider,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_platforms_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.capabilities.summary') {
