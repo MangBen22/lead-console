@@ -587,14 +587,19 @@ function social_inbox_summary_snapshot($limit = 10)
     $summary = [
         'total' => count($rows),
         'open' => 0,
+        'pending' => 0,
         'replied' => 0,
+        'closed' => 0,
+        'backlog' => 0,
     ];
     $providerMap = [];
     $openThreads = [];
+    $backlogThreads = [];
     foreach ($rows as $row) {
         if (!is_array($row)) {
             continue;
         }
+        $row = social_normalize_inbox_thread($row);
         $status = strtolower((string) ($row['status'] ?? 'open'));
         $provider = (string) ($row['provider'] ?? 'unknown');
         if (!isset($providerMap[$provider])) {
@@ -602,21 +607,59 @@ function social_inbox_summary_snapshot($limit = 10)
                 'provider' => $provider,
                 'total' => 0,
                 'open' => 0,
+                'pending' => 0,
                 'replied' => 0,
+                'closed' => 0,
+                'backlog' => 0,
             ];
         }
         $providerMap[$provider]['total']++;
         if ($status === 'replied') {
             $summary['replied']++;
             $providerMap[$provider]['replied']++;
+        } elseif ($status === 'closed') {
+            $summary['closed']++;
+            $providerMap[$provider]['closed']++;
+        } elseif ($status === 'pending') {
+            $summary['pending']++;
+            $summary['backlog']++;
+            $providerMap[$provider]['pending']++;
+            $providerMap[$provider]['backlog']++;
+            $backlogThreads[] = [
+                'thread_id' => (string) ($row['thread_id'] ?? ''),
+                'provider' => $provider,
+                'account_label' => (string) ($row['account_label'] ?? ''),
+                'subject' => (string) ($row['subject'] ?? ''),
+                'priority' => (string) ($row['priority'] ?? 'normal'),
+                'owner' => (string) ($row['owner'] ?? ''),
+                'status' => $status,
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+            ];
         } else {
             $summary['open']++;
+            $summary['backlog']++;
             $providerMap[$provider]['open']++;
+            $providerMap[$provider]['backlog']++;
             $openThreads[] = [
                 'thread_id' => (string) ($row['thread_id'] ?? ''),
                 'provider' => $provider,
                 'account_label' => (string) ($row['account_label'] ?? ''),
                 'subject' => (string) ($row['subject'] ?? ''),
+                'priority' => (string) ($row['priority'] ?? 'normal'),
+                'owner' => (string) ($row['owner'] ?? ''),
+                'status' => $status,
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+            ];
+            $backlogThreads[] = [
+                'thread_id' => (string) ($row['thread_id'] ?? ''),
+                'provider' => $provider,
+                'account_label' => (string) ($row['account_label'] ?? ''),
+                'subject' => (string) ($row['subject'] ?? ''),
+                'priority' => (string) ($row['priority'] ?? 'normal'),
+                'owner' => (string) ($row['owner'] ?? ''),
+                'status' => $status,
                 'created_at' => (string) ($row['created_at'] ?? ''),
                 'updated_at' => (string) ($row['updated_at'] ?? ''),
             ];
@@ -625,11 +668,16 @@ function social_inbox_summary_snapshot($limit = 10)
     usort($openThreads, static function ($a, $b) {
         return strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
     });
+    usort($backlogThreads, static function ($a, $b) {
+        return strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
+    });
     return [
         'summary' => $summary,
         'providers' => array_values($providerMap),
         'oldest_open' => isset($openThreads[0]) ? $openThreads[0] : null,
+        'oldest_backlog' => isset($backlogThreads[0]) ? $backlogThreads[0] : null,
         'open_threads' => array_slice($openThreads, 0, $limit),
+        'backlog_threads' => array_slice($backlogThreads, 0, $limit),
     ];
 }
 
@@ -697,6 +745,8 @@ function social_operations_snapshot($limit = 5)
             'schedule_failed_items' => (int) (($schedule['summary']['failed'] ?? 0)),
             'retry_backlog' => count($retryQueue),
             'open_inbox_threads' => (int) (($inbox['summary']['open'] ?? 0)),
+            'pending_inbox_threads' => (int) (($inbox['summary']['pending'] ?? 0)),
+            'inbox_backlog_threads' => (int) (($inbox['summary']['backlog'] ?? 0)),
         ],
         'latest_watch_run' => isset($watchRuns[0]) && is_array($watchRuns[0]) ? $watchRuns[0] : null,
         'latest_sync' => isset($syncLog[0]) && is_array($syncLog[0]) ? $syncLog[0] : null,
@@ -4611,7 +4661,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.49-social-inbox-workflow-update',
+        'phase' => '2.50-social-inbox-status-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7900,7 +7950,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.49-social-inbox-workflow-update',
+        'phase' => '2.50-social-inbox-status-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10272,9 +10322,16 @@ if ($action === 'social.summary') {
     $retryCount = count(app_read_json_file(social_retry_queue_path(), []));
     $threads = social_inbox_threads_rows(true);
     $openThreads = 0;
+    $pendingThreads = 0;
     foreach ($threads as $thread) {
-        if (is_array($thread) && strtolower((string) ($thread['status'] ?? 'open')) === 'open') {
+        if (!is_array($thread)) {
+            continue;
+        }
+        $status = strtolower((string) ($thread['status'] ?? 'open'));
+        if ($status === 'open') {
             $openThreads++;
+        } elseif ($status === 'pending') {
+            $pendingThreads++;
         }
     }
     $scheduledCount = 0;
@@ -10292,6 +10349,8 @@ if ($action === 'social.summary') {
             'active_platforms' => count($platforms),
             'scheduled_posts' => $scheduledCount,
             'unread_conversations' => $openThreads,
+            'pending_conversations' => $pendingThreads,
+            'conversation_backlog' => ($openThreads + $pendingThreads),
             'retry_backlog' => $retryCount,
         ],
         'last_sync' => $lastSync,
@@ -10695,7 +10754,9 @@ if ($action === 'social.inbox.summary') {
         'summary' => $snapshot['summary'],
         'providers' => $snapshot['providers'],
         'oldest_open' => $snapshot['oldest_open'],
+        'oldest_backlog' => $snapshot['oldest_backlog'],
         'open_threads' => $snapshot['open_threads'],
+        'backlog_threads' => $snapshot['backlog_threads'],
     ]);
 }
 
