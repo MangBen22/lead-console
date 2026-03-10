@@ -1247,6 +1247,18 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/email-templates/preview', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_email_templates_preview'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/email-templates/test-send', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_email_templates_test_send'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/crm-intake', [
             'methods' => 'POST',
             'callback' => [$this, 'rest_bridge_crm_intake'],
@@ -1476,6 +1488,51 @@ class LC_Plugin
         return rest_ensure_response([
             'ok' => true,
             'email_templates' => $saved,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_email_templates_preview($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $template_key = sanitize_key((string) ($payload['template_key'] ?? ''));
+        $vars = isset($payload['vars']) && is_array($payload['vars']) ? $payload['vars'] : [];
+        $subject_override = array_key_exists('subject', $payload) ? (string) ($payload['subject'] ?? '') : null;
+        $body_override = array_key_exists('body', $payload) ? (string) ($payload['body'] ?? '') : null;
+        $preview = $this->get_email_template_preview($template_key, $vars, $subject_override, $body_override);
+        $this->log_system_event('bridge', 'info', 'Bridge email template preview requested.', [
+            'template_key' => $template_key,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => !empty($preview['ok']),
+            'preview' => $preview,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_email_templates_test_send($request)
+    {
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $template_key = sanitize_key((string) ($payload['template_key'] ?? ''));
+        $to_email = sanitize_email((string) ($payload['to_email'] ?? ''));
+        $vars = isset($payload['vars']) && is_array($payload['vars']) ? $payload['vars'] : [];
+        $result = $this->send_templated_test_email($to_email, $template_key, $vars);
+        $this->log_system_event('bridge', !empty($result['success']) ? 'info' : 'error', 'Bridge email template test send executed.', [
+            'template_key' => $template_key,
+            'to_email' => $to_email,
+            'result' => $result,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => !empty($result['success']),
+            'result' => $result,
             'time' => current_time('mysql'),
         ]);
     }
@@ -1792,6 +1849,36 @@ class LC_Plugin
         ];
     }
 
+    public function get_email_template_preview($template_key, $vars = [], $subject_override = null, $body_override = null)
+    {
+        $template_key = sanitize_key((string) $template_key);
+        $definitions = $this->email_template_definitions();
+        if ($template_key === '' || !isset($definitions[$template_key])) {
+            return [
+                'ok' => false,
+                'error' => 'invalid_template_key',
+                'message' => 'Template key is invalid.',
+            ];
+        }
+
+        $settings = $this->get_settings();
+        $subject_key = 'email_template_' . $template_key . '_subject';
+        $body_key = 'email_template_' . $template_key . '_body';
+        $subject = $subject_override !== null ? (string) $subject_override : (string) ($settings[$subject_key] ?? '');
+        $body = $body_override !== null ? (string) $body_override : (string) ($settings[$body_key] ?? '');
+        $merged_vars = $this->email_template_preview_vars($vars);
+
+        return [
+            'ok' => true,
+            'template_key' => $template_key,
+            'label' => (string) ($definitions[$template_key]['label'] ?? $template_key),
+            'subject' => $this->render_email_template($subject, $merged_vars),
+            'body_text' => $this->render_email_template($body, $merged_vars),
+            'body_html' => nl2br($this->render_email_template($body, $merged_vars)),
+            'vars' => $merged_vars,
+        ];
+    }
+
     public function save_email_templates_snapshot($templates)
     {
         $current = $this->get_settings();
@@ -1814,6 +1901,30 @@ class LC_Plugin
         $sanitized = $this->sanitize_settings(array_merge($current, $updates));
         update_option('lc_settings', $sanitized);
         return $this->get_email_templates_snapshot();
+    }
+
+    public function send_templated_test_email($to_email, $template_key, $vars = [])
+    {
+        $to = sanitize_email((string) $to_email);
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error_code' => 'invalid_email',
+                'message' => 'Recipient email is invalid.',
+            ];
+        }
+        $preview = $this->get_email_template_preview($template_key, $vars);
+        if (empty($preview['ok'])) {
+            return [
+                'success' => false,
+                'error_code' => (string) ($preview['error'] ?? 'invalid_template_key'),
+                'message' => (string) ($preview['message'] ?? 'Template preview failed.'),
+            ];
+        }
+        $result = $this->smtp_send_custom_email($to, (string) ($preview['subject'] ?? ''), (string) ($preview['body_text'] ?? ''));
+        $result['template_key'] = sanitize_key((string) $template_key);
+        $result['preview'] = $preview;
+        return $result;
     }
 
     private function email_template_placeholders()
@@ -1865,6 +1976,27 @@ class LC_Plugin
                 'placeholders' => ['{first_name}', '{site_name}'],
             ],
         ];
+    }
+
+    private function email_template_preview_vars($vars = [])
+    {
+        $defaults = [
+            'first_name' => 'Alex',
+            'full_name' => 'Alex Sample',
+            'user_email' => 'alex@example.com',
+            'reset_link' => home_url('/reset-password/?token=demo'),
+            'revoke_link' => home_url('/revoke-password/?token=demo'),
+            'current_time' => current_time('mysql'),
+            'company' => '5N2 Digital',
+            'phone' => '+1 555-0100',
+            'site_name' => get_bloginfo('name'),
+            'site_url' => home_url('/'),
+        ];
+        $clean = [];
+        foreach ((array) $vars as $key => $value) {
+            $clean[sanitize_key((string) $key)] = is_scalar($value) ? (string) $value : '';
+        }
+        return array_merge($defaults, $clean);
     }
 
     public function run_smtp_health_check_cron()
@@ -1955,6 +2087,49 @@ class LC_Plugin
                 'success' => true,
                 'error_code' => '',
                 'message' => 'Test email sent successfully.',
+            ];
+        } catch (Throwable $e) {
+            $message = sanitize_text_field($e->getMessage());
+            $error_code = 'send_failed';
+            if (stripos($message, 'daemon') !== false || stripos($message, 'undeliver') !== false || stripos($message, 'mailbox unavailable') !== false) {
+                $error_code = 'mailer_daemon';
+            }
+            return [
+                'success' => false,
+                'error_code' => $error_code,
+                'message' => $message !== '' ? $message : 'SMTP send failed.',
+            ];
+        }
+    }
+
+    public function smtp_send_custom_email($to_email, $subject, $body_text, $settings_override = [])
+    {
+        $to = sanitize_email((string) $to_email);
+        if ($to === '') {
+            return [
+                'success' => false,
+                'error_code' => 'invalid_email',
+                'message' => 'Recipient email is invalid.',
+            ];
+        }
+
+        $settings = wp_parse_args((array) $settings_override, $this->get_settings());
+        try {
+            $mailer = $this->build_smtp_mailer($settings);
+            $from_email = sanitize_email((string) ($settings['smtp_from_email'] ?? ''));
+            if ($from_email === '') {
+                $from_email = sanitize_email((string) get_option('admin_email'));
+            }
+            $from_name = sanitize_text_field((string) ($settings['smtp_from_name'] ?? get_bloginfo('name')));
+            $mailer->setFrom($from_email, $from_name, false);
+            $mailer->addAddress($to);
+            $mailer->Subject = (string) $subject;
+            $mailer->Body = (string) $body_text;
+            $mailer->send();
+            return [
+                'success' => true,
+                'error_code' => '',
+                'message' => 'Template test email sent successfully.',
             ];
         } catch (Throwable $e) {
             $message = sanitize_text_field($e->getMessage());
