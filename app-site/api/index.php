@@ -6111,7 +6111,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.77-social-delivery-summary',
+        'phase' => '2.78-social-delivery-connector-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8480,6 +8480,73 @@ function social_delivery_summary_snapshot($limit = 20)
     ];
 }
 
+function social_delivery_connector_detail_snapshot($connectorId, $limit = 10)
+{
+    $id = trim((string) $connectorId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'connector_id is required.'];
+    }
+
+    $connector = social_connector_by_id($id);
+    $connectorMeta = is_array($connector) ? decorate_social_connector($connector) : null;
+    $syncLog = app_read_json_file(social_sync_log_path(), []);
+    $retryQueue = app_read_json_file(social_retry_queue_path(), []);
+    $syncItems = [];
+    foreach ($syncLog as $log) {
+        if (!is_array($log) || empty($log['connector_results']) || !is_array($log['connector_results'])) {
+            continue;
+        }
+        foreach ($log['connector_results'] as $result) {
+            if (!is_array($result) || (string) ($result['connector_id'] ?? '') !== $id) {
+                continue;
+            }
+            $syncItems[] = [
+                'sync_id' => (string) ($log['sync_id'] ?? ''),
+                'created_at' => (string) ($log['created_at'] ?? ''),
+                'draft_total' => (int) ($log['draft_total'] ?? 0),
+                'accepted' => (int) ($result['accepted'] ?? 0),
+                'rejected' => (int) ($result['rejected'] ?? 0),
+                'errors' => isset($result['errors']) && is_array($result['errors']) ? $result['errors'] : [],
+                'error_codes' => isset($result['error_codes']) && is_array($result['error_codes']) ? $result['error_codes'] : [],
+                'run_mode' => (string) ($result['run_mode'] ?? ''),
+            ];
+        }
+    }
+
+    $retryItems = [];
+    foreach ($retryQueue as $retry) {
+        if (!is_array($retry) || (string) ($retry['connector_id'] ?? '') !== $id) {
+            continue;
+        }
+        $retryItems[] = [
+            'retry_id' => (string) ($retry['retry_id'] ?? ''),
+            'created_at' => (string) ($retry['created_at'] ?? ''),
+            'draft_id' => (string) ($retry['draft_id'] ?? ''),
+            'attempts' => (int) ($retry['attempts'] ?? 0),
+            'status' => (string) ($retry['status'] ?? ''),
+            'error_codes' => isset($retry['error_codes']) && is_array($retry['error_codes']) ? $retry['error_codes'] : [],
+            'errors' => isset($retry['errors']) && is_array($retry['errors']) ? $retry['errors'] : [],
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'connector' => $connectorMeta ?: ['connector_id' => $id],
+        'summary' => [
+            'sync_count' => count($syncItems),
+            'retry_count' => count($retryItems),
+            'accepted_total' => array_sum(array_map(static function ($item) {
+                return (int) ($item['accepted'] ?? 0);
+            }, $syncItems)),
+            'rejected_total' => array_sum(array_map(static function ($item) {
+                return (int) ($item['rejected'] ?? 0);
+            }, $syncItems)),
+        ],
+        'sync_items' => array_slice($syncItems, 0, max(1, $limit)),
+        'retry_items' => array_slice($retryItems, 0, max(1, $limit)),
+    ];
+}
+
 function social_connector_readiness($connector, $drafts)
 {
     $decorated = decorate_social_connector($connector);
@@ -9662,7 +9729,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.77-social-delivery-summary',
+        'phase' => '2.78-social-delivery-connector-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14074,6 +14141,16 @@ if ($action === 'social.delivery.summary') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.delivery.connector_detail') {
+    $connectorId = isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '';
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = social_delivery_connector_detail_snapshot($connectorId, $limit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.retry.list') {

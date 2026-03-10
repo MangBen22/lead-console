@@ -865,6 +865,19 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="socialSyncResult">No social sync yet.</pre>
                 <h3>Social Delivery Summary</h3>
                 <pre id="socialDeliverySummary">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialDeliveryConnectorId">Delivery Connector ID</label>
+                        <input id="socialDeliveryConnectorId" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDeliveryConnectorLimit">Connector Detail Limit</label>
+                        <input id="socialDeliveryConnectorLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="refreshSocialDeliveryDetailBtn" type="button">Refresh Connector Detail</button>
+                </div>
+                <h3>Social Delivery Connector Detail</h3>
+                <pre id="socialDeliveryConnectorDetail">No connector detail loaded.</pre>
                 <h3>Social Sync Log</h3>
                 <pre id="socialSyncLog">Loading...</pre>
                 <h3>Social Retry Queue</h3>

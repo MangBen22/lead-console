@@ -318,8 +318,10 @@
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const refreshSocialDeliverySummaryBtn = document.getElementById("refreshSocialDeliverySummaryBtn");
+  const refreshSocialDeliveryDetailBtn = document.getElementById("refreshSocialDeliveryDetailBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
   const socialDeliverySummary = document.getElementById("socialDeliverySummary");
+  const socialDeliveryConnectorDetail = document.getElementById("socialDeliveryConnectorDetail");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const webopsMonitors = document.getElementById("webopsMonitors");
@@ -3023,6 +3025,26 @@
     }
   }
 
+  async function loadSocialDeliveryConnectorDetail() {
+    if (!socialDeliveryConnectorDetail) return;
+    const connectorId = document.getElementById("socialDeliveryConnectorId");
+    const limit = document.getElementById("socialDeliveryConnectorLimit");
+    const connector_id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+    if (!connector_id) {
+      socialDeliveryConnectorDetail.textContent = "Enter a connector ID to load social delivery detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.delivery.connector_detail", {
+        connector_id,
+        limit: limit && limit.value ? limit.value.trim() : "10",
+      });
+      socialDeliveryConnectorDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDeliveryConnectorDetail.textContent = "Failed to load social connector delivery detail.";
+    }
+  }
+
   async function loadWebopsMonitors() {
     if (!webopsMonitors) return;
     try {
@@ -4171,6 +4193,12 @@
   if (refreshSocialDeliverySummaryBtn) {
     refreshSocialDeliverySummaryBtn.addEventListener("click", async function () {
       await loadSocialDeliverySummary();
+    });
+  }
+
+  if (refreshSocialDeliveryDetailBtn) {
+    refreshSocialDeliveryDetailBtn.addEventListener("click", async function () {
+      await loadSocialDeliveryConnectorDetail();
     });
   }
 
