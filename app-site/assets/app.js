@@ -517,6 +517,7 @@
   const seoOperationsSnapshotView = document.getElementById("seoOperationsSnapshotView");
   const downloadSeoOperationsSnapshotBtn = document.getElementById("downloadSeoOperationsSnapshotBtn");
   const seoOperationsHistoryView = document.getElementById("seoOperationsHistoryView");
+  const seoOperationsHistorySummaryView = document.getElementById("seoOperationsHistorySummaryView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -4947,6 +4948,19 @@
     }
   }
 
+  async function loadSeoOperationsHistorySummary() {
+    if (!seoOperationsHistorySummaryView) return;
+    const limit = document.getElementById("seoOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("seo.operations.history_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 20,
+      });
+      seoOperationsHistorySummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoOperationsHistorySummaryView.textContent = "Failed to load SEO operations history summary.";
+    }
+  }
+
   async function downloadSeoOperationsSnapshot() {
     const limit = document.getElementById("seoOperationsSnapshotLimit");
     const data = await apiGetWithParams("seo.operations.export", {
@@ -5039,6 +5053,7 @@
     await loadSeoCompare();
     await loadSeoOperationsSnapshot();
     await loadSeoOperationsHistory();
+    await loadSeoOperationsHistorySummary();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7888,6 +7903,7 @@
     refreshSeoOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadSeoOperationsSnapshot();
       await loadSeoOperationsHistory();
+      await loadSeoOperationsHistorySummary();
     });
   }
 

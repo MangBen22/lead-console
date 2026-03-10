@@ -4872,6 +4872,57 @@ function seo_operations_history_snapshot($limit = 10)
     ];
 }
 
+function seo_operations_history_summary($limit = 20)
+{
+    $history = seo_operations_history_snapshot($limit);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $runsCount = count($items);
+    $latest = $runsCount > 0 ? $items[0] : null;
+    $oldest = $runsCount > 0 ? $items[$runsCount - 1] : null;
+    $totals = [
+        'project_count' => 0,
+        'active_projects' => 0,
+        'audit_count' => 0,
+        'average_audit_score' => 0,
+        'latest_audit_score' => 0,
+        'latest_critical_issues' => 0,
+        'extension_event_count' => 0,
+        'active_extension_sessions' => 0,
+        'regression_projects' => 0,
+        'improved_projects' => 0,
+    ];
+    foreach ($items as $item) {
+        $summary = isset($item['summary']) && is_array($item['summary']) ? $item['summary'] : [];
+        foreach (array_keys($totals) as $key) {
+            $totals[$key] += (float) ($summary[$key] ?? 0);
+        }
+    }
+    $averages = [];
+    foreach ($totals as $key => $total) {
+        $averages[$key] = $runsCount > 0 ? round($total / $runsCount, 2) : 0;
+    }
+
+    $latestSummary = isset($latest['summary']) && is_array($latest['summary']) ? $latest['summary'] : [];
+    $oldestSummary = isset($oldest['summary']) && is_array($oldest['summary']) ? $oldest['summary'] : [];
+    $changes = [];
+    foreach (array_keys($totals) as $key) {
+        $changes[$key] = round(((float) ($latestSummary[$key] ?? 0)) - ((float) ($oldestSummary[$key] ?? 0)), 2);
+    }
+
+    return [
+        'summary' => [
+            'runs_count' => $runsCount,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'oldest_created_at' => (string) ($oldest['created_at'] ?? ''),
+            'averages' => $averages,
+            'changes' => $changes,
+        ],
+        'latest' => $latest,
+        'oldest' => $oldest,
+        'history' => $items,
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8261,7 +8312,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.38-seo-operations-history',
+        'phase' => '5.39-seo-operations-history-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14112,7 +14163,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.38-seo-operations-history',
+        'phase' => '5.39-seo-operations-history-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17453,6 +17504,21 @@ if ($action === 'seo.operations.history') {
         'ok' => true,
         'summary' => $history['summary'],
         'items' => $history['items'],
+    ]);
+}
+
+if ($action === 'seo.operations.history_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $summary = seo_operations_history_summary($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $summary['summary'],
+        'latest' => $summary['latest'],
+        'oldest' => $summary['oldest'],
+        'history' => $summary['history'],
     ]);
 }
 
