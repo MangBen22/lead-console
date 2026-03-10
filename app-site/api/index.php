@@ -475,6 +475,16 @@ function social_inbox_threads_path()
     return app_storage_path('social_inbox_threads.json');
 }
 
+function social_watch_state_path()
+{
+    return app_storage_path('social_watch_state.json');
+}
+
+function social_watch_runs_path()
+{
+    return app_storage_path('social_watch_runs.json');
+}
+
 function social_platform_catalog()
 {
     return [
@@ -1043,6 +1053,8 @@ function module_storage_map()
         'social_schedule_queue' => social_schedule_queue_path(),
         'social_activity_feed' => social_activity_feed_path(),
         'social_inbox_threads' => social_inbox_threads_path(),
+        'social_watch_state' => social_watch_state_path(),
+        'social_watch_runs' => social_watch_runs_path(),
         'webops_monitors' => webops_monitors_path(),
         'webops_log' => webops_log_path(),
         'webops_retry_queue' => webops_retry_queue_path(),
@@ -4279,7 +4291,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.37-social-capability-summary',
+        'phase' => '2.38-social-watch',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6466,6 +6478,161 @@ function social_connector_readiness($connector, $drafts)
     ];
 }
 
+function social_watch_snapshot($source = 'manual', $emitNotifications = true)
+{
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $drafts = collect_social_drafts();
+    $state = app_read_json_file(social_watch_state_path(), []);
+    $previousConnectors = isset($state['connectors']) && is_array($state['connectors']) ? $state['connectors'] : [];
+    $items = [];
+    $summary = [
+        'connector_count' => count($connectors),
+        'ready_connectors' => 0,
+        'blocked_connectors' => 0,
+        'expired_connectors' => 0,
+        'expiring_soon_connectors' => 0,
+        'changed_connectors' => 0,
+    ];
+    $nextConnectors = [];
+    $nowTs = time();
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $readiness = social_connector_readiness($connector, $drafts);
+        $connectorId = (string) ($decorated['connector_id'] ?? '');
+        $label = (string) ($decorated['account_label'] ?? $connectorId);
+        $status = (string) (($readiness['state'] ?? '') === 'blocked' ? 'blocked' : 'ready');
+        $reason = (string) ($readiness['reason'] ?? '');
+        $expiresAt = trim((string) ($decorated['expires_at'] ?? ''));
+        $daysUntilExpiry = null;
+        if ($expiresAt !== '') {
+            $expiryTs = strtotime($expiresAt);
+            if ($expiryTs !== false) {
+                $daysUntilExpiry = (int) floor(($expiryTs - $nowTs) / 86400);
+                if ($expiryTs <= $nowTs) {
+                    $status = 'expired';
+                    $reason = 'credential_expired';
+                } elseif ($expiryTs <= ($nowTs + (7 * DAY_IN_SECONDS)) && $status === 'ready') {
+                    $status = 'expiring_soon';
+                    $reason = 'credential_expiring_soon';
+                }
+            }
+        }
+
+        if ($status === 'ready') {
+            $summary['ready_connectors']++;
+        } elseif ($status === 'blocked') {
+            $summary['blocked_connectors']++;
+        } elseif ($status === 'expired') {
+            $summary['expired_connectors']++;
+        } elseif ($status === 'expiring_soon') {
+            $summary['expiring_soon_connectors']++;
+        }
+
+        $previous = isset($previousConnectors[$connectorId]) && is_array($previousConnectors[$connectorId]) ? $previousConnectors[$connectorId] : [];
+        $changed = false;
+        if (!empty($previous)) {
+            $previousStatus = (string) ($previous['status'] ?? '');
+            $previousReason = (string) ($previous['reason'] ?? '');
+            if ($previousStatus !== $status || $previousReason !== $reason) {
+                $changed = true;
+            }
+            if ($emitNotifications) {
+                if ($previousStatus !== 'expired' && $status === 'expired') {
+                    push_notification('critical', 'Social connector expired for ' . $label . '.', [
+                        'connector_id' => $connectorId,
+                        'provider' => (string) ($decorated['provider'] ?? ''),
+                        'source' => $source,
+                    ]);
+                } elseif ($previousStatus === 'expired' && $status !== 'expired') {
+                    push_notification('success', 'Social connector recovered for ' . $label . '.', [
+                        'connector_id' => $connectorId,
+                        'provider' => (string) ($decorated['provider'] ?? ''),
+                        'source' => $source,
+                        'status' => $status,
+                    ]);
+                }
+                if ($previousStatus !== 'blocked' && $status === 'blocked') {
+                    push_notification('warning', 'Social connector blocked for ' . $label . '.', [
+                        'connector_id' => $connectorId,
+                        'provider' => (string) ($decorated['provider'] ?? ''),
+                        'source' => $source,
+                        'reason' => $reason,
+                    ]);
+                } elseif ($previousStatus === 'blocked' && in_array($status, ['ready', 'expiring_soon'], true)) {
+                    push_notification('info', 'Social connector unblocked for ' . $label . '.', [
+                        'connector_id' => $connectorId,
+                        'provider' => (string) ($decorated['provider'] ?? ''),
+                        'source' => $source,
+                        'status' => $status,
+                    ]);
+                }
+                if ($previousStatus !== 'expiring_soon' && $status === 'expiring_soon') {
+                    push_notification('warning', 'Social connector expiring soon for ' . $label . '.', [
+                        'connector_id' => $connectorId,
+                        'provider' => (string) ($decorated['provider'] ?? ''),
+                        'source' => $source,
+                        'expires_at' => $expiresAt,
+                    ]);
+                }
+            }
+        }
+        if ($changed) {
+            $summary['changed_connectors']++;
+        }
+
+        $items[] = [
+            'connector_id' => $connectorId,
+            'account_label' => $label,
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'status' => $status,
+            'reason' => $reason,
+            'expires_at' => $expiresAt,
+            'days_until_expiry' => $daysUntilExpiry,
+            'capability_count' => count((array) ($readiness['capabilities_enabled'] ?? [])),
+            'draft_count' => (int) ($readiness['draft_count'] ?? 0),
+            'changed' => $changed ? 1 : 0,
+        ];
+        $nextConnectors[$connectorId] = [
+            'status' => $status,
+            'reason' => $reason,
+            'expires_at' => $expiresAt,
+        ];
+    }
+
+    $run = [
+        'run_id' => 'social_watch_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'created_at' => gmdate('c'),
+        'summary' => $summary,
+        'items' => $items,
+    ];
+    $runs = app_read_json_file(social_watch_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 200);
+    app_write_json_file(social_watch_runs_path(), $runs);
+    $nextState = [
+        'last_checked_at' => gmdate('c'),
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => (string) $source,
+        'summary' => $summary,
+        'connectors' => $nextConnectors,
+    ];
+    app_write_json_file(social_watch_state_path(), $nextState);
+    audit_event('social', 'watch', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'source' => $source,
+        'summary' => $summary,
+    ]);
+    return [
+        'run' => $run,
+        'state' => $nextState,
+    ];
+}
+
 function collect_social_drafts()
 {
     $payload = collect_approved_leads();
@@ -6706,7 +6873,7 @@ function execute_automation_run($settings, $source = 'manual')
         'source' => (string) $source,
         'settings_snapshot' => $settings,
         'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
-        'social' => ['processed' => 0, 'failed' => 0],
+        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => ''],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
@@ -6769,6 +6936,10 @@ function execute_automation_run($settings, $source = 'manual')
                 ]);
             }
         }
+        $socialWatch = social_watch_snapshot('automation_' . (string) $source, true);
+        $summary['social']['blocked_connectors'] = (int) (($socialWatch['run']['summary']['blocked_connectors'] ?? 0));
+        $summary['social']['expired_connectors'] = (int) (($socialWatch['run']['summary']['expired_connectors'] ?? 0));
+        $summary['social']['watch_run_id'] = (string) ($socialWatch['run']['run_id'] ?? '');
     }
 
     if (!empty($settings['modules']['webops'])) {
@@ -6851,7 +7022,7 @@ if (!in_array($action, $publicActions, true)) {
 
 $rateLimitedWriteActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
-    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
+    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run', 'social.watch.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
@@ -6896,7 +7067,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, $rateLimitedWrite
 
 $deploymentGuardedActions = [
     'crm.connectors.save', 'crm.connectors.delete', 'crm.connectors.test', 'crm.push.sync', 'crm.retry.run',
-    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run',
+    'social.connectors.save', 'social.connectors.delete', 'social.connectors.test', 'social.push.sync', 'social.retry.run', 'social.watch.run',
     'webops.monitors.save', 'webops.monitors.delete', 'webops.monitors.test', 'webops.run', 'webops.retry.run',
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
@@ -6935,7 +7106,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.37-social-capability-summary',
+        'phase' => '2.38-social-watch',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9586,6 +9757,31 @@ if ($action === 'social.capabilities.summary') {
         'families' => $snapshot['families'],
         'providers' => $snapshot['providers'],
         'capabilities' => $snapshot['capabilities'],
+    ]);
+}
+
+if ($action === 'social.watch.summary') {
+    $state = app_read_json_file(social_watch_state_path(), []);
+    $runs = app_read_json_file(social_watch_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'state' => is_array($state) ? $state : [],
+        'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+        'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+    ]);
+}
+
+if ($action === 'social.watch.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $watch = social_watch_snapshot('manual_run', true);
+    out_json([
+        'ok' => true,
+        'state' => $watch['state'],
+        'run' => $watch['run'],
     ]);
 }
 

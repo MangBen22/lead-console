@@ -407,6 +407,15 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Watch</h2>
+                <div class="actions">
+                    <button id="refreshSocialWatchBtn" type="button">Refresh Social Watch</button>
+                    <button id="runSocialWatchBtn" type="button">Run Social Watch</button>
+                </div>
+                <pre id="socialWatchView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Draft Preview</h2>
                 <div class="actions">
                     <button id="refreshSocialDraftsBtn" type="button">Refresh Social Drafts</button>
