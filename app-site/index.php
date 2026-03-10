@@ -2124,6 +2124,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <pre id="launchOperationsSnapshotView">Loading...</pre>
                 <pre id="launchOperationsHistoryView">Loading...</pre>
+                <pre id="launchOperationsHistorySummaryView">Loading...</pre>
             </section>
 
             <section class="api-status">

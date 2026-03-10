@@ -523,6 +523,7 @@
   const downloadLaunchOperationsSnapshotBtn = document.getElementById("downloadLaunchOperationsSnapshotBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
+  const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -5007,6 +5008,19 @@
     }
   }
 
+  async function loadLaunchOperationsHistorySummary() {
+    if (!launchOperationsHistorySummaryView) return;
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("launch.operations.history_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 20,
+      });
+      launchOperationsHistorySummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsHistorySummaryView.textContent = "Failed to load launch operations history summary.";
+    }
+  }
+
   async function downloadLaunchOperationsSnapshot() {
     const limit = document.getElementById("launchOperationsSnapshotLimit");
     const freshness = document.getElementById("launchOperationsFreshnessMinutes");
@@ -5117,6 +5131,7 @@
     await loadSeoOperationsIssuesSummary();
     await loadLaunchOperationsSnapshot();
     await loadLaunchOperationsHistory();
+    await loadLaunchOperationsHistorySummary();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7981,6 +7996,7 @@
     refreshLaunchOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadLaunchOperationsSnapshot();
       await loadLaunchOperationsHistory();
+      await loadLaunchOperationsHistorySummary();
     });
   }
 
