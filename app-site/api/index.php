@@ -631,6 +631,110 @@ function decorate_social_connector($connector)
     return $masked;
 }
 
+function social_capability_summary()
+{
+    $catalog = social_platform_catalog();
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $connectorMap = [];
+    foreach ($connectors as $connector) {
+        $decorated = decorate_social_connector($connector);
+        $provider = strtolower((string) ($decorated['provider'] ?? 'custom'));
+        if (!isset($connectorMap[$provider])) {
+            $connectorMap[$provider] = [];
+        }
+        $connectorMap[$provider][] = $decorated;
+    }
+
+    $capabilityCoverage = [];
+    $familySummary = [];
+    $providers = [];
+    $connectedProviders = 0;
+    $connectedAccounts = 0;
+    $activeAccounts = 0;
+
+    foreach ($catalog as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $provider = strtolower((string) ($item['provider'] ?? 'custom'));
+        $family = (string) ($item['family'] ?? 'custom');
+        $supported = isset($item['capabilities']) && is_array($item['capabilities']) ? array_values($item['capabilities']) : [];
+        $providerConnectors = isset($connectorMap[$provider]) && is_array($connectorMap[$provider]) ? $connectorMap[$provider] : [];
+        $enabledUnion = [];
+        $activeCount = 0;
+        foreach ($providerConnectors as $connector) {
+            $connectedAccounts++;
+            $status = strtolower((string) ($connector['status'] ?? 'planned'));
+            if (in_array($status, ['active', 'enabled'], true)) {
+                $activeAccounts++;
+                $activeCount++;
+            }
+            foreach ((array) ($connector['capabilities_enabled'] ?? []) as $capability) {
+                $capability = (string) $capability;
+                if ($capability !== '' && !in_array($capability, $enabledUnion, true)) {
+                    $enabledUnion[] = $capability;
+                }
+            }
+        }
+        if (!empty($providerConnectors)) {
+            $connectedProviders++;
+        }
+        foreach ($supported as $capability) {
+            if (!isset($capabilityCoverage[$capability])) {
+                $capabilityCoverage[$capability] = [
+                    'capability' => (string) $capability,
+                    'supported_by' => [],
+                    'enabled_on' => [],
+                ];
+            }
+            $capabilityCoverage[$capability]['supported_by'][] = $provider;
+            if (in_array($capability, $enabledUnion, true)) {
+                $capabilityCoverage[$capability]['enabled_on'][] = $provider;
+            }
+        }
+        if (!isset($familySummary[$family])) {
+            $familySummary[$family] = [
+                'family' => $family,
+                'providers' => 0,
+                'connected_accounts' => 0,
+                'active_accounts' => 0,
+            ];
+        }
+        $familySummary[$family]['providers']++;
+        $familySummary[$family]['connected_accounts'] += count($providerConnectors);
+        $familySummary[$family]['active_accounts'] += $activeCount;
+        $providers[] = [
+            'provider' => $provider,
+            'label' => (string) ($item['label'] ?? $provider),
+            'family' => $family,
+            'supported_capabilities' => $supported,
+            'enabled_capabilities' => $enabledUnion,
+            'missing_capabilities' => array_values(array_diff($supported, $enabledUnion)),
+            'connector_count' => count($providerConnectors),
+            'active_connector_count' => $activeCount,
+            'theme' => isset($item['theme']) && is_array($item['theme']) ? $item['theme'] : [],
+        ];
+    }
+
+    $capabilities = array_values($capabilityCoverage);
+    usort($capabilities, static function ($a, $b) {
+        return strcmp((string) ($a['capability'] ?? ''), (string) ($b['capability'] ?? ''));
+    });
+
+    return [
+        'summary' => [
+            'provider_count' => count($providers),
+            'connected_providers' => $connectedProviders,
+            'connected_accounts' => $connectedAccounts,
+            'active_accounts' => $activeAccounts,
+            'capability_count' => count($capabilities),
+        ],
+        'families' => array_values($familySummary),
+        'providers' => $providers,
+        'capabilities' => $capabilities,
+    ];
+}
+
 function webops_monitors_path()
 {
     return app_storage_path('webops_monitors.json');
@@ -4175,7 +4279,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.36-crm-email-template-test-log',
+        'phase' => '2.37-social-capability-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6831,7 +6935,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.36-crm-email-template-test-log',
+        'phase' => '2.37-social-capability-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9471,6 +9575,17 @@ if ($action === 'social.platforms.list') {
         'ok' => true,
         'count' => count($items),
         'items' => $items,
+    ]);
+}
+
+if ($action === 'social.capabilities.summary') {
+    $snapshot = social_capability_summary();
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'families' => $snapshot['families'],
+        'providers' => $snapshot['providers'],
+        'capabilities' => $snapshot['capabilities'],
     ]);
 }
 

@@ -236,10 +236,12 @@
   const crmEmailTemplatePreview = document.getElementById("crmEmailTemplatePreview");
   const crmEmailTemplateTestLog = document.getElementById("crmEmailTemplateTestLog");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
+  const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
   const refreshSocialInboxBtn = document.getElementById("refreshSocialInboxBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
+  const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
@@ -2328,6 +2330,16 @@
     }
   }
 
+  async function loadSocialCapabilitiesSummary() {
+    if (!socialCapabilitiesSummary) return;
+    try {
+      const data = await apiGet("social.capabilities.summary");
+      socialCapabilitiesSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialCapabilitiesSummary.textContent = "Failed to load social capability map.";
+    }
+  }
+
   async function loadSocialDraftsPreview() {
     if (!socialDraftsPreview) return;
     try {
@@ -2588,6 +2600,7 @@
   (async function initCrm() {
     await loadCrmConnectors();
     await loadSocialPlatforms();
+    await loadSocialCapabilitiesSummary();
     await loadSocialDraftsPreview();
     await loadCrmSyncLog();
     await loadRetryQueue();
@@ -3061,6 +3074,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialConnectors();
+        await loadSocialCapabilitiesSummary();
         await loadSocialDraftsPreview();
         await loadSocialActivityFeed();
         await loadSocialInboxThreads();
@@ -3083,6 +3097,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialConnectors();
+        await loadSocialCapabilitiesSummary();
         await loadSocialDraftsPreview();
         await loadSocialActivityFeed();
         await loadSocialInboxThreads();
@@ -3218,6 +3233,12 @@
   if (refreshSocialPlatformsBtn) {
     refreshSocialPlatformsBtn.addEventListener("click", async function () {
       await loadSocialPlatforms();
+    });
+  }
+
+  if (refreshSocialCapabilitiesBtn) {
+    refreshSocialCapabilitiesBtn.addEventListener("click", async function () {
+      await loadSocialCapabilitiesSummary();
     });
   }
 
