@@ -267,6 +267,7 @@
   const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
   const refreshCrmSyncLogBtn = document.getElementById("refreshCrmSyncLogBtn");
   const loadCrmSyncDetailBtn = document.getElementById("loadCrmSyncDetailBtn");
+  const downloadCrmSyncExportBtn = document.getElementById("downloadCrmSyncExportBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmSyncDetail = document.getElementById("crmSyncDetail");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
@@ -2799,6 +2800,23 @@
     }
   }
 
+  async function downloadCrmSyncExport() {
+    const syncId = document.getElementById("crmSyncDetailId");
+    const data = await apiGetWithParams("crm.push.export", {
+      status: document.getElementById("crmSyncFilterStatus") && document.getElementById("crmSyncFilterStatus").value ? document.getElementById("crmSyncFilterStatus").value.trim() : "",
+      connector_id: document.getElementById("crmSyncFilterConnector") && document.getElementById("crmSyncFilterConnector").value ? document.getElementById("crmSyncFilterConnector").value.trim() : "",
+      search: document.getElementById("crmSyncFilterSearch") && document.getElementById("crmSyncFilterSearch").value ? document.getElementById("crmSyncFilterSearch").value.trim() : "",
+      page: document.getElementById("crmSyncFilterPage") && document.getElementById("crmSyncFilterPage").value ? document.getElementById("crmSyncFilterPage").value : 1,
+      limit: document.getElementById("crmSyncFilterLimit") && document.getElementById("crmSyncFilterLimit").value ? document.getElementById("crmSyncFilterLimit").value : 10,
+      sync_id: syncId && syncId.value ? syncId.value.trim() : "",
+      include_detail: syncId && syncId.value ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "crm-sync-export.json", data.export || data);
+    if (crmSyncResult) {
+      crmSyncResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadCrmDeliverySummary() {
     if (!crmDeliverySummary) return;
     try {
@@ -4704,6 +4722,12 @@
   if (loadCrmSyncDetailBtn) {
     loadCrmSyncDetailBtn.addEventListener("click", async function () {
       await loadCrmSyncDetail();
+    });
+  }
+
+  if (downloadCrmSyncExportBtn) {
+    downloadCrmSyncExportBtn.addEventListener("click", async function () {
+      await downloadCrmSyncExport();
     });
   }
 

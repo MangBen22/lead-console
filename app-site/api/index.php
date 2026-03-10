@@ -6878,7 +6878,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.06-crm-sync-log-detail',
+        'phase' => '5.07-crm-sync-log-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12729,7 +12729,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.06-crm-sync-log-detail',
+        'phase' => '5.07-crm-sync-log-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14999,6 +14999,32 @@ if ($action === 'crm.push.detail') {
     $syncId = isset($_GET['sync_id']) ? (string) $_GET['sync_id'] : '';
     $snapshot = crm_sync_log_detail_snapshot($syncId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'crm.push.export') {
+    $snapshot = crm_sync_log_list_snapshot($_GET);
+    $syncId = isset($_GET['sync_id']) ? (string) $_GET['sync_id'] : '';
+    $includeDetail = !empty($_GET['include_detail']);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'sync_id' => $syncId,
+        'include_detail' => $includeDetail ? 1 : 0,
+    ];
+    if ($includeDetail && $syncId !== '') {
+        $payload['detail'] = crm_sync_log_detail_snapshot($syncId);
+    }
+    audit_event('crm', 'push.export', [
+        'sync_id' => $syncId,
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'include_detail' => $includeDetail ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_sync_log_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'crm.delivery.summary') {

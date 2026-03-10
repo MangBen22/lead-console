@@ -584,6 +584,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="crmSyncFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshCrmSyncLogBtn" type="button">Refresh Sync Log</button>
+                    <button id="downloadCrmSyncExportBtn" type="button">Download Sync Export</button>
                 </form>
                 <pre id="crmSyncLog">Loading...</pre>
                 <form id="crmSyncDetailForm" class="inline-form">
