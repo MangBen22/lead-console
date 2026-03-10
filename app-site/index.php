@@ -823,6 +823,36 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </div>
                     <button id="updateSocialInboxThreadBtn" type="button">Update Thread</button>
                 </form>
+                <form id="socialInboxBulkUpdateForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialInboxBulkStatus">Bulk Status</label>
+                        <select id="socialInboxBulkStatus">
+                            <option value="">Keep current</option>
+                            <option value="open">open</option>
+                            <option value="pending">pending</option>
+                            <option value="replied">replied</option>
+                            <option value="closed">closed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxBulkPriority">Bulk Priority</label>
+                        <select id="socialInboxBulkPriority">
+                            <option value="">Keep current</option>
+                            <option value="low">low</option>
+                            <option value="normal">normal</option>
+                            <option value="high">high</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxBulkOwner">Bulk Owner</label>
+                        <input id="socialInboxBulkOwner" type="text" placeholder="Ops team">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxBulkNote">Bulk Internal Note</label>
+                        <textarea id="socialInboxBulkNote" rows="3" placeholder="Bulk note to apply..."></textarea>
+                    </div>
+                    <button id="updateSocialInboxBulkBtn" type="button">Update Inbox Page</button>
+                </form>
             </section>
 
             <section class="api-status">

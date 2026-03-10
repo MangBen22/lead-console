@@ -1989,6 +1989,90 @@ function social_inbox_thread_detail_snapshot($threadId)
     return ['ok' => false, 'error' => 'Inbox thread not found.'];
 }
 
+function social_inbox_bulk_update($payload)
+{
+    $data = is_array($payload) ? $payload : [];
+    $snapshot = social_inbox_list_snapshot([
+        'status' => isset($data['filter_status']) ? (string) $data['filter_status'] : '',
+        'priority' => isset($data['filter_priority']) ? (string) $data['filter_priority'] : '',
+        'provider' => isset($data['filter_provider']) ? (string) $data['filter_provider'] : '',
+        'owner' => isset($data['filter_owner']) ? (string) $data['filter_owner'] : '',
+        'search' => isset($data['filter_search']) ? (string) $data['filter_search'] : '',
+        'page' => isset($data['filter_page']) ? (int) $data['filter_page'] : 1,
+        'limit' => isset($data['filter_limit']) ? (int) $data['filter_limit'] : 10,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    $statusProvided = array_key_exists('status', $data);
+    $priorityProvided = array_key_exists('priority', $data);
+    $ownerProvided = array_key_exists('owner', $data);
+    $noteProvided = array_key_exists('internal_note', $data);
+    $nextStatus = strtolower(trim((string) ($data['status'] ?? '')));
+    $nextPriority = strtolower(trim((string) ($data['priority'] ?? '')));
+    if ($statusProvided && $nextStatus !== '' && !in_array($nextStatus, social_inbox_status_values(), true)) {
+        return ['ok' => false, 'error' => 'Invalid inbox status.'];
+    }
+    if ($priorityProvided && $nextPriority !== '' && !in_array($nextPriority, social_inbox_priority_values(), true)) {
+        return ['ok' => false, 'error' => 'Invalid inbox priority.'];
+    }
+    if (!$statusProvided && !$priorityProvided && !$ownerProvided && !$noteProvided) {
+        return ['ok' => false, 'error' => 'At least one bulk update field is required.'];
+    }
+
+    $rows = social_inbox_threads_rows(true);
+    $threadIds = array_flip(array_map(static function ($item) {
+        return (string) ($item['thread_id'] ?? '');
+    }, $items));
+    $updated = 0;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $threadId = (string) ($row['thread_id'] ?? '');
+        if ($threadId === '' || !isset($threadIds[$threadId])) {
+            continue;
+        }
+        $row = social_normalize_inbox_thread($row);
+        $changed = false;
+        if ($statusProvided && $nextStatus !== '' && $nextStatus !== (string) ($row['status'] ?? 'open')) {
+            $row['status'] = $nextStatus;
+            $row['last_status_at'] = gmdate('c');
+            $changed = true;
+        }
+        if ($priorityProvided && $nextPriority !== '' && $nextPriority !== (string) ($row['priority'] ?? 'normal')) {
+            $row['priority'] = $nextPriority;
+            $changed = true;
+        }
+        if ($ownerProvided) {
+            $ownerValue = substr(trim((string) ($data['owner'] ?? '')), 0, 120);
+            if ($ownerValue !== (string) ($row['owner'] ?? '')) {
+                $row['owner'] = $ownerValue;
+                $changed = true;
+            }
+        }
+        if ($noteProvided) {
+            $noteValue = substr(trim((string) ($data['internal_note'] ?? '')), 0, 1000);
+            if ($noteValue !== (string) ($row['internal_note'] ?? '')) {
+                $row['internal_note'] = $noteValue;
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $row['updated_at'] = gmdate('c');
+            $rows[$index] = $row;
+            $updated++;
+        }
+    }
+
+    app_write_json_file(social_inbox_threads_path(), $rows);
+    return [
+        'ok' => true,
+        'processed' => count($items),
+        'updated' => $updated,
+        'filters' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        'items' => $items,
+    ];
+}
+
 function social_inbox_watch_snapshot($source = 'manual', $emitNotifications = true, $staleAfterHours = 24)
 {
     $rows = social_inbox_threads_rows(true);
@@ -6027,7 +6111,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.75-social-inbox-export',
+        'phase' => '2.76-social-inbox-bulk-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9421,7 +9505,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.75-social-inbox-export',
+        'phase' => '2.76-social-inbox-bulk-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12759,6 +12843,25 @@ if ($action === 'social.inbox.update') {
         'thread' => $updated,
         'changes' => $changes,
     ]);
+}
+
+if ($action === 'social.inbox.bulk_update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    $snapshot = social_inbox_bulk_update($data);
+    audit_event('social', 'inbox.bulk_update', [
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'updated' => (int) ($snapshot['updated'] ?? 0),
+    ]);
+    record_social_activity('inbox_bulk_update', 'Social inbox bulk update applied.', [
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'updated' => (int) ($snapshot['updated'] ?? 0),
+    ]);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.schedule.save') {

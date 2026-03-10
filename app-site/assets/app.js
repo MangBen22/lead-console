@@ -309,6 +309,7 @@
   const downloadSocialInboxExportBtn = document.getElementById("downloadSocialInboxExportBtn");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const socialInboxUpdateForm = document.getElementById("socialInboxUpdateForm");
+  const updateSocialInboxBulkBtn = document.getElementById("updateSocialInboxBulkBtn");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
   const refreshWebopsActionsBtn = document.getElementById("refreshWebopsActionsBtn");
@@ -2787,6 +2788,41 @@
     }
   }
 
+  async function runSocialInboxBulkUpdate() {
+    const filters = socialInboxFilters();
+    const payload = {
+      filter_status: filters.status || "",
+      filter_priority: filters.priority || "",
+      filter_provider: filters.provider || "",
+      filter_owner: filters.owner || "",
+      filter_search: filters.search || "",
+      filter_page: filters.page || "1",
+      filter_limit: filters.limit || "10",
+      status: document.getElementById("socialInboxBulkStatus") && document.getElementById("socialInboxBulkStatus").value
+        ? document.getElementById("socialInboxBulkStatus").value
+        : "",
+      priority: document.getElementById("socialInboxBulkPriority") && document.getElementById("socialInboxBulkPriority").value
+        ? document.getElementById("socialInboxBulkPriority").value
+        : "",
+      owner: document.getElementById("socialInboxBulkOwner") && document.getElementById("socialInboxBulkOwner").value
+        ? document.getElementById("socialInboxBulkOwner").value.trim()
+        : "",
+      internal_note: document.getElementById("socialInboxBulkNote") && document.getElementById("socialInboxBulkNote").value
+        ? document.getElementById("socialInboxBulkNote").value.trim()
+        : "",
+    };
+    const result = await apiPost("social.inbox.bulk_update", payload);
+    if (socialInboxThreadDetail) {
+      socialInboxThreadDetail.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadSocialInboxThreads();
+    await loadSocialInboxSummary();
+    await loadSocialInboxWorkload();
+    await loadSocialInboxWatch();
+    await loadSocialActivityFeed();
+    await refreshSocialModuleSummary();
+  }
+
   async function downloadSocialInboxExport() {
     const detailThread = document.getElementById("socialInboxDetailThreadId");
     const params = socialInboxFilters();
@@ -4050,6 +4086,12 @@
   if (loadSocialInboxDetailBtn) {
     loadSocialInboxDetailBtn.addEventListener("click", async function () {
       await loadSocialInboxDetail();
+    });
+  }
+
+  if (updateSocialInboxBulkBtn) {
+    updateSocialInboxBulkBtn.addEventListener("click", async function () {
+      await runSocialInboxBulkUpdate();
     });
   }
 
