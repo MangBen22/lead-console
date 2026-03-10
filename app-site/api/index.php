@@ -705,7 +705,7 @@ function leads_quality_snapshot($limit = 10)
         if ($left === $right) {
             return strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? ''));
         }
-        return ($left < $right) ? 1 : -1;
+        return ($leftDebt < $rightDebt) ? 1 : -1;
     });
     $summary['duplicate_groups'] = count($duplicateGroups);
 
@@ -743,6 +743,163 @@ function leads_delivery_history_snapshot($limit = 10)
         ],
         'items' => array_slice($items, 0, $limit),
         'retry_queue' => array_slice($retryQueue, 0, $limit),
+    ];
+}
+
+function crm_delivery_summary_snapshot($limit = 20)
+{
+    $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $syncLog = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $retryQueue = app_read_json_file(retry_queue_path(), []);
+
+    $items = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $connectorId = (string) ($connector['connector_id'] ?? '');
+        if ($connectorId === '') {
+            continue;
+        }
+        $items[$connectorId] = [
+            'connector_id' => $connectorId,
+            'provider' => (string) ($connector['provider'] ?? ''),
+            'type' => (string) ($connector['type'] ?? ''),
+            'status' => (string) ($connector['status'] ?? ''),
+            'sync_count' => 0,
+            'accepted_total' => 0,
+            'rejected_total' => 0,
+            'queued_retries' => 0,
+            'retry_attempts' => 0,
+            'last_sync_at' => '',
+            'last_sync_status' => 'unknown',
+            'last_retry_status' => '',
+            'error_codes' => [],
+        ];
+    }
+
+    foreach ($syncLog as $log) {
+        if (!is_array($log) || empty($log['connector_results']) || !is_array($log['connector_results'])) {
+            continue;
+        }
+        $createdAt = (string) ($log['created_at'] ?? '');
+        foreach ($log['connector_results'] as $result) {
+            if (!is_array($result)) {
+                continue;
+            }
+            $connectorId = (string) ($result['connector_id'] ?? '');
+            if ($connectorId === '') {
+                continue;
+            }
+            if (!isset($items[$connectorId])) {
+                $items[$connectorId] = [
+                    'connector_id' => $connectorId,
+                    'provider' => (string) ($result['provider'] ?? ''),
+                    'type' => (string) ($result['type'] ?? ''),
+                    'status' => 'unknown',
+                    'sync_count' => 0,
+                    'accepted_total' => 0,
+                    'rejected_total' => 0,
+                    'queued_retries' => 0,
+                    'retry_attempts' => 0,
+                    'last_sync_at' => '',
+                    'last_sync_status' => 'unknown',
+                    'last_retry_status' => '',
+                    'error_codes' => [],
+                ];
+            }
+            $items[$connectorId]['sync_count']++;
+            $items[$connectorId]['accepted_total'] += (int) ($result['accepted'] ?? 0);
+            $items[$connectorId]['rejected_total'] += (int) ($result['rejected'] ?? 0);
+            if ($items[$connectorId]['last_sync_at'] === '' || strcmp($createdAt, $items[$connectorId]['last_sync_at']) > 0) {
+                $items[$connectorId]['last_sync_at'] = $createdAt;
+                $items[$connectorId]['last_sync_status'] = ((int) ($result['rejected'] ?? 0) > 0 || !empty($result['errors'])) ? 'degraded' : 'ok';
+            }
+            foreach ((array) ($result['error_codes'] ?? []) as $code) {
+                $code = (string) $code;
+                if ($code === '') {
+                    continue;
+                }
+                if (!isset($items[$connectorId]['error_codes'][$code])) {
+                    $items[$connectorId]['error_codes'][$code] = 0;
+                }
+                $items[$connectorId]['error_codes'][$code]++;
+            }
+        }
+    }
+
+    foreach ($retryQueue as $retry) {
+        if (!is_array($retry)) {
+            continue;
+        }
+        $connectorId = (string) ($retry['connector_id'] ?? '');
+        if ($connectorId === '') {
+            continue;
+        }
+        if (!isset($items[$connectorId])) {
+            $items[$connectorId] = [
+                'connector_id' => $connectorId,
+                'provider' => (string) ($retry['provider'] ?? ''),
+                'type' => (string) ($retry['type'] ?? ''),
+                'status' => 'unknown',
+                'sync_count' => 0,
+                'accepted_total' => 0,
+                'rejected_total' => 0,
+                'queued_retries' => 0,
+                'retry_attempts' => 0,
+                'last_sync_at' => '',
+                'last_sync_status' => 'unknown',
+                'last_retry_status' => '',
+                'error_codes' => [],
+            ];
+        }
+        $items[$connectorId]['queued_retries']++;
+        $items[$connectorId]['retry_attempts'] += (int) ($retry['attempts'] ?? 0);
+        $items[$connectorId]['last_retry_status'] = (string) ($retry['status'] ?? '');
+        foreach ((array) ($retry['error_codes'] ?? []) as $code) {
+            $code = (string) $code;
+            if ($code === '') {
+                continue;
+            }
+            if (!isset($items[$connectorId]['error_codes'][$code])) {
+                $items[$connectorId]['error_codes'][$code] = 0;
+            }
+            $items[$connectorId]['error_codes'][$code]++;
+        }
+    }
+
+    $rows = array_values(array_map(static function ($item) {
+        if (is_array($item['error_codes'])) {
+            arsort($item['error_codes']);
+        }
+        return $item;
+    }, $items));
+
+    usort($rows, static function ($a, $b) {
+        $leftDebt = (int) ($a['queued_retries'] ?? 0) + (int) ($a['rejected_total'] ?? 0);
+        $rightDebt = (int) ($b['queued_retries'] ?? 0) + (int) ($b['rejected_total'] ?? 0);
+        if ($leftDebt === $rightDebt) {
+            return strcmp((string) ($a['connector_id'] ?? ''), (string) ($b['connector_id'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+
+    return [
+        'summary' => [
+            'connector_count' => count($rows),
+            'active_connector_count' => count(array_filter($rows, static function ($row) {
+                return in_array(strtolower((string) ($row['status'] ?? '')), ['active', 'enabled'], true);
+            })),
+            'sync_count' => count($syncLog),
+            'retry_queue_count' => count($retryQueue),
+            'connectors_with_retries' => count(array_filter($rows, static function ($row) {
+                return (int) ($row['queued_retries'] ?? 0) > 0;
+            })),
+            'connectors_with_rejections' => count(array_filter($rows, static function ($row) {
+                return (int) ($row['rejected_total'] ?? 0) > 0;
+            })),
+        ],
+        'items' => array_slice($rows, 0, max(1, $limit)),
     ];
 }
 
@@ -5618,7 +5775,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.67-leads-review-duplicate-check',
+        'phase' => '2.68-crm-delivery-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9009,7 +9166,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.67-leads-review-duplicate-check',
+        'phase' => '2.68-crm-delivery-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -11223,6 +11380,19 @@ if ($action === 'crm.push.log') {
         'ok' => true,
         'count' => count($logs),
         'items' => $logs,
+    ]);
+}
+
+if ($action === 'crm.delivery.summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $snapshot = crm_delivery_summary_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

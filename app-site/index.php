@@ -454,8 +454,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="runCrmSyncBtn" type="button">Run CRM Sync</button>
                     <button id="runRetryQueueBtn" type="button">Run Retry Queue</button>
+                    <button id="refreshCrmDeliverySummaryBtn" type="button">Refresh Delivery Summary</button>
                 </div>
                 <pre id="crmSyncResult">No sync yet.</pre>
+                <h3>Delivery Summary</h3>
+                <pre id="crmDeliverySummary">Loading...</pre>
                 <h3>Sync Log</h3>
                 <pre id="crmSyncLog">Loading...</pre>
                 <h3>Retry Queue</h3>

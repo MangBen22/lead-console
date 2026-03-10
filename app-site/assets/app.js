@@ -243,7 +243,9 @@
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
+  const refreshCrmDeliverySummaryBtn = document.getElementById("refreshCrmDeliverySummaryBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
+  const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
@@ -2548,6 +2550,16 @@
     }
   }
 
+  async function loadCrmDeliverySummary() {
+    if (!crmDeliverySummary) return;
+    try {
+      const data = await apiGetWithParams("crm.delivery.summary", { limit: 20 });
+      crmDeliverySummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmDeliverySummary.textContent = "Failed to load CRM delivery summary.";
+    }
+  }
+
   async function loadRetryQueue() {
     if (!crmRetryQueue) return;
     try {
@@ -3094,6 +3106,7 @@
     await loadSocialDraftsPreview();
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
+    await loadCrmDeliverySummary();
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadCrmSmtpSummary();
@@ -3255,6 +3268,7 @@
       if (crmSyncResult) {
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
+      await loadCrmDeliverySummary();
       await loadCrmSyncLog();
       await loadRetryQueue();
       modules.forEach(async function (entry) {
@@ -3273,12 +3287,19 @@
       if (crmSyncResult) {
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
+      await loadCrmDeliverySummary();
       await loadRetryQueue();
       const crmData = await apiGet("crm.summary");
       const crmPanel = document.getElementById("modCrm");
       if (crmPanel) {
         crmPanel.textContent = JSON.stringify(crmData, null, 2);
       }
+    });
+  }
+
+  if (refreshCrmDeliverySummaryBtn) {
+    refreshCrmDeliverySummaryBtn.addEventListener("click", async function () {
+      await loadCrmDeliverySummary();
     });
   }
 
@@ -4410,6 +4431,7 @@
       await loadLeadsList();
       await loadLeadsQuality();
       await loadLeadsDeliveryHistory();
+      await loadCrmDeliverySummary();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();
@@ -4428,6 +4450,7 @@
       await loadLeadsPushPlan();
       await loadLeadsQuality();
       await loadLeadsDeliveryHistory();
+      await loadCrmDeliverySummary();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();
