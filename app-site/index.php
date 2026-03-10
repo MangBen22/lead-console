@@ -440,6 +440,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Draft Delivery Plan</h2>
+                <div class="actions">
+                    <button id="refreshSocialDraftPlanBtn" type="button">Refresh Draft Plan</button>
+                </div>
+                <pre id="socialDraftPlanView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Connectors</h2>
                 <pre id="socialConnectors">Loading...</pre>
                 <form id="socialConnectorForm" class="inline-form">

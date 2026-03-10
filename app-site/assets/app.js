@@ -242,6 +242,7 @@
   const refreshSocialOpsSnapshotBtn = document.getElementById("refreshSocialOpsSnapshotBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
+  const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
   const refreshSocialInboxBtn = document.getElementById("refreshSocialInboxBtn");
   const refreshSocialInboxWorkloadBtn = document.getElementById("refreshSocialInboxWorkloadBtn");
@@ -254,6 +255,7 @@
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
+  const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
@@ -2513,6 +2515,16 @@
     }
   }
 
+  async function loadSocialDraftPlan() {
+    if (!socialDraftPlanView) return;
+    try {
+      const data = await apiGetWithParams("social.drafts.plan", { limit: 8 });
+      socialDraftPlanView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDraftPlanView.textContent = "Failed to load social draft plan.";
+    }
+  }
+
   async function loadSocialSyncLog() {
     if (!socialSyncLog) return;
     try {
@@ -2768,6 +2780,7 @@
     await loadSocialOperationsSnapshot();
     await loadSocialDraftsPreview();
     await loadSocialDraftValidation();
+    await loadSocialDraftPlan();
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadCrmSmtpSummary();
@@ -3257,6 +3270,7 @@
         await loadSocialOperationsSnapshot();
         await loadSocialDraftsPreview();
         await loadSocialDraftValidation();
+        await loadSocialDraftPlan();
         await loadSocialActivityFeed();
         await loadSocialInboxThreads();
       });
@@ -3283,6 +3297,7 @@
         await loadSocialOperationsSnapshot();
         await loadSocialDraftsPreview();
         await loadSocialDraftValidation();
+        await loadSocialDraftPlan();
         await loadSocialActivityFeed();
         await loadSocialInboxThreads();
       });
@@ -3522,6 +3537,12 @@
   if (refreshSocialDraftValidationBtn) {
     refreshSocialDraftValidationBtn.addEventListener("click", async function () {
       await loadSocialDraftValidation();
+    });
+  }
+
+  if (refreshSocialDraftPlanBtn) {
+    refreshSocialDraftPlanBtn.addEventListener("click", async function () {
+      await loadSocialDraftPlan();
     });
   }
 

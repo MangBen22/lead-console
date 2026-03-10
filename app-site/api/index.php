@@ -749,6 +749,7 @@ function social_operations_snapshot($limit = 5)
     $schedule = social_schedule_snapshot($limit);
     $inbox = social_inbox_summary_snapshot($limit);
     $inboxWorkload = social_inbox_workload_snapshot($limit);
+    $draftPlan = social_draft_delivery_plan(null, $limit);
     $draftValidation = social_draft_validation_snapshot(collect_social_drafts());
     $retryQueue = app_read_json_file(social_retry_queue_path(), []);
     $syncLog = app_read_json_file(social_sync_log_path(), []);
@@ -762,6 +763,8 @@ function social_operations_snapshot($limit = 5)
             'schedule_due_items' => (int) (($schedule['summary']['due'] ?? 0)),
             'schedule_failed_items' => (int) (($schedule['summary']['failed'] ?? 0)),
             'retry_backlog' => count($retryQueue),
+            'draft_ready_pairs' => (int) (($draftPlan['summary']['ready_pairs'] ?? 0)),
+            'draft_blocked_pairs' => (int) (($draftPlan['summary']['blocked_pairs'] ?? 0)),
             'open_inbox_threads' => (int) (($inbox['summary']['open'] ?? 0)),
             'pending_inbox_threads' => (int) (($inbox['summary']['pending'] ?? 0)),
             'inbox_backlog_threads' => (int) (($inbox['summary']['backlog'] ?? 0)),
@@ -773,6 +776,7 @@ function social_operations_snapshot($limit = 5)
         'schedule' => $schedule,
         'inbox' => $inbox,
         'inbox_workload' => $inboxWorkload,
+        'draft_delivery_plan' => $draftPlan,
         'draft_validation' => $draftValidation,
         'retry_queue_count' => count($retryQueue),
     ];
@@ -4916,7 +4920,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.52-social-inbox-watch-automation',
+        'phase' => '2.53-social-draft-delivery-plan',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7291,6 +7295,102 @@ function social_draft_validation_snapshot($drafts = null)
     ];
 }
 
+function social_draft_delivery_plan($drafts = null, $limit = 10)
+{
+    $draftRows = is_array($drafts) ? $drafts : collect_social_drafts();
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $items = [];
+    $summary = [
+        'connector_count' => 0,
+        'ready_connectors' => 0,
+        'blocked_connectors' => 0,
+        'draft_target_pairs' => 0,
+        'ready_pairs' => 0,
+        'blocked_pairs' => 0,
+    ];
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $summary['connector_count']++;
+        $pairResults = [];
+        $connectorReady = 0;
+        $connectorBlocked = 0;
+        $connectorWarnings = [];
+        $connectorIssues = [];
+
+        foreach ($draftRows as $index => $draft) {
+            $validation = social_validate_draft_for_connector($connector, $draft);
+            $summary['draft_target_pairs']++;
+            $draftLabel = trim((string) (($draft['title'] ?? '') ?: ($draft['message'] ?? '')));
+            if ($draftLabel === '') {
+                $draftLabel = 'Draft ' . ($index + 1);
+            }
+
+            if (!empty($validation['ready'])) {
+                $summary['ready_pairs']++;
+                $connectorReady++;
+            } else {
+                $summary['blocked_pairs']++;
+                $connectorBlocked++;
+            }
+            foreach ((array) ($validation['issues'] ?? []) as $issue) {
+                if (!in_array($issue, $connectorIssues, true)) {
+                    $connectorIssues[] = $issue;
+                }
+            }
+            foreach ((array) ($validation['warnings'] ?? []) as $warning) {
+                if (!in_array($warning, $connectorWarnings, true)) {
+                    $connectorWarnings[] = $warning;
+                }
+            }
+            $pairResults[] = [
+                'draft_index' => $index,
+                'draft_label' => substr($draftLabel, 0, 120),
+                'ready' => !empty($validation['ready']) ? 1 : 0,
+                'issues' => isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [],
+                'warnings' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
+            ];
+        }
+
+        if ($connectorBlocked > 0) {
+            $summary['blocked_connectors']++;
+        } else {
+            $summary['ready_connectors']++;
+        }
+
+        $items[] = [
+            'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'account_label' => (string) ($decorated['account_label'] ?? ''),
+            'status' => (string) ($decorated['status'] ?? ''),
+            'family' => (string) (($decorated['profile']['family'] ?? 'custom')),
+            'capabilities_enabled' => isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [],
+            'ready_draft_count' => $connectorReady,
+            'blocked_draft_count' => $connectorBlocked,
+            'issues' => $connectorIssues,
+            'warnings' => $connectorWarnings,
+            'draft_results' => array_slice($pairResults, 0, $limit),
+        ];
+    }
+
+    usort($items, static function ($a, $b) {
+        $left = (int) ($a['blocked_draft_count'] ?? 0);
+        $right = (int) ($b['blocked_draft_count'] ?? 0);
+        if ($left === $right) {
+            return strcmp((string) ($a['account_label'] ?? ''), (string) ($b['account_label'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+
+    return [
+        'summary' => $summary,
+        'items' => $items,
+    ];
+}
+
 function social_validation_label_map()
 {
     return [
@@ -8211,7 +8311,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.52-social-inbox-watch-automation',
+        'phase' => '2.53-social-draft-delivery-plan',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10942,6 +11042,21 @@ if ($action === 'social.drafts.preview') {
 if ($action === 'social.drafts.validation') {
     $drafts = collect_social_drafts();
     $snapshot = social_draft_validation_snapshot($drafts);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'draft_count' => count($drafts),
+    ]);
+}
+
+if ($action === 'social.drafts.plan') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $drafts = collect_social_drafts();
+    $snapshot = social_draft_delivery_plan($drafts, $limit);
     out_json([
         'ok' => true,
         'summary' => $snapshot['summary'],
