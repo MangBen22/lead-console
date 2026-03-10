@@ -295,6 +295,7 @@
   const downloadSocialSyncExportBtn = document.getElementById("downloadSocialSyncExportBtn");
   const loadSocialActivityDetailBtn = document.getElementById("loadSocialActivityDetailBtn");
   const downloadSocialActivityExportBtn = document.getElementById("downloadSocialActivityExportBtn");
+  const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -304,6 +305,7 @@
   const refreshSocialInboxWatchBtn = document.getElementById("refreshSocialInboxWatchBtn");
   const runSocialInboxWatchBtn = document.getElementById("runSocialInboxWatchBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
+  const socialPlatformDetail = document.getElementById("socialPlatformDetail");
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
@@ -3192,6 +3194,28 @@
     };
   }
 
+  async function loadSocialPlatformDetail() {
+    if (!socialPlatformDetail) return;
+    const provider = document.getElementById("socialPlatformDetailProvider");
+    if (!provider || !provider.value) {
+      socialPlatformDetail.textContent = "Enter a provider to load platform detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.platforms.detail", { provider: provider.value.trim() });
+      socialPlatformDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const providerInput = document.getElementById("socialProvider");
+        if (providerInput) {
+          providerInput.value = data.item.provider || "";
+          applySocialProviderProfile(providerInput.value);
+        }
+      }
+    } catch (err) {
+      socialPlatformDetail.textContent = "Failed to load social platform detail.";
+    }
+  }
+
   const renderSocialProviderProfile = function (profile, message) {
     if (!socialProviderProfile) return;
     if (profile) {
@@ -4650,6 +4674,12 @@
   if (refreshSocialPlatformsBtn) {
     refreshSocialPlatformsBtn.addEventListener("click", async function () {
       await loadSocialPlatforms();
+    });
+  }
+
+  if (loadSocialPlatformDetailBtn) {
+    loadSocialPlatformDetailBtn.addEventListener("click", async function () {
+      await loadSocialPlatformDetail();
     });
   }
 

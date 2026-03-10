@@ -2667,6 +2667,38 @@ function social_platforms_list_snapshot($query = [])
     ];
 }
 
+function social_platform_detail_snapshot($provider)
+{
+    $profile = social_platform_profile($provider);
+    $catalog = social_platform_catalog();
+    $catalogProviders = array_map(static function ($item) {
+        return (string) ($item['provider'] ?? '');
+    }, $catalog);
+    $isCatalogMatch = in_array((string) ($profile['provider'] ?? ''), $catalogProviders, true);
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $matchedConnectors = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        if (strtolower((string) ($connector['provider'] ?? '')) !== strtolower((string) ($profile['provider'] ?? ''))) {
+            continue;
+        }
+        $matchedConnectors[] = decorate_social_connector($connector);
+    }
+    return [
+        'ok' => true,
+        'item' => $profile,
+        'meta' => [
+            'catalog_match' => $isCatalogMatch ? 1 : 0,
+            'connector_count' => count($matchedConnectors),
+            'auth_mode_count' => count(isset($profile['auth_modes']) && is_array($profile['auth_modes']) ? $profile['auth_modes'] : []),
+            'capability_count' => count(isset($profile['capabilities']) && is_array($profile['capabilities']) ? $profile['capabilities'] : []),
+        ],
+        'connectors' => $matchedConnectors,
+    ];
+}
+
 function normalize_social_capabilities($provider, $capabilities)
 {
     $profile = social_platform_profile($provider);
@@ -6358,7 +6390,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.07-social-platform-filters',
+        'phase' => '3.08-social-platform-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11219,7 +11251,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.07-social-platform-filters',
+        'phase' => '3.08-social-platform-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14171,6 +14203,12 @@ if ($action === 'social.platforms.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.platforms.detail') {
+    $provider = isset($_GET['provider']) ? (string) $_GET['provider'] : '';
+    $snapshot = social_platform_detail_snapshot($provider);
+    out_json($snapshot);
 }
 
 if ($action === 'social.capabilities.summary') {
