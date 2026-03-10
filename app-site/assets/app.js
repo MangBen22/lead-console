@@ -302,6 +302,7 @@
   const crmOperationsSnapshot = document.getElementById("crmOperationsSnapshot");
   const downloadCrmOperationsSnapshotBtn = document.getElementById("downloadCrmOperationsSnapshotBtn");
   const crmOperationsHistory = document.getElementById("crmOperationsHistory");
+  const crmOperationsHistorySummary = document.getElementById("crmOperationsHistorySummary");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
@@ -3200,6 +3201,21 @@
     }
   }
 
+  async function loadCrmOperationsHistorySummary() {
+    if (!crmOperationsHistorySummary) return null;
+    const limit = document.getElementById("crmOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("crm.operations.history_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 20,
+      });
+      crmOperationsHistorySummary.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      crmOperationsHistorySummary.textContent = "Failed to load CRM operations history summary.";
+      return null;
+    }
+  }
+
   async function downloadCrmOperationsSnapshot() {
     const limit = document.getElementById("crmOperationsSnapshotLimit");
     const data = await apiGetWithParams("crm.operations.export", {
@@ -4758,6 +4774,7 @@
     await loadCrmEmailTemplateTestLog();
     await loadCrmOperationsSnapshot();
     await loadCrmOperationsHistory();
+    await loadCrmOperationsHistorySummary();
     await loadSocialConnectors();
     await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
@@ -5254,6 +5271,7 @@
     refreshCrmOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadCrmOperationsSnapshot();
       await loadCrmOperationsHistory();
+      await loadCrmOperationsHistorySummary();
     });
   }
 

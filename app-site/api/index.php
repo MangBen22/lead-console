@@ -1358,6 +1358,52 @@ function crm_operations_history_snapshot($limit = 10)
     ];
 }
 
+function crm_operations_history_summary($limit = 20)
+{
+    $history = crm_operations_history_snapshot($limit);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $runsCount = count($items);
+    $latest = $runsCount > 0 ? $items[0] : null;
+    $oldest = $runsCount > 0 ? $items[$runsCount - 1] : null;
+    $totals = [
+        'connector_count' => 0,
+        'delivery_connectors_with_retries' => 0,
+        'retry_filtered_count' => 0,
+        'smtp_failed_sites' => 0,
+        'template_log_filtered_count' => 0,
+    ];
+    foreach ($items as $item) {
+        $summary = isset($item['summary']) && is_array($item['summary']) ? $item['summary'] : [];
+        foreach (array_keys($totals) as $key) {
+            $totals[$key] += (int) ($summary[$key] ?? 0);
+        }
+    }
+    $averages = [];
+    foreach ($totals as $key => $total) {
+        $averages[$key] = $runsCount > 0 ? round($total / $runsCount, 2) : 0;
+    }
+
+    $latestSummary = isset($latest['summary']) && is_array($latest['summary']) ? $latest['summary'] : [];
+    $oldestSummary = isset($oldest['summary']) && is_array($oldest['summary']) ? $oldest['summary'] : [];
+    $changes = [];
+    foreach (array_keys($totals) as $key) {
+        $changes[$key] = (int) ($latestSummary[$key] ?? 0) - (int) ($oldestSummary[$key] ?? 0);
+    }
+
+    return [
+        'summary' => [
+            'runs_count' => $runsCount,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'oldest_created_at' => (string) ($oldest['created_at'] ?? ''),
+            'averages' => $averages,
+            'changes' => $changes,
+        ],
+        'latest' => $latest,
+        'oldest' => $oldest,
+        'history' => $items,
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -7561,7 +7607,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.22-crm-operations-history',
+        'phase' => '5.23-crm-operations-history-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13412,7 +13458,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.22-crm-operations-history',
+        'phase' => '5.23-crm-operations-history-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16258,6 +16304,21 @@ if ($action === 'crm.operations.history') {
         'ok' => true,
         'summary' => $history['summary'],
         'items' => $history['items'],
+    ]);
+}
+
+if ($action === 'crm.operations.history_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $summary = crm_operations_history_summary($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $summary['summary'],
+        'latest' => $summary['latest'],
+        'oldest' => $summary['oldest'],
+        'history' => $summary['history'],
     ]);
 }
 
