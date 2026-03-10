@@ -7304,7 +7304,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.14-crm-email-template-sites',
+        'phase' => '5.15-crm-email-template-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13155,7 +13155,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.14-crm-email-template-sites',
+        'phase' => '5.15-crm-email-template-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15836,6 +15836,55 @@ if ($action === 'crm.email_templates.sites') {
         'ok' => true,
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
+    ]);
+}
+
+if ($action === 'crm.email_templates.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+        'bridge' => isset($_GET['bridge']) ? (string) $_GET['bridge'] : '',
+        'template_key' => isset($_GET['template_key']) ? (string) $_GET['template_key'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $detailSiteId = isset($_GET['detail_site_id']) ? trim((string) $_GET['detail_site_id']) : '';
+    $testLogLimit = isset($_GET['test_log_limit']) ? (int) $_GET['test_log_limit'] : 15;
+    if ($testLogLimit <= 0) {
+        $testLogLimit = 15;
+    }
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'template_sites' => crm_email_template_sites_snapshot($filters),
+    ];
+    if ($detailSiteId !== '') {
+        $site = site_by_id($detailSiteId);
+        if (is_array($site)) {
+            $payload['template_detail'] = [
+                'site' => [
+                    'site_id' => (string) ($site['site_id'] ?? ''),
+                    'label' => (string) ($site['label'] ?? $site['base_url']),
+                    'base_url' => (string) ($site['base_url'] ?? ''),
+                ],
+                'templates' => crm_email_templates_fetch($site),
+                'test_log' => crm_email_template_test_log_fetch($site, $testLogLimit),
+            ];
+        }
+    }
+    audit_event('crm', 'email_templates.export', [
+        'detail_site_id' => $detailSiteId,
+        'limit' => $limit,
+        'test_log_limit' => $testLogLimit,
+        'filtered_count' => (int) (($payload['template_sites']['summary']['filtered_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_email_templates_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
     ]);
 }
 

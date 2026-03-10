@@ -761,6 +761,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="crmEmailTemplateFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshCrmEmailTemplatesBtn" type="button">Refresh Templates</button>
+                    <button id="downloadCrmEmailTemplatesExportBtn" type="button">Download Template Export</button>
                 </form>
                 <pre id="crmEmailTemplateSites">Loading...</pre>
                 <label>Template site ID<input id="crmEmailTemplateSiteId" type="text" placeholder="hq-main"></label>
