@@ -670,6 +670,28 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Bulk Schedule Draft Page</h2>
+                <form id="socialDraftBulkScheduleForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialDraftBulkConnectorIds">Connector IDs (optional)</label>
+                        <input id="socialDraftBulkConnectorIds" type="text" placeholder="social_abc123,social_xyz789">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftBulkFor">Bulk Schedule Start (optional)</label>
+                        <input id="socialDraftBulkFor" type="datetime-local">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftBulkInterval">Interval Minutes</label>
+                        <input id="socialDraftBulkInterval" type="number" min="0" max="1440" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="runSocialDraftBulkScheduleBtn" type="button">Bulk Schedule Draft Page</button>
+                </div>
+                <pre id="socialDraftBulkScheduleResult">No bulk draft schedule action yet.</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Draft Validation</h2>
                 <div class="actions">
                     <button id="refreshSocialDraftValidationBtn" type="button">Refresh Draft Validation</button>

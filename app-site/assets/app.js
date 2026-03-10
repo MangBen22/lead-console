@@ -281,6 +281,7 @@
   const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
   const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
   const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
+  const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -299,6 +300,7 @@
   const socialDraftDetail = document.getElementById("socialDraftDetail");
   const socialDraftRecommendations = document.getElementById("socialDraftRecommendations");
   const socialDraftScheduleResult = document.getElementById("socialDraftScheduleResult");
+  const socialDraftBulkScheduleResult = document.getElementById("socialDraftBulkScheduleResult");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -3202,6 +3204,33 @@
     await refreshSocialModuleSummary();
   }
 
+  async function runSocialDraftBulkSchedule() {
+    if (!socialDraftBulkScheduleResult) return;
+    const connectorIds = document.getElementById("socialDraftBulkConnectorIds");
+    const scheduledFor = document.getElementById("socialDraftBulkFor");
+    const interval = document.getElementById("socialDraftBulkInterval");
+    const filters = socialDraftFilters();
+    const payload = {
+      filter_source_site_id: filters.source_site_id,
+      filter_has_url: filters.has_url,
+      filter_search: filters.search,
+      filter_page: filters.page,
+      filter_limit: filters.limit,
+      connector_ids: connectorIds && connectorIds.value
+        ? connectorIds.value.split(",").map(function (value) { return value.trim(); }).filter(Boolean)
+        : [],
+      scheduled_for: scheduledFor && scheduledFor.value ? scheduledFor.value : "",
+      interval_minutes: interval && interval.value ? Number(interval.value) : 10,
+    };
+    const data = await apiPost("social.drafts.bulk_schedule", payload);
+    socialDraftBulkScheduleResult.textContent = JSON.stringify(data, null, 2);
+    await loadSocialScheduleSummary();
+    await loadSocialScheduleQueue();
+    await loadSocialActivityFeed();
+    await loadSocialOperationsSnapshot();
+    await refreshSocialModuleSummary();
+  }
+
   async function downloadSocialDraftsExport() {
     const data = await apiGetWithParams("social.drafts.export", { limit: 20 });
     const filename = data && data.filename ? String(data.filename) : ("social-drafts-export-" + Date.now() + ".json");
@@ -4369,6 +4398,12 @@
   if (runSocialDraftScheduleBtn) {
     runSocialDraftScheduleBtn.addEventListener("click", async function () {
       await runSocialDraftSchedule();
+    });
+  }
+
+  if (runSocialDraftBulkScheduleBtn) {
+    runSocialDraftBulkScheduleBtn.addEventListener("click", async function () {
+      await runSocialDraftBulkSchedule();
     });
   }
 

@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.91-social-draft-schedule',
+        'phase' => '2.92-social-drafts-bulk-schedule',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9624,6 +9624,78 @@ function social_schedule_create_from_draft($payload)
     ];
 }
 
+function social_drafts_bulk_schedule($payload)
+{
+    $data = is_array($payload) ? $payload : [];
+    $snapshot = social_drafts_list_snapshot([
+        'source_site_id' => isset($data['filter_source_site_id']) ? (string) $data['filter_source_site_id'] : '',
+        'has_url' => isset($data['filter_has_url']) ? (string) $data['filter_has_url'] : '',
+        'search' => isset($data['filter_search']) ? (string) $data['filter_search'] : '',
+        'page' => isset($data['filter_page']) ? (int) $data['filter_page'] : 1,
+        'limit' => isset($data['filter_limit']) ? (int) $data['filter_limit'] : 10,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    if (empty($items)) {
+        return ['ok' => false, 'error' => 'No draft items matched the current filters.'];
+    }
+
+    $connectorIds = social_schedule_connector_ids_from_input(isset($data['connector_ids']) ? $data['connector_ids'] : []);
+    $scheduledFor = trim((string) ($data['scheduled_for'] ?? ''));
+    $baseTs = $scheduledFor !== '' ? strtotime($scheduledFor) : false;
+    if ($baseTs === false) {
+        $baseTs = time() + 900;
+    }
+    $intervalMinutes = isset($data['interval_minutes']) ? (int) $data['interval_minutes'] : 10;
+    $intervalMinutes = max(0, min(1440, $intervalMinutes));
+
+    $created = [];
+    $failed = [];
+    foreach (array_values($items) as $index => $draft) {
+        if (!is_array($draft)) {
+            continue;
+        }
+        $res = social_schedule_create_from_draft([
+            'draft_index' => (int) ($draft['draft_index'] ?? 0),
+            'lead_id' => (int) ($draft['lead_id'] ?? 0),
+            'connector_ids' => $connectorIds,
+            'scheduled_for' => gmdate('Y-m-d\TH:i', $baseTs + ($index * $intervalMinutes * 60)),
+            'title' => (string) ($draft['title'] ?? ''),
+            'message' => (string) ($draft['message'] ?? ''),
+            'url' => (string) ($draft['url'] ?? ''),
+        ]);
+        if (!empty($res['ok']) && is_array($res['item'] ?? null)) {
+            $created[] = $res['item'];
+        } else {
+            $failed[] = [
+                'draft_index' => (int) ($draft['draft_index'] ?? 0),
+                'lead_id' => (int) ($draft['lead_id'] ?? 0),
+                'error' => (string) ($res['error'] ?? 'Draft bulk schedule failed.'),
+            ];
+        }
+    }
+
+    audit_event('social', 'drafts.bulk_schedule', [
+        'processed' => count($items),
+        'created' => count($created),
+        'failed' => count($failed),
+    ]);
+    record_social_activity('drafts_bulk_scheduled', 'Bulk draft scheduling completed.', [
+        'processed' => count($items),
+        'created' => count($created),
+        'failed' => count($failed),
+    ]);
+
+    return [
+        'ok' => !empty($created),
+        'processed' => count($items),
+        'created' => count($created),
+        'failed' => count($failed),
+        'filters' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        'items' => $created,
+        'errors' => $failed,
+    ];
+}
+
 function execute_social_connector_sync($connector, $drafts)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -10317,7 +10389,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.91-social-draft-schedule',
+        'phase' => '2.92-social-drafts-bulk-schedule',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13390,6 +13462,20 @@ if ($action === 'social.drafts.schedule') {
         out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
     }
     $snapshot = social_schedule_create_from_draft($data);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
+}
+
+if ($action === 'social.drafts.bulk_schedule') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $snapshot = social_drafts_bulk_schedule($data);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
