@@ -279,6 +279,7 @@
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialDraftListBtn = document.getElementById("refreshSocialDraftListBtn");
   const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
+  const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -295,6 +296,7 @@
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialDraftList = document.getElementById("socialDraftList");
   const socialDraftDetail = document.getElementById("socialDraftDetail");
+  const socialDraftRecommendations = document.getElementById("socialDraftRecommendations");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -3131,6 +3133,37 @@
     }
   }
 
+  function socialDraftRecommendationParams() {
+    const params = socialDraftFilters();
+    const draftIndex = document.getElementById("socialDraftDetailIndex");
+    const leadId = document.getElementById("socialDraftDetailLeadId");
+    if (draftIndex && draftIndex.value !== "") {
+      params.draft_index = Number(draftIndex.value);
+    }
+    if (leadId && leadId.value !== "") {
+      params.lead_id = Number(leadId.value);
+    }
+    return params;
+  }
+
+  async function loadSocialDraftRecommendations() {
+    if (!socialDraftRecommendations) return;
+    try {
+      const data = await apiGetWithParams("social.drafts.recommendations", socialDraftRecommendationParams());
+      socialDraftRecommendations.textContent = JSON.stringify(data, null, 2);
+      if (data && data.summary && Number(data.summary.detail_mode) === 1 && Array.isArray(data.items) && data.items.length) {
+        const connectorIds = document.getElementById("socialScheduleConnectorIds");
+        if (connectorIds) {
+          connectorIds.value = Array.isArray(data.items[0].recommended_connector_ids)
+            ? data.items[0].recommended_connector_ids.join(",")
+            : "";
+        }
+      }
+    } catch (err) {
+      socialDraftRecommendations.textContent = "Failed to load social draft recommendations.";
+    }
+  }
+
   async function downloadSocialDraftsExport() {
     const data = await apiGetWithParams("social.drafts.export", { limit: 20 });
     const filename = data && data.filename ? String(data.filename) : ("social-drafts-export-" + Date.now() + ".json");
@@ -3478,6 +3511,7 @@
     await loadSocialOperationsSnapshot();
     await loadSocialDraftsPreview();
     await loadSocialDraftList();
+    await loadSocialDraftRecommendations();
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
     await loadSocialDeliverySummary();
@@ -4284,6 +4318,13 @@
   if (refreshSocialDraftDetailBtn) {
     refreshSocialDraftDetailBtn.addEventListener("click", async function () {
       await loadSocialDraftDetail();
+      await loadSocialDraftRecommendations();
+    });
+  }
+
+  if (refreshSocialDraftRecommendationsBtn) {
+    refreshSocialDraftRecommendationsBtn.addEventListener("click", async function () {
+      await loadSocialDraftRecommendations();
     });
   }
 

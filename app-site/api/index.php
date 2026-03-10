@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.89-social-draft-detail',
+        'phase' => '2.90-social-draft-recommendations',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9408,6 +9408,110 @@ function social_draft_detail_snapshot($query = [])
     ];
 }
 
+function social_draft_recommendation_entry($draft)
+{
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $readyTargets = [];
+    $blockedTargets = [];
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $validation = social_validate_draft_for_connector($connector, $draft);
+        $entry = [
+            'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+            'account_label' => (string) ($decorated['account_label'] ?? ''),
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'family' => (string) (($decorated['profile']['family'] ?? 'custom')),
+            'run_mode' => (string) (($decorated['config']['run_mode'] ?? 'dry_run')),
+            'ready' => !empty($validation['ready']) ? 1 : 0,
+            'issues' => isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [],
+            'warnings' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
+        ];
+        $entry['issue_count'] = count($entry['issues']);
+        $entry['warning_count'] = count($entry['warnings']);
+        if (!empty($entry['ready'])) {
+            $readyTargets[] = $entry;
+        } else {
+            $blockedTargets[] = $entry;
+        }
+    }
+
+    usort($readyTargets, static function ($a, $b) {
+        if ((int) ($a['warning_count'] ?? 0) === (int) ($b['warning_count'] ?? 0)) {
+            return strcmp((string) ($a['connector_id'] ?? ''), (string) ($b['connector_id'] ?? ''));
+        }
+        return (int) ($a['warning_count'] ?? 0) <=> (int) ($b['warning_count'] ?? 0);
+    });
+    usort($blockedTargets, static function ($a, $b) {
+        if ((int) ($a['issue_count'] ?? 0) === (int) ($b['issue_count'] ?? 0)) {
+            return strcmp((string) ($a['connector_id'] ?? ''), (string) ($b['connector_id'] ?? ''));
+        }
+        return (int) ($a['issue_count'] ?? 0) <=> (int) ($b['issue_count'] ?? 0);
+    });
+
+    return [
+        'draft_index' => (int) ($draft['draft_index'] ?? 0),
+        'lead_id' => (int) ($draft['lead_id'] ?? 0),
+        'title' => (string) ($draft['title'] ?? ''),
+        'source_site_id' => (string) ($draft['source_site_id'] ?? ''),
+        'recommended_connector_ids' => array_values(array_map(static function ($target) {
+            return (string) ($target['connector_id'] ?? '');
+        }, array_slice($readyTargets, 0, 5))),
+        'ready_connector_count' => count($readyTargets),
+        'blocked_connector_count' => count($blockedTargets),
+        'ready_targets' => $readyTargets,
+        'blocked_targets' => $blockedTargets,
+    ];
+}
+
+function social_draft_recommendations_snapshot($query = [])
+{
+    $detailRequested = (array_key_exists('draft_index', $query) && trim((string) ($query['draft_index'] ?? '')) !== '')
+        || (array_key_exists('lead_id', $query) && trim((string) ($query['lead_id'] ?? '')) !== '');
+    $draftItems = [];
+
+    if ($detailRequested) {
+        $detail = social_draft_detail_snapshot($query);
+        if (empty($detail['ok']) || !is_array($detail['item'] ?? null)) {
+            return $detail;
+        }
+        $draftItems[] = $detail['item'];
+    } else {
+        $snapshot = social_drafts_list_snapshot($query);
+        $draftItems = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    }
+
+    $items = [];
+    $readyDrafts = 0;
+    $blockedDrafts = 0;
+    foreach ($draftItems as $draft) {
+        if (!is_array($draft)) {
+            continue;
+        }
+        $entry = social_draft_recommendation_entry($draft);
+        if (!empty($entry['ready_connector_count'])) {
+            $readyDrafts++;
+        } else {
+            $blockedDrafts++;
+        }
+        $items[] = $entry;
+    }
+
+    return [
+        'ok' => true,
+        'summary' => [
+            'draft_count' => count($items),
+            'ready_drafts' => $readyDrafts,
+            'blocked_drafts' => $blockedDrafts,
+            'detail_mode' => $detailRequested ? 1 : 0,
+        ],
+        'items' => $items,
+    ];
+}
+
 function execute_social_connector_sync($connector, $drafts)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -10101,7 +10205,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.89-social-draft-detail',
+        'phase' => '2.90-social-draft-recommendations',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13155,6 +13259,11 @@ if ($action === 'social.drafts.list') {
 
 if ($action === 'social.drafts.detail') {
     $snapshot = social_draft_detail_snapshot($_GET);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.drafts.recommendations') {
+    $snapshot = social_draft_recommendations_snapshot($_GET);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
