@@ -2586,6 +2586,60 @@ function social_platform_profile($provider)
     ];
 }
 
+function social_provider_rule_profile($provider)
+{
+    $rule = [
+        'requires_title' => 0,
+        'requires_url' => 0,
+        'message_max_length' => null,
+        'message_warning_length' => null,
+        'recommended_min_message_length' => null,
+        'recommended_url' => 0,
+        'auto_append_url' => 0,
+        'auto_append_hashtags' => 0,
+        'generated_title' => 0,
+        'transport_hint' => 'generic',
+    ];
+    $provider = strtolower(trim((string) $provider));
+
+    if ($provider === 'x') {
+        $rule['message_max_length'] = 280;
+        $rule['message_warning_length'] = 240;
+        $rule['auto_append_url'] = 1;
+        $rule['transport_hint'] = 'micro_post';
+    } elseif ($provider === 'instagram') {
+        $rule['message_max_length'] = 2200;
+        $rule['recommended_url'] = 1;
+        $rule['auto_append_hashtags'] = 1;
+        $rule['transport_hint'] = 'visual_post';
+    } elseif ($provider === 'linkedin') {
+        $rule['recommended_min_message_length'] = 40;
+        $rule['recommended_url'] = 1;
+        $rule['auto_append_url'] = 1;
+        $rule['transport_hint'] = 'professional_post';
+    } elseif ($provider === 'youtube') {
+        $rule['requires_title'] = 1;
+        $rule['requires_url'] = 1;
+        $rule['generated_title'] = 1;
+        $rule['transport_hint'] = 'video_post';
+    } elseif ($provider === 'tiktok') {
+        $rule['requires_url'] = 1;
+        $rule['message_warning_length'] = 2200;
+        $rule['transport_hint'] = 'video_post';
+    } elseif (in_array($provider, ['reddit', 'discourse'], true)) {
+        $rule['requires_title'] = 1;
+        $rule['generated_title'] = 1;
+        $rule['recommended_min_message_length'] = 20;
+        $rule['transport_hint'] = 'forum_topic';
+    } elseif ($provider === 'wordpress_social_bridge') {
+        $rule['transport_hint'] = 'wordpress_bridge';
+    } elseif ($provider === 'social_webhook') {
+        $rule['transport_hint'] = 'webhook';
+    }
+
+    return $rule;
+}
+
 function social_platforms_list_snapshot($query = [])
 {
     $rows = social_platform_catalog();
@@ -2686,6 +2740,24 @@ function social_platform_detail_snapshot($provider)
         }
         $matchedConnectors[] = decorate_social_connector($connector);
     }
+    $connectorSummary = [
+        'total' => count($matchedConnectors),
+        'active' => 0,
+        'dry_run' => 0,
+        'live' => 0,
+    ];
+    foreach ($matchedConnectors as $connector) {
+        $status = strtolower((string) ($connector['status'] ?? 'planned'));
+        $runMode = strtolower((string) (($connector['config']['run_mode'] ?? 'dry_run')));
+        if (in_array($status, ['active', 'enabled'], true)) {
+            $connectorSummary['active']++;
+        }
+        if ($runMode === 'live') {
+            $connectorSummary['live']++;
+        } else {
+            $connectorSummary['dry_run']++;
+        }
+    }
     return [
         'ok' => true,
         'item' => $profile,
@@ -2695,6 +2767,8 @@ function social_platform_detail_snapshot($provider)
             'auth_mode_count' => count(isset($profile['auth_modes']) && is_array($profile['auth_modes']) ? $profile['auth_modes'] : []),
             'capability_count' => count(isset($profile['capabilities']) && is_array($profile['capabilities']) ? $profile['capabilities'] : []),
         ],
+        'rules' => social_provider_rule_profile((string) ($profile['provider'] ?? '')),
+        'connector_summary' => $connectorSummary,
         'connectors' => $matchedConnectors,
     ];
 }
@@ -6390,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.12-social-variant-execution',
+        'phase' => '3.13-social-provider-rules',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11403,7 +11477,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.12-social-variant-execution',
+        'phase' => '3.13-social-provider-rules',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
