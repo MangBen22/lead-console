@@ -7038,7 +7038,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.09-crm-retry-detail',
+        'phase' => '5.10-crm-retry-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12889,7 +12889,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.09-crm-retry-detail',
+        'phase' => '5.10-crm-retry-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15279,6 +15279,45 @@ if ($action === 'crm.retry.detail') {
     }
     $snapshot = crm_retry_detail_snapshot($retryId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'crm.retry.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'connector_id' => isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '',
+        'provider' => isset($_GET['provider']) ? (string) $_GET['provider'] : '',
+        'error_code' => isset($_GET['error_code']) ? (string) $_GET['error_code'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $retryId = isset($_GET['retry_id']) ? trim((string) $_GET['retry_id']) : '';
+    $detailLimit = isset($_GET['detail_limit']) ? (int) $_GET['detail_limit'] : $limit;
+    if ($detailLimit <= 0) {
+        $detailLimit = $limit;
+    }
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'retry_queue' => crm_retry_list_snapshot($filters),
+    ];
+    if ($retryId !== '') {
+        $payload['retry_detail'] = crm_retry_detail_snapshot($retryId, $detailLimit);
+    }
+    audit_event('crm', 'retry.export', [
+        'retry_id' => $retryId,
+        'limit' => $limit,
+        'detail_limit' => $detailLimit,
+        'filtered_count' => (int) (($payload['retry_queue']['summary']['filtered_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_retry_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'crm.retry.run') {

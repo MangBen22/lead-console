@@ -270,6 +270,7 @@
   const downloadCrmSyncExportBtn = document.getElementById("downloadCrmSyncExportBtn");
   const refreshCrmRetryQueueBtn = document.getElementById("refreshCrmRetryQueueBtn");
   const loadCrmRetryDetailBtn = document.getElementById("loadCrmRetryDetailBtn");
+  const downloadCrmRetryExportBtn = document.getElementById("downloadCrmRetryExportBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmSyncDetail = document.getElementById("crmSyncDetail");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
@@ -2931,6 +2932,22 @@
     }
   }
 
+  async function downloadCrmRetryExport() {
+    const params = crmRetryFilters();
+    const retryId = document.getElementById("crmRetryDetailId");
+    const detailLimit = document.getElementById("crmRetryDetailLimit");
+    if (retryId && retryId.value) {
+      params.retry_id = retryId.value.trim();
+      params.detail_limit = detailLimit && detailLimit.value ? Number(detailLimit.value) : 10;
+    }
+    const data = await apiGetWithParams("crm.retry.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("crm-retry-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (crmSyncResult) {
+      crmSyncResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadCrmSmtpSummary() {
     if (!crmSmtpSummary) return;
     try {
@@ -4778,6 +4795,12 @@
   if (loadCrmRetryDetailBtn) {
     loadCrmRetryDetailBtn.addEventListener("click", async function () {
       await loadCrmRetryDetail();
+    });
+  }
+
+  if (downloadCrmRetryExportBtn) {
+    downloadCrmRetryExportBtn.addEventListener("click", async function () {
+      await downloadCrmRetryExport();
     });
   }
 
