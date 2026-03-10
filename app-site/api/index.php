@@ -3224,6 +3224,48 @@ function social_operations_history_summary($limit = 20)
     ];
 }
 
+function social_operations_latest_compare()
+{
+    $history = social_operations_history_snapshot(2);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $latest = isset($items[0]) && is_array($items[0]) ? $items[0] : null;
+    $previous = isset($items[1]) && is_array($items[1]) ? $items[1] : null;
+    $keys = [
+        'watch_blocked_connectors',
+        'watch_expired_connectors',
+        'draft_validation_blocked_connectors',
+        'schedule_due_items',
+        'schedule_failed_items',
+        'retry_backlog',
+        'draft_ready_pairs',
+        'draft_blocked_pairs',
+        'open_inbox_threads',
+        'pending_inbox_threads',
+        'inbox_backlog_threads',
+        'high_priority_inbox_backlog',
+        'unassigned_inbox_backlog',
+    ];
+    $changes = [];
+    foreach ($keys as $key) {
+        $changes[$key] = [
+            'latest' => (int) (($latest['summary'][$key] ?? 0)),
+            'previous' => (int) (($previous['summary'][$key] ?? 0)),
+            'delta' => (int) (($latest['summary'][$key] ?? 0)) - (int) (($previous['summary'][$key] ?? 0)),
+        ];
+    }
+    return [
+        'summary' => [
+            'has_latest' => is_array($latest) ? 1 : 0,
+            'has_previous' => is_array($previous) ? 1 : 0,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'previous_created_at' => (string) ($previous['created_at'] ?? ''),
+        ],
+        'latest' => $latest,
+        'previous' => $previous,
+        'changes' => $changes,
+    ];
+}
+
 function social_inbox_workload_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -7813,7 +7855,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.28-social-operations-history-summary',
+        'phase' => '5.29-social-operations-latest-compare',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13664,7 +13706,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.28-social-operations-history-summary',
+        'phase' => '5.29-social-operations-latest-compare',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16788,6 +16830,17 @@ if ($action === 'social.operations.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+    ]);
+}
+
+if ($action === 'social.operations.latest_compare') {
+    $compare = social_operations_latest_compare();
+    out_json([
+        'ok' => true,
+        'summary' => $compare['summary'],
+        'latest' => $compare['latest'],
+        'previous' => $compare['previous'],
+        'changes' => $compare['changes'],
     ]);
 }
 

@@ -932,6 +932,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="socialOpsSnapshotView">Loading...</pre>
                 <pre id="socialOpsHistoryView">Loading...</pre>
                 <pre id="socialOpsHistorySummaryView">Loading...</pre>
+                <pre id="socialOpsLatestCompareView">Loading...</pre>
             </section>
 
             <section class="api-status">

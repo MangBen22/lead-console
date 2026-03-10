@@ -356,6 +356,7 @@
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
   const socialOpsHistoryView = document.getElementById("socialOpsHistoryView");
   const socialOpsHistorySummaryView = document.getElementById("socialOpsHistorySummaryView");
+  const socialOpsLatestCompareView = document.getElementById("socialOpsLatestCompareView");
   const downloadSocialOpsSnapshotBtn = document.getElementById("downloadSocialOpsSnapshotBtn");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
@@ -3962,6 +3963,18 @@
     }
   }
 
+  async function loadSocialOperationsLatestCompare() {
+    if (!socialOpsLatestCompareView) return null;
+    try {
+      const data = await apiGet("social.operations.latest_compare");
+      socialOpsLatestCompareView.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      socialOpsLatestCompareView.textContent = "Failed to load social operations latest compare.";
+      return null;
+    }
+  }
+
   async function downloadSocialOperationsSnapshot() {
     const limit = document.getElementById("socialOperationsSnapshotLimit");
     const data = await apiGetWithParams("social.operations.export", {
@@ -4834,6 +4847,7 @@
     await loadSocialOperationsSnapshot();
     await loadSocialOperationsHistory();
     await loadSocialOperationsHistorySummary();
+    await loadSocialOperationsLatestCompare();
     await loadSocialDraftsPreview();
     await loadSocialDraftList();
     await loadSocialDraftRecommendations();
@@ -5780,6 +5794,7 @@
       await loadSocialOperationsSnapshot();
       await loadSocialOperationsHistory();
       await loadSocialOperationsHistorySummary();
+      await loadSocialOperationsLatestCompare();
     });
   }
 
