@@ -299,6 +299,7 @@
   const crmEmailTemplateSites = document.getElementById("crmEmailTemplateSites");
   const downloadCrmEmailTemplatesExportBtn = document.getElementById("downloadCrmEmailTemplatesExportBtn");
   const downloadCrmEmailTemplateLogExportBtn = document.getElementById("downloadCrmEmailTemplateLogExportBtn");
+  const crmOperationsSnapshot = document.getElementById("crmOperationsSnapshot");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
@@ -3167,6 +3168,21 @@
     }
   }
 
+  async function loadCrmOperationsSnapshot() {
+    if (!crmOperationsSnapshot) return null;
+    const limit = document.getElementById("crmOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("crm.operations.snapshot", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      crmOperationsSnapshot.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      crmOperationsSnapshot.textContent = "Failed to load CRM operations snapshot.";
+      return null;
+    }
+  }
+
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
@@ -4711,6 +4727,7 @@
     await loadCrmEmailTemplateSites();
     await loadCrmEmailTemplatesSummary();
     await loadCrmEmailTemplateTestLog();
+    await loadCrmOperationsSnapshot();
     await loadSocialConnectors();
     await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
@@ -5199,6 +5216,13 @@
   if (downloadCrmEmailTemplateLogExportBtn) {
     downloadCrmEmailTemplateLogExportBtn.addEventListener("click", async function () {
       await downloadCrmEmailTemplateLogExport();
+    });
+  }
+
+  const refreshCrmOperationsSnapshotBtn = document.getElementById("refreshCrmOperationsSnapshotBtn");
+  if (refreshCrmOperationsSnapshotBtn) {
+    refreshCrmOperationsSnapshotBtn.addEventListener("click", async function () {
+      await loadCrmOperationsSnapshot();
     });
   }
 

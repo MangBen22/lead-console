@@ -830,6 +830,18 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>CRM Operations Snapshot</h2>
+                <form id="crmOperationsSnapshotForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmOperationsSnapshotLimit">Snapshot Limit</label>
+                        <input id="crmOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="refreshCrmOperationsSnapshotBtn" type="button">Refresh CRM Operations Snapshot</button>
+                </form>
+                <pre id="crmOperationsSnapshot">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Platforms</h2>
                 <div class="inline-form">
                     <div class="form-row">

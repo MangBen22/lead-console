@@ -1256,6 +1256,68 @@ function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
     ];
 }
 
+function crm_operations_snapshot($limit = 10)
+{
+    $safeLimit = max(1, min(50, (int) $limit));
+    $connectors = crm_connectors_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $delivery = crm_delivery_summary_snapshot($safeLimit);
+    $deliveryWatchState = app_read_json_file(crm_delivery_watch_state_path(), []);
+    $deliveryWatchRuns = app_read_json_file(crm_delivery_watch_runs_path(), []);
+    $retry = crm_retry_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $smtp = crm_smtp_summary_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $smtpWatchState = app_read_json_file(crm_smtp_watch_state_path(), []);
+    $smtpWatchRuns = app_read_json_file(crm_smtp_watch_runs_path(), []);
+    $templateSites = crm_email_template_sites_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $templateLog = crm_email_template_test_log_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+
+    return [
+        'generated_at' => gmdate('c'),
+        'limit' => $safeLimit,
+        'summary' => [
+            'connector_count' => (int) (($connectors['summary']['total_count'] ?? 0)),
+            'active_connectors' => (int) (($connectors['summary']['status_counts']['active'] ?? 0)),
+            'delivery_connectors_with_retries' => (int) (($delivery['summary']['connectors_with_retries'] ?? 0)),
+            'delivery_connectors_with_rejections' => (int) (($delivery['summary']['connectors_with_rejections'] ?? 0)),
+            'retry_filtered_count' => (int) (($retry['summary']['filtered_count'] ?? 0)),
+            'smtp_connected_sites' => (int) (($smtp['summary']['totals']['connected_sites'] ?? 0)),
+            'smtp_failed_sites' => (int) (($smtp['summary']['totals']['failed_sites'] ?? 0)),
+            'template_site_count' => (int) (($templateSites['summary']['total_count'] ?? 0)),
+            'template_log_filtered_count' => (int) (($templateLog['summary']['filtered_count'] ?? 0)),
+        ],
+        'connectors' => $connectors,
+        'delivery' => $delivery,
+        'delivery_watch' => [
+            'state' => is_array($deliveryWatchState) ? $deliveryWatchState : [],
+            'latest_run' => isset($deliveryWatchRuns[0]) && is_array($deliveryWatchRuns[0]) ? $deliveryWatchRuns[0] : null,
+        ],
+        'retry_queue' => $retry,
+        'smtp' => $smtp,
+        'smtp_watch' => [
+            'state' => is_array($smtpWatchState) ? $smtpWatchState : [],
+            'latest_run' => isset($smtpWatchRuns[0]) && is_array($smtpWatchRuns[0]) ? $smtpWatchRuns[0] : null,
+        ],
+        'email_templates' => [
+            'sites' => $templateSites,
+            'test_log' => $templateLog,
+        ],
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -7459,7 +7521,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.19-crm-smtp-watch-export',
+        'phase' => '5.20-crm-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13310,7 +13372,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.19-crm-smtp-watch-export',
+        'phase' => '5.20-crm-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16112,6 +16174,18 @@ if ($action === 'crm.email_templates.test_log_export') {
         'ok' => true,
         'filename' => 'crm_email_template_test_log_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
+    ]);
+}
+
+if ($action === 'crm.operations.snapshot') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = crm_operations_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'snapshot' => $snapshot,
     ]);
 }
 
