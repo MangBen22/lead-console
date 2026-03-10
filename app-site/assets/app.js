@@ -255,6 +255,7 @@
   const socialScheduleSummary = document.getElementById("socialScheduleSummary");
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
+  const socialScheduleTargetValidation = document.getElementById("socialScheduleTargetValidation");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
   const refreshSocialInboxSummaryBtn = document.getElementById("refreshSocialInboxSummaryBtn");
   const socialInboxSummary = document.getElementById("socialInboxSummary");
@@ -2321,6 +2322,22 @@
     }
   }
 
+  async function validateSocialScheduleTargets() {
+    if (!socialScheduleTargetValidation) return null;
+    const connectorIds = document.getElementById("socialScheduleConnectorIds");
+    const value = connectorIds && connectorIds.value ? connectorIds.value.trim() : "";
+    try {
+      const data = await apiGetWithParams("social.schedule.targets.validate", {
+        connector_ids: value,
+      });
+      socialScheduleTargetValidation.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      socialScheduleTargetValidation.textContent = "Failed to validate social schedule targets.";
+      return null;
+    }
+  }
+
   async function loadSocialActivityFeed() {
     if (!socialActivityFeed) return;
     try {
@@ -3242,6 +3259,12 @@
       event.preventDefault();
     });
     const saveScheduleBtn = document.getElementById("saveSocialScheduleBtn");
+    const validateTargetsBtn = document.getElementById("validateSocialScheduleTargetsBtn");
+    if (validateTargetsBtn) {
+      validateTargetsBtn.addEventListener("click", async function () {
+        await validateSocialScheduleTargets();
+      });
+    }
     if (saveScheduleBtn) {
       saveScheduleBtn.addEventListener("click", async function () {
         const scheduleId = document.getElementById("socialScheduleId");
@@ -3264,6 +3287,7 @@
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
+        await validateSocialScheduleTargets();
         await loadSocialScheduleSummary();
         await loadSocialScheduleQueue();
         await loadSocialActivityFeed();

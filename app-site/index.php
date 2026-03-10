@@ -532,10 +532,12 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="socialScheduleFor">Schedule for</label>
                         <input id="socialScheduleFor" type="datetime-local">
                     </div>
+                    <button id="validateSocialScheduleTargetsBtn" type="button">Validate Schedule Targets</button>
                     <button id="saveSocialScheduleBtn" type="button">Save Scheduled Post</button>
                     <button id="deleteSocialScheduleBtn" type="button">Delete Scheduled Post</button>
                     <button id="runSocialScheduleBtn" type="button">Run Due Scheduled Posts</button>
                 </form>
+                <pre id="socialScheduleTargetValidation">No schedule target validation yet.</pre>
             </section>
 
             <section class="api-status">

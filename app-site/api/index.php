@@ -633,6 +633,104 @@ function social_inbox_summary_snapshot($limit = 10)
     ];
 }
 
+function social_schedule_target_validation_snapshot($connectorIds)
+{
+    $ids = [];
+    if (is_array($connectorIds)) {
+        foreach ($connectorIds as $value) {
+            $id = preg_replace('/[^a-z0-9_\-]/i', '', (string) $value);
+            if ($id !== '' && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+    }
+    $summary = [
+        'requested_connector_count' => count($ids),
+        'valid_connector_count' => 0,
+        'invalid_connector_count' => 0,
+        'uses_default_targets' => empty($ids) ? 1 : 0,
+    ];
+    $items = [];
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $activeSchedulable = [];
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $caps = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
+        $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+        if (in_array($status, ['active', 'enabled'], true) && in_array('can_schedule', $caps, true)) {
+            $activeSchedulable[] = (string) ($decorated['connector_id'] ?? '');
+        }
+    }
+
+    if (empty($ids)) {
+        return [
+            'ok' => !empty($activeSchedulable),
+            'summary' => $summary + [
+                'valid_connector_count' => count($activeSchedulable),
+                'invalid_connector_count' => empty($activeSchedulable) ? 1 : 0,
+            ],
+            'items' => empty($activeSchedulable) ? [[
+                'connector_id' => '',
+                'provider' => '',
+                'account_label' => 'Default active connectors',
+                'valid' => 0,
+                'issues' => ['no_active_schedulable_connectors'],
+            ]] : [],
+        ];
+    }
+
+    foreach ($ids as $connectorId) {
+        $connector = social_connector_by_id($connectorId);
+        $issues = [];
+        $provider = '';
+        $accountLabel = $connectorId;
+        if (!is_array($connector)) {
+            $issues[] = 'connector_not_found';
+        } else {
+            $decorated = decorate_social_connector($connector);
+            $provider = (string) ($decorated['provider'] ?? '');
+            $accountLabel = (string) ($decorated['account_label'] ?? $connectorId);
+            $caps = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
+            $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+            if (!in_array($status, ['active', 'enabled'], true)) {
+                $issues[] = 'connector_inactive';
+            }
+            if (!in_array('can_schedule', $caps, true)) {
+                $issues[] = 'schedule_capability_missing';
+            }
+            $expiresAt = trim((string) ($decorated['expires_at'] ?? ''));
+            if ($expiresAt !== '') {
+                $expiryTs = strtotime($expiresAt);
+                if ($expiryTs !== false && $expiryTs <= time()) {
+                    $issues[] = 'credential_expired';
+                }
+            }
+        }
+        if (empty($issues)) {
+            $summary['valid_connector_count']++;
+        } else {
+            $summary['invalid_connector_count']++;
+        }
+        $items[] = [
+            'connector_id' => $connectorId,
+            'provider' => $provider,
+            'account_label' => $accountLabel,
+            'valid' => empty($issues) ? 1 : 0,
+            'issues' => $issues,
+        ];
+    }
+
+    return [
+        'ok' => $summary['invalid_connector_count'] === 0,
+        'summary' => $summary,
+        'items' => $items,
+    ];
+}
+
 function social_platform_catalog()
 {
     return [
@@ -4439,7 +4537,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.46-social-publish-validation-enforcement',
+        'phase' => '2.47-social-schedule-target-validation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7707,7 +7805,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.46-social-publish-validation-enforcement',
+        'phase' => '2.47-social-schedule-target-validation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10442,6 +10540,16 @@ if ($action === 'social.schedule.summary') {
     ]);
 }
 
+if ($action === 'social.schedule.targets.validate') {
+    $connectorIds = isset($_GET['connector_ids']) ? explode(',', (string) $_GET['connector_ids']) : [];
+    $snapshot = social_schedule_target_validation_snapshot($connectorIds);
+    out_json([
+        'ok' => !empty($snapshot['ok']),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+    ], !empty($snapshot['ok']) ? 200 : 400);
+}
+
 if ($action === 'social.schedule.list') {
     $rows = app_read_json_file(social_schedule_queue_path(), []);
     out_json([
@@ -10562,6 +10670,14 @@ if ($action === 'social.schedule.save') {
         if ($id !== '' && !in_array($id, $item['connector_ids'], true)) {
             $item['connector_ids'][] = $id;
         }
+    }
+    $targetValidation = social_schedule_target_validation_snapshot($item['connector_ids']);
+    if (empty($targetValidation['ok'])) {
+        out_json([
+            'ok' => false,
+            'error' => 'Schedule target validation failed.',
+            'validation' => $targetValidation,
+        ], 400);
     }
     $rows = app_read_json_file(social_schedule_queue_path(), []);
     $rows = array_values(array_filter($rows, static function ($row) use ($item) {
