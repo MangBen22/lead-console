@@ -286,6 +286,7 @@
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
+  const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3383,11 +3384,30 @@
   async function loadSocialRetryQueue() {
     if (!socialRetryQueue) return;
     try {
-      const data = await apiGet("social.retry.list");
+      const data = await apiGetWithParams("social.retry.list", socialRetryFilters());
       socialRetryQueue.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialRetryQueue.textContent = "Failed to load social retry queue.";
     }
+  }
+
+  function socialRetryFilters() {
+    const status = document.getElementById("socialRetryFilterStatus");
+    const connector = document.getElementById("socialRetryFilterConnector");
+    const source = document.getElementById("socialRetryFilterSource");
+    const errorCode = document.getElementById("socialRetryFilterErrorCode");
+    const search = document.getElementById("socialRetryFilterSearch");
+    const page = document.getElementById("socialRetryFilterPage");
+    const limit = document.getElementById("socialRetryFilterLimit");
+    return {
+      status: status && status.value ? status.value : "",
+      connector_id: connector && connector.value ? connector.value.trim() : "",
+      source: source && source.value ? source.value.trim() : "",
+      error_code: errorCode && errorCode.value ? errorCode.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
   }
 
   async function loadSocialDeliverySummary() {
@@ -4541,6 +4561,12 @@
   if (runSocialConnectorBulkUpdateBtn) {
     runSocialConnectorBulkUpdateBtn.addEventListener("click", async function () {
       await runSocialConnectorBulkUpdate();
+    });
+  }
+
+  if (refreshSocialRetryQueueBtn) {
+    refreshSocialRetryQueueBtn.addEventListener("click", async function () {
+      await loadSocialRetryQueue();
     });
   }
 

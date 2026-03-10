@@ -1136,6 +1136,41 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Social Sync Log</h3>
                 <pre id="socialSyncLog">Loading...</pre>
                 <h3>Social Retry Queue</h3>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialRetryFilterStatus">Retry Status</label>
+                        <select id="socialRetryFilterStatus">
+                            <option value="">all</option>
+                            <option value="queued">queued</option>
+                            <option value="failed_missing_connector">failed_missing_connector</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterConnector">Retry Connector ID</label>
+                        <input id="socialRetryFilterConnector" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterSource">Retry Source</label>
+                        <input id="socialRetryFilterSource" type="text" placeholder="push_sync">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterErrorCode">Retry Error Code</label>
+                        <input id="socialRetryFilterErrorCode" type="text" placeholder="missing_webhook_url">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterSearch">Retry Search</label>
+                        <input id="socialRetryFilterSearch" type="text" placeholder="retry id or schedule id">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterPage">Retry Page</label>
+                        <input id="socialRetryFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialRetryFilterLimit">Retry Limit</label>
+                        <input id="socialRetryFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSocialRetryQueueBtn" type="button">Refresh Retry Queue</button>
+                </div>
                 <pre id="socialRetryQueue">Loading...</pre>
             </section>
 

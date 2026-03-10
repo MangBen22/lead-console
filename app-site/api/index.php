@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.96-social-connectors-bulk-update',
+        'phase' => '2.97-social-retry-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8674,6 +8674,116 @@ function record_social_activity($type, $message, $meta = [])
     app_write_json_file(social_activity_feed_path(), $rows);
 }
 
+function social_retry_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(social_retry_queue_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $connectorId = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $source = strtolower(trim((string) ($query['source'] ?? '')));
+    $errorCode = strtolower(trim((string) ($query['error_code'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $summary = [
+        'total_count' => count($rows),
+        'queued_count' => 0,
+        'missing_connector_count' => 0,
+        'draft_total' => 0,
+        'retry_attempt_total' => 0,
+    ];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $item['errors'] = isset($row['errors']) && is_array($row['errors']) ? array_values($row['errors']) : [];
+        $item['error_codes'] = isset($row['error_codes']) && is_array($row['error_codes']) ? array_values($row['error_codes']) : [];
+        $item['draft_count'] = (int) ($row['draft_count'] ?? 0);
+        $item['attempts'] = (int) ($row['attempts'] ?? 0);
+        $item['status'] = (string) ($row['status'] ?? 'queued');
+        $item['last_error'] = isset($item['errors'][0]) ? (string) $item['errors'][0] : '';
+        $item['has_schedule'] = trim((string) ($row['schedule_id'] ?? '')) !== '' ? 1 : 0;
+        if (strtolower($item['status']) === 'queued') {
+            $summary['queued_count']++;
+        }
+        if (strtolower($item['status']) === 'failed_missing_connector') {
+            $summary['missing_connector_count']++;
+        }
+        $summary['draft_total'] += $item['draft_count'];
+        $summary['retry_attempt_total'] += $item['attempts'];
+
+        if ($status !== '' && strtolower($item['status']) !== $status) {
+            continue;
+        }
+        if ($connectorId !== '' && strpos(strtolower((string) ($item['connector_id'] ?? '')), $connectorId) === false) {
+            continue;
+        }
+        if ($source !== '' && strpos(strtolower((string) ($item['source'] ?? '')), $source) === false) {
+            continue;
+        }
+        if ($errorCode !== '') {
+            $matchedCode = false;
+            foreach ($item['error_codes'] as $code) {
+                if (strpos(strtolower((string) $code), $errorCode) !== false) {
+                    $matchedCode = true;
+                    break;
+                }
+            }
+            if (!$matchedCode) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['retry_id'] ?? ''),
+                (string) ($item['connector_id'] ?? ''),
+                (string) ($item['provider'] ?? ''),
+                (string) ($item['source'] ?? ''),
+                (string) ($item['schedule_id'] ?? ''),
+                (string) ($item['last_error'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    $summary['filtered_count'] = count($filtered);
+    $summary['page'] = $page;
+    $summary['limit'] = $limit;
+    $summary['status'] = $status;
+    $summary['connector_id'] = $connectorId;
+    $summary['source'] = $source;
+    $summary['error_code'] = $errorCode;
+    $summary['search'] = $search;
+
+    return [
+        'summary' => $summary,
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function social_inbox_threads_rows($seedIfEmpty = false)
 {
     $rows = app_read_json_file(social_inbox_threads_path(), []);
@@ -10633,7 +10743,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.96-social-connectors-bulk-update',
+        'phase' => '2.97-social-retry-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15300,11 +15410,12 @@ if ($action === 'social.delivery.watch.export') {
 }
 
 if ($action === 'social.retry.list') {
-    $queue = app_read_json_file(social_retry_queue_path(), []);
+    $snapshot = social_retry_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($queue),
-        'items' => $queue,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 
