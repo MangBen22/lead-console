@@ -1835,6 +1835,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <pre id="webopsOperationsSnapshotView">Loading...</pre>
                 <pre id="webopsOperationsHistoryView">Loading...</pre>
+                <pre id="webopsOperationsHistorySummaryView">Loading...</pre>
             </section>
 
             <section class="api-status">

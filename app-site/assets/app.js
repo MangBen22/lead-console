@@ -429,6 +429,7 @@
   const webopsPostureView = document.getElementById("webopsPostureView");
   const webopsOperationsSnapshotView = document.getElementById("webopsOperationsSnapshotView");
   const webopsOperationsHistoryView = document.getElementById("webopsOperationsHistoryView");
+  const webopsOperationsHistorySummaryView = document.getElementById("webopsOperationsHistorySummaryView");
   const refreshWebopsOperationsSnapshotBtn = document.getElementById("refreshWebopsOperationsSnapshotBtn");
   const downloadWebopsOperationsSnapshotBtn = document.getElementById("downloadWebopsOperationsSnapshotBtn");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
@@ -4561,6 +4562,19 @@
     }
   }
 
+  async function loadWebopsOperationsHistorySummary() {
+    if (!webopsOperationsHistorySummaryView) return;
+    const limit = document.getElementById("webopsOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("webops.operations.history_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 20,
+      });
+      webopsOperationsHistorySummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsOperationsHistorySummaryView.textContent = "Failed to load WebOps operations history summary.";
+    }
+  }
+
   async function downloadWebopsOperationsSnapshot() {
     const limit = document.getElementById("webopsOperationsSnapshotLimit");
     const data = await apiGetWithParams("webops.operations.export", {
@@ -4947,6 +4961,7 @@
     await loadWebopsPosture();
     await loadWebopsOperationsSnapshot();
     await loadWebopsOperationsHistory();
+    await loadWebopsOperationsHistorySummary();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -6226,6 +6241,7 @@
     refreshWebopsOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadWebopsOperationsSnapshot();
       await loadWebopsOperationsHistory();
+      await loadWebopsOperationsHistorySummary();
     });
   }
 
