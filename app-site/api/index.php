@@ -6390,7 +6390,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.10-social-provider-validation',
+        'phase' => '3.11-social-draft-variants',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9777,6 +9777,108 @@ function social_validate_draft_for_connector($connector, $draft)
     ];
 }
 
+function social_build_variant_for_connector($connector, $draft)
+{
+    $decorated = decorate_social_connector($connector);
+    $provider = strtolower((string) ($decorated['provider'] ?? 'custom'));
+    $family = (string) (($decorated['profile']['family'] ?? 'custom'));
+    $draft = is_array($draft) ? $draft : [];
+    $variant = [
+        'title' => trim((string) ($draft['title'] ?? '')),
+        'message' => trim((string) ($draft['message'] ?? '')),
+        'url' => trim((string) ($draft['url'] ?? '')),
+    ];
+    $notes = [];
+
+    if (in_array($provider, ['reddit', 'discourse', 'youtube'], true) && $variant['title'] === '') {
+        $variant['title'] = substr(trim((string) ($draft['message'] ?? '')), 0, 80);
+        if ($variant['title'] === '') {
+            $variant['title'] = 'Social Update';
+        }
+        $notes[] = 'generated_title';
+    }
+    if ($provider === 'linkedin' && $variant['url'] !== '' && strpos($variant['message'], $variant['url']) === false) {
+        $variant['message'] = trim($variant['message'] . "\n\n" . $variant['url']);
+        $notes[] = 'appended_url_for_linkedin';
+    }
+    if ($provider === 'instagram' && strpos($variant['message'], '#') === false) {
+        $variant['message'] = trim($variant['message'] . "\n\n#Spotlight #5N2Digital");
+        $notes[] = 'appended_default_hashtags';
+    }
+    if ($provider === 'x') {
+        $urlSuffix = '';
+        if ($variant['url'] !== '' && strpos($variant['message'], $variant['url']) === false) {
+            $urlSuffix = ' ' . $variant['url'];
+        }
+        $maxLength = 280 - strlen($urlSuffix);
+        if ($maxLength < 0) {
+            $maxLength = 0;
+        }
+        if (strlen($variant['message']) > $maxLength) {
+            $trimLength = max(0, $maxLength - 1);
+            $variant['message'] = rtrim(substr($variant['message'], 0, $trimLength)) . ($trimLength > 0 ? '…' : '');
+            $notes[] = 'trimmed_for_x';
+        }
+        if ($urlSuffix !== '') {
+            $variant['message'] = trim($variant['message'] . $urlSuffix);
+            $notes[] = 'appended_url_for_x';
+        }
+    }
+    if ($family === 'forum' && $variant['title'] === '') {
+        $variant['title'] = substr($variant['message'], 0, 80);
+        if ($variant['title'] === '') {
+            $variant['title'] = 'Forum Update';
+        }
+        $notes[] = 'generated_forum_title';
+    }
+
+    $validation = social_validate_draft_for_connector($connector, $variant);
+
+    return [
+        'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+        'provider' => (string) ($decorated['provider'] ?? ''),
+        'account_label' => (string) ($decorated['account_label'] ?? ''),
+        'variant' => $variant,
+        'notes' => $notes,
+        'validation' => $validation,
+    ];
+}
+
+function social_draft_variant_snapshot($query = [])
+{
+    $detail = social_draft_detail_snapshot($query);
+    if (empty($detail['ok']) || !is_array($detail['item'] ?? null)) {
+        return $detail;
+    }
+    $draft = $detail['item'];
+    $connectorFilter = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $items = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        if ($connectorFilter !== '' && strpos(strtolower((string) ($connector['connector_id'] ?? '')), $connectorFilter) === false) {
+            continue;
+        }
+        $items[] = social_build_variant_for_connector($connector, $draft);
+    }
+    return [
+        'ok' => true,
+        'draft' => $draft,
+        'summary' => [
+            'connector_count' => count($items),
+            'ready_count' => count(array_filter($items, static function ($item) {
+                return !empty($item['validation']['ready']);
+            })),
+            'blocked_count' => count(array_filter($items, static function ($item) {
+                return empty($item['validation']['ready']);
+            })),
+        ],
+        'items' => $items,
+    ];
+}
+
 function social_draft_validation_snapshot($drafts = null)
 {
     $draftRows = is_array($drafts) ? $drafts : collect_social_drafts();
@@ -11286,7 +11388,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.10-social-provider-validation',
+        'phase' => '3.11-social-draft-variants',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14384,6 +14486,11 @@ if ($action === 'social.drafts.detail') {
 
 if ($action === 'social.drafts.recommendations') {
     $snapshot = social_draft_recommendations_snapshot($_GET);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.drafts.variants') {
+    $snapshot = social_draft_variant_snapshot($_GET);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 

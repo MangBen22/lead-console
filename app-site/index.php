@@ -677,6 +677,20 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Draft Variants</h2>
+                <form id="socialDraftVariantForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialDraftVariantConnector">Connector ID Filter (optional)</label>
+                        <input id="socialDraftVariantConnector" type="text" placeholder="social_abc123">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshSocialDraftVariantsBtn" type="button">Refresh Draft Variants</button>
+                </div>
+                <pre id="socialDraftVariants">No social draft variants loaded.</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Schedule Draft</h2>
                 <form id="socialDraftScheduleForm" class="inline-form">
                     <div class="form-row">

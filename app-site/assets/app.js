@@ -280,6 +280,7 @@
   const refreshSocialDraftListBtn = document.getElementById("refreshSocialDraftListBtn");
   const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
   const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
+  const refreshSocialDraftVariantsBtn = document.getElementById("refreshSocialDraftVariantsBtn");
   const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
@@ -315,6 +316,7 @@
   const socialDraftList = document.getElementById("socialDraftList");
   const socialDraftDetail = document.getElementById("socialDraftDetail");
   const socialDraftRecommendations = document.getElementById("socialDraftRecommendations");
+  const socialDraftVariants = document.getElementById("socialDraftVariants");
   const socialDraftScheduleResult = document.getElementById("socialDraftScheduleResult");
   const socialDraftBulkScheduleResult = document.getElementById("socialDraftBulkScheduleResult");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
@@ -3405,6 +3407,33 @@
     }
   }
 
+  async function loadSocialDraftVariants() {
+    if (!socialDraftVariants) return;
+    const draftIndex = document.getElementById("socialDraftDetailIndex");
+    const leadId = document.getElementById("socialDraftDetailLeadId");
+    const connector = document.getElementById("socialDraftVariantConnector");
+    const params = {};
+    if (draftIndex && draftIndex.value !== "") {
+      params.draft_index = Number(draftIndex.value);
+    }
+    if (leadId && leadId.value !== "") {
+      params.lead_id = Number(leadId.value);
+    }
+    if (connector && connector.value) {
+      params.connector_id = connector.value.trim();
+    }
+    if (!Object.keys(params).length || (params.draft_index === undefined && params.lead_id === undefined)) {
+      socialDraftVariants.textContent = "Enter a draft index or lead ID before loading variants.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.drafts.variants", params);
+      socialDraftVariants.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDraftVariants.textContent = "Failed to load social draft variants.";
+    }
+  }
+
   async function runSocialDraftSchedule() {
     if (!socialDraftScheduleResult) return;
     const draftIndex = document.getElementById("socialDraftScheduleIndex");
@@ -4746,12 +4775,19 @@
     refreshSocialDraftDetailBtn.addEventListener("click", async function () {
       await loadSocialDraftDetail();
       await loadSocialDraftRecommendations();
+      await loadSocialDraftVariants();
     });
   }
 
   if (refreshSocialDraftRecommendationsBtn) {
     refreshSocialDraftRecommendationsBtn.addEventListener("click", async function () {
       await loadSocialDraftRecommendations();
+    });
+  }
+
+  if (refreshSocialDraftVariantsBtn) {
+    refreshSocialDraftVariantsBtn.addEventListener("click", async function () {
+      await loadSocialDraftVariants();
     });
   }
 
