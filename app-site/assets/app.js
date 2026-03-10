@@ -317,7 +317,9 @@
   const runWebopsActionsBtn = document.getElementById("runWebopsActionsBtn");
   const runSocialSyncBtn = document.getElementById("runSocialSyncBtn");
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
+  const refreshSocialDeliverySummaryBtn = document.getElementById("refreshSocialDeliverySummaryBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
+  const socialDeliverySummary = document.getElementById("socialDeliverySummary");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const webopsMonitors = document.getElementById("webopsMonitors");
@@ -3011,6 +3013,16 @@
     }
   }
 
+  async function loadSocialDeliverySummary() {
+    if (!socialDeliverySummary) return;
+    try {
+      const data = await apiGetWithParams("social.delivery.summary", { limit: 20 });
+      socialDeliverySummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDeliverySummary.textContent = "Failed to load social delivery summary.";
+    }
+  }
+
   async function loadWebopsMonitors() {
     if (!webopsMonitors) return;
     try {
@@ -3253,6 +3265,7 @@
     await loadSocialDraftsPreview();
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
+    await loadSocialDeliverySummary();
     await loadCrmDeliverySummary();
     await loadCrmDeliveryWatch();
     await loadCrmSyncLog();
@@ -4134,6 +4147,7 @@
       if (socialSyncResult) {
         socialSyncResult.textContent = JSON.stringify(result, null, 2);
       }
+      await loadSocialDeliverySummary();
       await loadSocialSyncLog();
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
@@ -4147,9 +4161,16 @@
       if (socialSyncResult) {
         socialSyncResult.textContent = JSON.stringify(result, null, 2);
       }
+      await loadSocialDeliverySummary();
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
       await refreshSocialModuleSummary();
+    });
+  }
+
+  if (refreshSocialDeliverySummaryBtn) {
+    refreshSocialDeliverySummaryBtn.addEventListener("click", async function () {
+      await loadSocialDeliverySummary();
     });
   }
 

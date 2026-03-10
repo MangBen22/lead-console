@@ -860,8 +860,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="runSocialSyncBtn" type="button">Run Social Sync</button>
                     <button id="runSocialRetryQueueBtn" type="button">Run Social Retry Queue</button>
+                    <button id="refreshSocialDeliverySummaryBtn" type="button">Refresh Delivery Summary</button>
                 </div>
                 <pre id="socialSyncResult">No social sync yet.</pre>
+                <h3>Social Delivery Summary</h3>
+                <pre id="socialDeliverySummary">Loading...</pre>
                 <h3>Social Sync Log</h3>
                 <pre id="socialSyncLog">Loading...</pre>
                 <h3>Social Retry Queue</h3>
