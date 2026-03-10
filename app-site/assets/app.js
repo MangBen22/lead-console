@@ -430,6 +430,7 @@
   const webopsOperationsSnapshotView = document.getElementById("webopsOperationsSnapshotView");
   const webopsOperationsHistoryView = document.getElementById("webopsOperationsHistoryView");
   const webopsOperationsHistorySummaryView = document.getElementById("webopsOperationsHistorySummaryView");
+  const webopsOperationsIssuesSummaryView = document.getElementById("webopsOperationsIssuesSummaryView");
   const refreshWebopsOperationsSnapshotBtn = document.getElementById("refreshWebopsOperationsSnapshotBtn");
   const downloadWebopsOperationsSnapshotBtn = document.getElementById("downloadWebopsOperationsSnapshotBtn");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
@@ -4575,6 +4576,19 @@
     }
   }
 
+  async function loadWebopsOperationsIssuesSummary() {
+    if (!webopsOperationsIssuesSummaryView) return;
+    const limit = document.getElementById("webopsOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("webops.operations.issues_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      webopsOperationsIssuesSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsOperationsIssuesSummaryView.textContent = "Failed to load WebOps operations issues summary.";
+    }
+  }
+
   async function downloadWebopsOperationsSnapshot() {
     const limit = document.getElementById("webopsOperationsSnapshotLimit");
     const data = await apiGetWithParams("webops.operations.export", {
@@ -4962,6 +4976,7 @@
     await loadWebopsOperationsSnapshot();
     await loadWebopsOperationsHistory();
     await loadWebopsOperationsHistorySummary();
+    await loadWebopsOperationsIssuesSummary();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -6242,6 +6257,7 @@
       await loadWebopsOperationsSnapshot();
       await loadWebopsOperationsHistory();
       await loadWebopsOperationsHistorySummary();
+      await loadWebopsOperationsIssuesSummary();
     });
   }
 

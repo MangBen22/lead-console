@@ -4575,6 +4575,76 @@ function webops_operations_history_summary($limit = 20)
     ];
 }
 
+function webops_operations_issues_summary($limit = 10)
+{
+    $snapshot = webops_operations_snapshot($limit);
+    $summary = isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [];
+    $issues = [];
+
+    if ((int) ($summary['critical_results'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'critical',
+            'category' => 'runs',
+            'message' => 'Latest WebOps run contains critical results.',
+            'count' => (int) ($summary['critical_results'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['open_incidents'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'incidents',
+            'message' => 'WebOps incidents remain open.',
+            'count' => (int) ($summary['open_incidents'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['retry_backlog'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'retry_queue',
+            'message' => 'WebOps retry queue still has backlog.',
+            'count' => (int) ($summary['retry_backlog'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['queued_actions'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'info',
+            'category' => 'actions',
+            'message' => 'WebOps action queue has pending actions.',
+            'count' => (int) ($summary['queued_actions'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['active_monitors'] ?? 0) === 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'monitors',
+            'message' => 'No active WebOps monitors are configured.',
+            'count' => 0,
+        ];
+    }
+
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($issues as $issue) {
+        $severity = (string) ($issue['severity'] ?? 'info');
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+        ],
+        'issues' => $issues,
+    ];
+}
+
 function webops_monitor_catalog()
 {
     return [
@@ -8093,7 +8163,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.34-webops-operations-history-summary',
+        'phase' => '5.35-webops-operations-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13944,7 +14014,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.34-webops-operations-history-summary',
+        'phase' => '5.35-webops-operations-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17197,6 +17267,20 @@ if ($action === 'webops.operations.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+    ]);
+}
+
+if ($action === 'webops.operations.issues_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $issues = webops_operations_issues_summary($limit);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
     ]);
 }
 
