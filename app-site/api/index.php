@@ -634,6 +634,98 @@ function crm_smtp_sites_snapshot()
     ];
 }
 
+function crm_smtp_summary_snapshot($query = [])
+{
+    $snapshot = crm_smtp_sites_snapshot();
+    $rows = isset($snapshot['sites']) && is_array($snapshot['sites']) ? $snapshot['sites'] : [];
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $siteId = strtolower(trim((string) ($query['site_id'] ?? '')));
+    $connection = strtolower(trim((string) ($query['connection'] ?? '')));
+    $confirmation = strtolower(trim((string) ($query['confirmation'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $connectionCounts = [
+        'connected' => 0,
+        'disconnected' => 0,
+    ];
+    $confirmationCounts = [
+        'pending' => 0,
+        'confirmed' => 0,
+        'none' => 0,
+    ];
+    $filtered = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $connected = !empty($row['smtp_health']['connected']);
+        $pending = !empty($row['test_confirmation']['pending']);
+        $confirmed = !empty($row['test_confirmation']['confirmed']);
+        $connectionKey = $connected ? 'connected' : 'disconnected';
+        $confirmationKey = $confirmed ? 'confirmed' : ($pending ? 'pending' : 'none');
+        $connectionCounts[$connectionKey]++;
+        $confirmationCounts[$confirmationKey]++;
+
+        if ($siteId !== '' && strpos(strtolower((string) ($row['site_id'] ?? '')), $siteId) === false) {
+            continue;
+        }
+        if ($connection !== '' && $connectionKey !== $connection) {
+            continue;
+        }
+        if ($confirmation !== '' && $confirmationKey !== $confirmation) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($row['site_id'] ?? ''),
+                (string) ($row['label'] ?? ''),
+                (string) ($row['base_url'] ?? ''),
+                (string) ($row['bridge_error'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $row;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($a['site_id'] ?? ''), (string) ($b['site_id'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'site_id' => $siteId,
+            'connection' => $connection,
+            'confirmation' => $confirmation,
+            'search' => $search,
+            'connection_counts' => $connectionCounts,
+            'confirmation_counts' => $confirmationCounts,
+            'totals' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        ],
+        'sites' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function crm_email_templates_fetch($site)
 {
     $res = app_bridge_request($site, 'GET', 'bridge/email-templates');
@@ -7038,7 +7130,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.10-crm-retry-export',
+        'phase' => '5.11-crm-smtp-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12889,7 +12981,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.10-crm-retry-export',
+        'phase' => '5.11-crm-smtp-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15367,7 +15459,7 @@ if ($action === 'crm.retry.run') {
 }
 
 if ($action === 'crm.smtp.summary') {
-    $snapshot = crm_smtp_sites_snapshot();
+    $snapshot = crm_smtp_summary_snapshot($_GET);
     out_json([
         'ok' => true,
         'summary' => $snapshot['summary'],

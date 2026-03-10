@@ -650,10 +650,45 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             <section class="api-status">
                 <h2>CRM SMTP Operations</h2>
                 <div class="actions">
-                    <button id="refreshCrmSmtpBtn" type="button">Refresh SMTP Status</button>
                     <button id="refreshCrmSmtpWatchBtn" type="button">Refresh SMTP Watch</button>
                     <button id="runCrmSmtpWatchBtn" type="button">Run SMTP Watch</button>
                 </div>
+                <form id="crmSmtpFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmSmtpFilterSiteId">Site ID</label>
+                        <input id="crmSmtpFilterSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSmtpFilterConnection">Connection</label>
+                        <select id="crmSmtpFilterConnection">
+                            <option value="">all</option>
+                            <option value="connected">connected</option>
+                            <option value="disconnected">disconnected</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSmtpFilterConfirmation">Confirmation</label>
+                        <select id="crmSmtpFilterConfirmation">
+                            <option value="">all</option>
+                            <option value="confirmed">confirmed</option>
+                            <option value="pending">pending</option>
+                            <option value="none">none</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSmtpFilterSearch">SMTP Search</label>
+                        <input id="crmSmtpFilterSearch" type="text" placeholder="site, url, or bridge error">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSmtpFilterPage">SMTP Page</label>
+                        <input id="crmSmtpFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSmtpFilterLimit">SMTP Limit</label>
+                        <input id="crmSmtpFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshCrmSmtpBtn" type="button">Refresh SMTP Status</button>
+                </form>
                 <pre id="crmSmtpSummary">Loading...</pre>
                 <form id="crmSmtpForm" class="inline-form">
                     <div class="form-row">

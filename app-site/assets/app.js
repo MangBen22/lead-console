@@ -2951,7 +2951,14 @@
   async function loadCrmSmtpSummary() {
     if (!crmSmtpSummary) return;
     try {
-      const data = await apiGet("crm.smtp.summary");
+      const data = await apiGetWithParams("crm.smtp.summary", {
+        site_id: document.getElementById("crmSmtpFilterSiteId") && document.getElementById("crmSmtpFilterSiteId").value ? document.getElementById("crmSmtpFilterSiteId").value.trim() : "",
+        connection: document.getElementById("crmSmtpFilterConnection") && document.getElementById("crmSmtpFilterConnection").value ? document.getElementById("crmSmtpFilterConnection").value : "",
+        confirmation: document.getElementById("crmSmtpFilterConfirmation") && document.getElementById("crmSmtpFilterConfirmation").value ? document.getElementById("crmSmtpFilterConfirmation").value : "",
+        search: document.getElementById("crmSmtpFilterSearch") && document.getElementById("crmSmtpFilterSearch").value ? document.getElementById("crmSmtpFilterSearch").value.trim() : "",
+        page: document.getElementById("crmSmtpFilterPage") && document.getElementById("crmSmtpFilterPage").value ? Number(document.getElementById("crmSmtpFilterPage").value) : 1,
+        limit: document.getElementById("crmSmtpFilterLimit") && document.getElementById("crmSmtpFilterLimit").value ? Number(document.getElementById("crmSmtpFilterLimit").value) : 10,
+      });
       crmSmtpSummary.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       crmSmtpSummary.textContent = "Failed to load CRM SMTP status.";
