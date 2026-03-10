@@ -824,6 +824,41 @@ function leads_review_detail_fetch($siteId, $runId)
     ];
 }
 
+function leads_review_action($siteId, $runId, $action)
+{
+    $site = site_by_id((string) $siteId);
+    if (!is_array($site)) {
+        return ['ok' => false, 'error' => 'Site not found.'];
+    }
+    $route = '';
+    if ($action === 'save') {
+        $route = 'bridge/run-review/save';
+    } elseif ($action === 'discard') {
+        $route = 'bridge/run-review/discard';
+    }
+    if ($route === '') {
+        return ['ok' => false, 'error' => 'Invalid review action.'];
+    }
+
+    $res = app_bridge_request($site, 'POST', $route, ['run_id' => (int) $runId]);
+    if (empty($res['ok']) || !is_array($res['data'])) {
+        return [
+            'ok' => false,
+            'error' => (string) ($res['error'] ?? 'Bridge request failed.'),
+            'status' => (int) ($res['status'] ?? 0),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'site' => [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+        ],
+        'result' => $res['data'],
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5335,7 +5370,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.60-leads-review-queue',
+        'phase' => '2.61-leads-review-actions',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8726,7 +8761,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.60-leads-review-queue',
+        'phase' => '2.61-leads-review-actions',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10652,6 +10687,26 @@ if ($action === 'leads.review.detail') {
         out_json(['ok' => false, 'error' => 'site_id and run_id are required.'], 400);
     }
     $snapshot = leads_review_detail_fetch($siteId, $runId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'leads.review.save' || $action === 'leads.review.discard') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || empty($data['run_id'])) {
+        out_json(['ok' => false, 'error' => 'site_id and run_id are required.'], 400);
+    }
+    $mode = ($action === 'leads.review.save') ? 'save' : 'discard';
+    $snapshot = leads_review_action((string) $data['site_id'], (int) $data['run_id'], $mode);
+    audit_event('leads', 'review.' . $mode, [
+        'site_id' => (string) ($data['site_id'] ?? ''),
+        'run_id' => (int) ($data['run_id'] ?? 0),
+        'ok' => !empty($snapshot['ok']) ? 1 : 0,
+    ]);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
 }
 

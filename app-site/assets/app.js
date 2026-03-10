@@ -218,6 +218,8 @@
   const refreshLeadsDeliveryHistoryBtn = document.getElementById("refreshLeadsDeliveryHistoryBtn");
   const refreshLeadsReviewQueueBtn = document.getElementById("refreshLeadsReviewQueueBtn");
   const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
+  const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
+  const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
@@ -229,6 +231,7 @@
   const leadsDeliveryHistoryView = document.getElementById("leadsDeliveryHistoryView");
   const leadsReviewQueueView = document.getElementById("leadsReviewQueueView");
   const leadsReviewDetailView = document.getElementById("leadsReviewDetailView");
+  const leadsReviewActionView = document.getElementById("leadsReviewActionView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2328,6 +2331,27 @@
     }
   }
 
+  async function runLeadsReviewAction(action) {
+    const siteId = document.getElementById("leadsReviewSiteId");
+    const runId = document.getElementById("leadsReviewRunId");
+    const payload = {
+      site_id: siteId && siteId.value ? siteId.value.trim() : "",
+      run_id: runId && runId.value ? runId.value.trim() : "",
+    };
+    const endpoint = action === "save" ? "leads.review.save" : "leads.review.discard";
+    const result = await apiPost(endpoint, payload);
+    if (leadsReviewActionView) {
+      leadsReviewActionView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadLeadsReviewQueue();
+    await loadLeadsReviewDetail();
+    await loadLeadsInventory();
+    await loadLeadsList();
+    await loadLeadsPushPlan();
+    await loadLeadsQuality();
+    await refreshLeadsAndCrmModuleCards();
+  }
+
   async function refreshLeadsAndCrmModuleCards() {
     const leadsPanel = document.getElementById("modLeads");
     const crmPanel = document.getElementById("modCrm");
@@ -4155,6 +4179,18 @@
   if (loadLeadsReviewDetailBtn) {
     loadLeadsReviewDetailBtn.addEventListener("click", async function () {
       await loadLeadsReviewDetail();
+    });
+  }
+
+  if (saveLeadsReviewBtn) {
+    saveLeadsReviewBtn.addEventListener("click", async function () {
+      await runLeadsReviewAction("save");
+    });
+  }
+
+  if (discardLeadsReviewBtn) {
+    discardLeadsReviewBtn.addEventListener("click", async function () {
+      await runLeadsReviewAction("discard");
     });
   }
 

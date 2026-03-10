@@ -1224,6 +1224,18 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/run-review/save', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_run_review_save'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/run-review/discard', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_run_review_discard'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/smtp-health', [
             'methods' => 'GET',
             'callback' => [$this, 'rest_bridge_smtp_health'],
@@ -1502,6 +1514,86 @@ class LC_Plugin
             ],
             'logs' => is_array($logs) ? $logs : [],
             'draft_preview' => is_array($draft_preview) ? $draft_preview : [],
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_run_review_save($request)
+    {
+        global $wpdb;
+
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $run_id = absint($payload['run_id'] ?? 0);
+        if ($run_id <= 0) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'run_id is required.'], 400);
+        }
+
+        $drafts = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$this->db_table('lc_run_drafts')} WHERE run_id = %d ORDER BY id ASC", $run_id), ARRAY_A);
+        $saved = 0;
+        foreach ($drafts as $draft) {
+            $inserted = $wpdb->insert($this->db_table('lc_leads'), [
+                'business_name' => sanitize_text_field((string) ($draft['business_name'] ?? '')),
+                'city' => sanitize_text_field((string) ($draft['city'] ?? '')),
+                'category' => sanitize_text_field((string) ($draft['category'] ?? '')),
+                'address' => sanitize_text_field((string) ($draft['address'] ?? '')),
+                'website' => esc_url_raw((string) ($draft['website'] ?? '')),
+                'phone' => sanitize_text_field((string) ($draft['phone'] ?? '')),
+                'email' => sanitize_email((string) ($draft['email'] ?? '')),
+                'email_confidence' => '',
+                'review_count' => absint($draft['review_count'] ?? 0),
+                'rating' => (float) ($draft['rating'] ?? 0),
+                'status' => $this->normalize_status((string) ($draft['status'] ?? 'New')),
+                'score' => absint($draft['score'] ?? 0),
+                'lead_type' => sanitize_text_field((string) ($draft['lead_type'] ?? 'C')),
+                'source_url' => esc_url_raw((string) ($draft['source_url'] ?? '')),
+                'notes' => sanitize_textarea_field((string) ($draft['notes'] ?? '')),
+            ]);
+            if ($inserted) {
+                $saved++;
+            }
+        }
+
+        $wpdb->delete($this->db_table('lc_run_drafts'), ['run_id' => $run_id], ['%d']);
+        $wpdb->update($this->db_table('lc_runs'), ['review_status' => 'saved'], ['id' => $run_id], ['%s'], ['%d']);
+        $this->log_system_event('bridge', 'info', 'Bridge run review drafts saved.', [
+            'run_id' => $run_id,
+            'saved' => $saved,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'run_id' => $run_id,
+            'saved' => $saved,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_run_review_discard($request)
+    {
+        global $wpdb;
+
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $run_id = absint($payload['run_id'] ?? 0);
+        if ($run_id <= 0) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'run_id is required.'], 400);
+        }
+
+        $wpdb->delete($this->db_table('lc_run_drafts'), ['run_id' => $run_id], ['%d']);
+        $wpdb->update($this->db_table('lc_runs'), ['review_status' => 'discarded'], ['id' => $run_id], ['%s'], ['%d']);
+        $this->log_system_event('bridge', 'info', 'Bridge run review drafts discarded.', [
+            'run_id' => $run_id,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'run_id' => $run_id,
+            'discarded' => true,
             'time' => current_time('mysql'),
         ]);
     }
