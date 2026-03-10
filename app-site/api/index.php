@@ -6390,7 +6390,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.09-social-platform-export',
+        'phase' => '3.10-social-provider-validation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9687,6 +9687,7 @@ function social_validate_draft_for_connector($connector, $draft)
     $decorated = decorate_social_connector($connector);
     $profile = isset($decorated['profile']) && is_array($decorated['profile']) ? $decorated['profile'] : [];
     $family = (string) ($profile['family'] ?? 'custom');
+    $provider = strtolower((string) ($decorated['provider'] ?? ''));
     $capabilities = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
     $config = isset($decorated['config']) && is_array($decorated['config']) ? $decorated['config'] : [];
     $draft = is_array($draft) ? $draft : [];
@@ -9727,6 +9728,40 @@ function social_validate_draft_for_connector($connector, $draft)
     }
     if ($title === '' && !in_array($family, ['forum'], true)) {
         $warnings[] = 'title_missing';
+    }
+    if ($provider === 'x') {
+        if ($message !== '' && strlen($message) > 280) {
+            $issues[] = 'message_too_long_for_x';
+        } elseif ($message !== '' && strlen($message) > 240) {
+            $warnings[] = 'message_near_limit_for_x';
+        }
+    }
+    if ($provider === 'instagram') {
+        if ($message !== '' && strlen($message) > 2200) {
+            $issues[] = 'message_too_long_for_instagram';
+        }
+        if ($url === '') {
+            $warnings[] = 'url_missing_for_instagram';
+        }
+    }
+    if ($provider === 'linkedin') {
+        if ($message !== '' && strlen($message) < 40) {
+            $warnings[] = 'message_short_for_linkedin';
+        }
+        if ($url === '') {
+            $warnings[] = 'url_missing_for_linkedin';
+        }
+    }
+    if ($provider === 'youtube') {
+        if ($title === '') {
+            $issues[] = 'title_missing_for_youtube';
+        }
+    }
+    if ($provider === 'tiktok' && $message !== '' && strlen($message) > 2200) {
+        $warnings[] = 'message_long_for_tiktok';
+    }
+    if (in_array($provider, ['reddit', 'discourse'], true) && $message !== '' && strlen($message) < 20) {
+        $warnings[] = 'message_short_for_forum';
     }
 
     return [
@@ -11251,7 +11286,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.09-social-platform-export',
+        'phase' => '3.10-social-provider-validation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
