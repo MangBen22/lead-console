@@ -281,6 +281,7 @@
   const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
   const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
   const refreshSocialDraftVariantsBtn = document.getElementById("refreshSocialDraftVariantsBtn");
+  const downloadSocialDraftVariantsExportBtn = document.getElementById("downloadSocialDraftVariantsExportBtn");
   const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
@@ -3434,6 +3435,31 @@
     }
   }
 
+  async function downloadSocialDraftVariantsExport() {
+    const draftIndex = document.getElementById("socialDraftDetailIndex");
+    const leadId = document.getElementById("socialDraftDetailLeadId");
+    const connector = document.getElementById("socialDraftVariantConnector");
+    const params = {};
+    if (draftIndex && draftIndex.value !== "") {
+      params.draft_index = Number(draftIndex.value);
+    }
+    if (leadId && leadId.value !== "") {
+      params.lead_id = Number(leadId.value);
+    }
+    if (connector && connector.value) {
+      params.connector_id = connector.value.trim();
+    }
+    if (params.draft_index === undefined && params.lead_id === undefined) {
+      if (socialDraftVariants) {
+        socialDraftVariants.textContent = "Enter a draft index or lead ID before exporting variants.";
+      }
+      return;
+    }
+    const data = await apiGetWithParams("social.drafts.variants.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-draft-variants-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function runSocialDraftSchedule() {
     if (!socialDraftScheduleResult) return;
     const draftIndex = document.getElementById("socialDraftScheduleIndex");
@@ -4788,6 +4814,12 @@
   if (refreshSocialDraftVariantsBtn) {
     refreshSocialDraftVariantsBtn.addEventListener("click", async function () {
       await loadSocialDraftVariants();
+    });
+  }
+
+  if (downloadSocialDraftVariantsExportBtn) {
+    downloadSocialDraftVariantsExportBtn.addEventListener("click", async function () {
+      await downloadSocialDraftVariantsExport();
     });
   }
 

@@ -686,6 +686,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <div class="actions">
                     <button id="refreshSocialDraftVariantsBtn" type="button">Refresh Draft Variants</button>
+                    <button id="downloadSocialDraftVariantsExportBtn" type="button">Download Draft Variants</button>
                 </div>
                 <pre id="socialDraftVariants">No social draft variants loaded.</pre>
             </section>

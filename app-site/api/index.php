@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.13-social-provider-rules',
+        'phase' => '3.14-social-draft-variant-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11477,7 +11477,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.13-social-provider-rules',
+        'phase' => '3.14-social-draft-variant-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14581,6 +14581,26 @@ if ($action === 'social.drafts.recommendations') {
 if ($action === 'social.drafts.variants') {
     $snapshot = social_draft_variant_snapshot($_GET);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.drafts.variants.export') {
+    $snapshot = social_draft_variant_snapshot($_GET);
+    if (empty($snapshot['ok'])) {
+        out_json($snapshot, 404);
+    }
+    audit_event('social', 'drafts.variants.export', [
+        'draft_index' => isset($_GET['draft_index']) ? (int) $_GET['draft_index'] : null,
+        'lead_id' => isset($_GET['lead_id']) ? (int) $_GET['lead_id'] : null,
+        'connector_id' => isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_draft_variants_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'variants' => $snapshot,
+        ],
+    ]);
 }
 
 if ($action === 'social.drafts.schedule') {
