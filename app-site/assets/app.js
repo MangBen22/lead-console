@@ -412,6 +412,7 @@
   const refreshSeoExtensionSessionsBtn = document.getElementById("refreshSeoExtensionSessionsBtn");
   const downloadSeoAuditsExportBtn = document.getElementById("downloadSeoAuditsExportBtn");
   const downloadSeoExtensionEventsExportBtn = document.getElementById("downloadSeoExtensionEventsExportBtn");
+  const downloadSeoExtensionSessionsExportBtn = document.getElementById("downloadSeoExtensionSessionsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
@@ -4190,6 +4191,24 @@
     }
   }
 
+  async function downloadSeoExtensionSessionsExport() {
+    const detailId = document.getElementById("seoExtensionSessionDetailId");
+    const sessionId = detailId && detailId.value ? detailId.value.trim() : "";
+    const data = await apiGetWithParams("seo.extension.sessions.export", {
+      project_id: seoExtensionSessionFilterProjectId && seoExtensionSessionFilterProjectId.value ? seoExtensionSessionFilterProjectId.value.trim() : "",
+      status: seoExtensionSessionFilterStatus && seoExtensionSessionFilterStatus.value ? seoExtensionSessionFilterStatus.value : "",
+      search: seoExtensionSessionFilterSearch && seoExtensionSessionFilterSearch.value ? seoExtensionSessionFilterSearch.value.trim() : "",
+      page: seoExtensionSessionFilterPage && seoExtensionSessionFilterPage.value ? seoExtensionSessionFilterPage.value : 1,
+      limit: seoExtensionSessionFilterLimit && seoExtensionSessionFilterLimit.value ? seoExtensionSessionFilterLimit.value : 10,
+      session_id: sessionId,
+      include_detail: sessionId ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "seo-extension-sessions-export.json", data.export || data);
+    if (seoResult) {
+      seoResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadSeoProjectSnapshot() {
     if (!seoProjectSnapshot) return;
     try {
@@ -6940,6 +6959,12 @@
   if (loadSeoExtensionSessionDetailBtn) {
     loadSeoExtensionSessionDetailBtn.addEventListener("click", async function () {
       await loadSeoExtensionSessionDetail();
+    });
+  }
+
+  if (downloadSeoExtensionSessionsExportBtn) {
+    downloadSeoExtensionSessionsExportBtn.addEventListener("click", async function () {
+      await downloadSeoExtensionSessionsExport();
     });
   }
 

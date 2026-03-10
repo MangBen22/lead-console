@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.11-seo-extension-session-detail',
+        'phase' => '4.12-seo-extension-session-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.11-seo-extension-session-detail',
+        'phase' => '4.12-seo-extension-session-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15332,6 +15332,32 @@ if ($action === 'seo.extension.sessions.list') {
 if ($action === 'seo.extension.sessions.detail') {
     $sessionId = isset($_GET['session_id']) ? (string) $_GET['session_id'] : '';
     out_json(seo_extension_session_detail_snapshot($sessionId));
+}
+
+if ($action === 'seo.extension.sessions.export') {
+    $snapshot = seo_extension_sessions_list_snapshot($_GET);
+    $sessionId = isset($_GET['session_id']) ? (string) $_GET['session_id'] : '';
+    $includeDetail = !empty($_GET['include_detail']);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'session_id' => $sessionId,
+        'include_detail' => $includeDetail ? 1 : 0,
+    ];
+    if ($includeDetail) {
+        $payload['detail'] = seo_extension_session_detail_snapshot($sessionId);
+    }
+    audit_event('seo', 'extension.sessions.export', [
+        'session_id' => $sessionId,
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'include_detail' => $includeDetail ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_extension_sessions_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.platforms.list') {

@@ -1699,6 +1699,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="seoExtensionSessionFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSeoExtensionSessionsBtn" type="button">Refresh Sessions</button>
+                    <button id="downloadSeoExtensionSessionsExportBtn" type="button">Download Sessions</button>
                 </div>
                 <pre id="seoExtensionSessions">Loading...</pre>
                 <div class="inline-form">
