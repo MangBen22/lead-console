@@ -354,6 +354,7 @@
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
+  const downloadSocialOpsSnapshotBtn = document.getElementById("downloadSocialOpsSnapshotBtn");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialDraftList = document.getElementById("socialDraftList");
@@ -3919,10 +3920,25 @@
   async function loadSocialOperationsSnapshot() {
     if (!socialOpsSnapshotView) return;
     try {
-      const data = await apiGetWithParams("social.operations.snapshot", { limit: 5 });
+      const limit = document.getElementById("socialOperationsSnapshotLimit");
+      const data = await apiGetWithParams("social.operations.snapshot", {
+        limit: limit && limit.value ? Number(limit.value) : 5,
+      });
       socialOpsSnapshotView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialOpsSnapshotView.textContent = "Failed to load social operations snapshot.";
+    }
+  }
+
+  async function downloadSocialOperationsSnapshot() {
+    const limit = document.getElementById("socialOperationsSnapshotLimit");
+    const data = await apiGetWithParams("social.operations.export", {
+      limit: limit && limit.value ? Number(limit.value) : 5,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("social-operations-snapshot-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (socialOpsSnapshotView) {
+      socialOpsSnapshotView.textContent = JSON.stringify(data, null, 2);
     }
   }
 
@@ -5728,6 +5744,12 @@
   if (refreshSocialOpsSnapshotBtn) {
     refreshSocialOpsSnapshotBtn.addEventListener("click", async function () {
       await loadSocialOperationsSnapshot();
+    });
+  }
+
+  if (downloadSocialOpsSnapshotBtn) {
+    downloadSocialOpsSnapshotBtn.addEventListener("click", async function () {
+      await downloadSocialOperationsSnapshot();
     });
   }
 

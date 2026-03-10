@@ -921,9 +921,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>Social Operations Snapshot</h2>
-                <div class="actions">
+                <form id="socialOperationsSnapshotForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialOperationsSnapshotLimit">Snapshot Limit</label>
+                        <input id="socialOperationsSnapshotLimit" type="number" min="1" max="50" value="5">
+                    </div>
                     <button id="refreshSocialOpsSnapshotBtn" type="button">Refresh Social Snapshot</button>
-                </div>
+                    <button id="downloadSocialOpsSnapshotBtn" type="button">Download Social Snapshot</button>
+                </form>
                 <pre id="socialOpsSnapshotView">Loading...</pre>
             </section>
 

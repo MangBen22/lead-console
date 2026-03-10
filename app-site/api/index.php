@@ -7719,7 +7719,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.25-crm-operations-issues-summary',
+        'phase' => '5.26-social-operations-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13570,7 +13570,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.25-crm-operations-issues-summary',
+        'phase' => '5.26-social-operations-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16647,6 +16647,23 @@ if ($action === 'social.operations.snapshot') {
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+    ]);
+}
+
+if ($action === 'social.operations.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 5;
+    if ($limit <= 0) {
+        $limit = 5;
+    }
+    $snapshot = social_operations_snapshot($limit);
+    audit_event('social', 'operations.export', [
+        'limit' => $limit,
+        'retry_backlog' => (int) (($snapshot['summary']['retry_backlog'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_operations_snapshot_' . gmdate('Ymd_His') . '.json',
+        'export' => $snapshot,
     ]);
 }
 
