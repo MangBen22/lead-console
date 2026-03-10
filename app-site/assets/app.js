@@ -300,6 +300,7 @@
   const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
   const downloadSocialPlatformsExportBtn = document.getElementById("downloadSocialPlatformsExportBtn");
   const refreshSocialExecutionPreviewBtn = document.getElementById("refreshSocialExecutionPreviewBtn");
+  const downloadSocialExecutionPreviewBtn = document.getElementById("downloadSocialExecutionPreviewBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3569,6 +3570,19 @@
     }
   }
 
+  async function downloadSocialExecutionPreview() {
+    const provider = document.getElementById("socialExecutionPreviewProvider");
+    const connector = document.getElementById("socialExecutionPreviewConnector");
+    const draftLimit = document.getElementById("socialExecutionPreviewDraftLimit");
+    const data = await apiGetWithParams("social.execution.preview.export", {
+      provider: provider && provider.value ? provider.value.trim() : "",
+      connector_id: connector && connector.value ? connector.value.trim() : "",
+      draft_limit: draftLimit && draftLimit.value ? Number(draftLimit.value) : 5,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("social-execution-preview-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadSocialSyncDetail() {
     if (!socialSyncDetail) return;
     const syncId = document.getElementById("socialSyncDetailId");
@@ -4778,6 +4792,12 @@
   if (refreshSocialExecutionPreviewBtn) {
     refreshSocialExecutionPreviewBtn.addEventListener("click", async function () {
       await loadSocialExecutionPreview();
+    });
+  }
+
+  if (downloadSocialExecutionPreviewBtn) {
+    downloadSocialExecutionPreviewBtn.addEventListener("click", async function () {
+      await downloadSocialExecutionPreview();
     });
   }
 

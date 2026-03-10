@@ -1206,6 +1206,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="socialExecutionPreviewDraftLimit" type="number" min="1" max="20" value="5">
                     </div>
                     <button id="refreshSocialExecutionPreviewBtn" type="button">Refresh Execution Preview</button>
+                    <button id="downloadSocialExecutionPreviewBtn" type="button">Download Execution Preview</button>
                 </div>
                 <pre id="socialSyncResult">No social sync yet.</pre>
                 <h3>Social Execution Preview</h3>

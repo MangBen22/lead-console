@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.15-social-execution-preview',
+        'phase' => '3.16-social-execution-preview-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11563,7 +11563,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.15-social-execution-preview',
+        'phase' => '3.16-social-execution-preview-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14692,6 +14692,23 @@ if ($action === 'social.drafts.variants.export') {
 if ($action === 'social.execution.preview') {
     $snapshot = social_execution_preview_snapshot($_GET);
     out_json($snapshot);
+}
+
+if ($action === 'social.execution.preview.export') {
+    $snapshot = social_execution_preview_snapshot($_GET);
+    audit_event('social', 'execution.preview.export', [
+        'provider' => isset($_GET['provider']) ? (string) $_GET['provider'] : '',
+        'connector_id' => isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '',
+        'draft_limit' => isset($_GET['draft_limit']) ? (int) $_GET['draft_limit'] : 5,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_execution_preview_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'preview' => $snapshot,
+        ],
+    ]);
 }
 
 if ($action === 'social.drafts.schedule') {
