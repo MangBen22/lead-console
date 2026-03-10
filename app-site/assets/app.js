@@ -319,6 +319,7 @@
   const runSocialRetryQueueBtn = document.getElementById("runSocialRetryQueueBtn");
   const refreshSocialDeliverySummaryBtn = document.getElementById("refreshSocialDeliverySummaryBtn");
   const refreshSocialDeliveryDetailBtn = document.getElementById("refreshSocialDeliveryDetailBtn");
+  const downloadSocialDeliveryExportBtn = document.getElementById("downloadSocialDeliveryExportBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
   const socialDeliverySummary = document.getElementById("socialDeliverySummary");
   const socialDeliveryConnectorDetail = document.getElementById("socialDeliveryConnectorDetail");
@@ -3045,6 +3046,20 @@
     }
   }
 
+  async function downloadSocialDeliveryExport() {
+    const connectorId = document.getElementById("socialDeliveryConnectorId");
+    const limit = document.getElementById("socialDeliveryConnectorLimit");
+    const params = {
+      limit: limit && limit.value ? limit.value.trim() : "10",
+    };
+    if (connectorId && connectorId.value) {
+      params.connector_id = connectorId.value.trim();
+    }
+    const data = await apiGetWithParams("social.delivery.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-delivery-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadWebopsMonitors() {
     if (!webopsMonitors) return;
     try {
@@ -4199,6 +4214,12 @@
   if (refreshSocialDeliveryDetailBtn) {
     refreshSocialDeliveryDetailBtn.addEventListener("click", async function () {
       await loadSocialDeliveryConnectorDetail();
+    });
+  }
+
+  if (downloadSocialDeliveryExportBtn) {
+    downloadSocialDeliveryExportBtn.addEventListener("click", async function () {
+      await downloadSocialDeliveryExport();
     });
   }
 
