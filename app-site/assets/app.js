@@ -439,6 +439,8 @@
   const seoExtensionEventFilterPage = document.getElementById("seoExtensionEventFilterPage");
   const seoExtensionEventFilterLimit = document.getElementById("seoExtensionEventFilterLimit");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
+  const loadSeoExtensionEventDetailBtn = document.getElementById("loadSeoExtensionEventDetailBtn");
+  const seoExtensionEventDetail = document.getElementById("seoExtensionEventDetail");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectDetail = document.getElementById("seoProjectDetail");
@@ -4119,6 +4121,18 @@
     }
   }
 
+  async function loadSeoExtensionEventDetail() {
+    if (!seoExtensionEventDetail) return;
+    try {
+      const detailId = document.getElementById("seoExtensionEventDetailId");
+      const eventId = detailId && detailId.value ? detailId.value.trim() : "";
+      const data = await apiGetWithParams("seo.extension.events.detail", { event_id: eventId });
+      seoExtensionEventDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoExtensionEventDetail.textContent = "Failed to load SEO extension event detail.";
+    }
+  }
+
   async function loadSeoExtensionSessions() {
     if (!seoExtensionSessions) return;
     try {
@@ -4261,6 +4275,7 @@
     await loadSeoAudits();
     await loadSeoAuditDetail();
     await loadSeoExtensionEvents();
+    await loadSeoExtensionEventDetail();
     await loadSeoExtensionSessions();
     await loadSeoProjectSnapshot();
     await loadSeoActionPlan();
@@ -6865,6 +6880,12 @@
   if (refreshSeoExtensionEventsBtn) {
     refreshSeoExtensionEventsBtn.addEventListener("click", async function () {
       await loadSeoExtensionEvents();
+    });
+  }
+
+  if (loadSeoExtensionEventDetailBtn) {
+    loadSeoExtensionEventDetailBtn.addEventListener("click", async function () {
+      await loadSeoExtensionEventDetail();
     });
   }
 

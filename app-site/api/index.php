@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.07-seo-extension-event-filters',
+        'phase' => '4.08-seo-extension-event-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7569,6 +7569,70 @@ function seo_extension_events_list_snapshot($query = [])
             'project_counts' => $projectCounts,
         ],
         'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
+function seo_extension_event_detail_snapshot($eventId = '')
+{
+    $rows = app_read_json_file(seo_extension_events_path(), []);
+    $item = null;
+    $selectedId = trim((string) $eventId);
+    if ($selectedId !== '') {
+        foreach ($rows as $row) {
+            if (is_array($row) && (string) ($row['event_id'] ?? '') === $selectedId) {
+                $item = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($item)) {
+        $item = isset($rows[0]) && is_array($rows[0]) ? $rows[0] : null;
+    }
+    if (!is_array($item)) {
+        return [
+            'ok' => true,
+            'item' => null,
+            'message' => 'No SEO extension event available.',
+        ];
+    }
+
+    $projectId = (string) ($item['project_id'] ?? '');
+    $project = $projectId !== '' ? seo_project_by_id($projectId) : null;
+    $linkedAudit = null;
+    $audits = app_read_json_file(seo_audits_path(), []);
+    foreach ($audits as $audit) {
+        if (!is_array($audit)) {
+            continue;
+        }
+        if ((string) ($audit['project_id'] ?? '') !== $projectId) {
+            continue;
+        }
+        if (seo_normalize_history_url((string) ($audit['domain'] ?? '')) === seo_normalize_history_url((string) ($item['url'] ?? ''))) {
+            $linkedAudit = $audit;
+            break;
+        }
+    }
+    $issueRollup = isset($item['issue_rollup']) && is_array($item['issue_rollup'])
+        ? $item['issue_rollup']
+        : seo_issue_rollup_from_checks(isset($item['issues']) && is_array($item['issues']) ? $item['issues'] : [])['issues'];
+    $prioritySummary = isset($item['priority_summary']) && is_array($item['priority_summary'])
+        ? $item['priority_summary']
+        : seo_issue_rollup_from_checks(isset($item['issues']) && is_array($item['issues']) ? $item['issues'] : [])['priority_summary'];
+
+    return [
+        'ok' => true,
+        'item' => $item,
+        'project' => $project,
+        'meta' => [
+            'issue_count' => count($issueRollup),
+            'raw_issue_count' => count(isset($item['issues']) && is_array($item['issues']) ? $item['issues'] : []),
+            'has_session_id' => !empty($item['session_id']) ? 1 : 0,
+            'has_linked_audit' => is_array($linkedAudit) ? 1 : 0,
+        ],
+        'priority_summary' => $prioritySummary,
+        'issue_rollup' => $issueRollup,
+        'page_signals' => seo_normalize_page_signals(isset($item['page_signals']) && is_array($item['page_signals']) ? $item['page_signals'] : []),
+        'linked_audit' => $linkedAudit,
     ];
 }
 
@@ -12194,7 +12258,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.07-seo-extension-event-filters',
+        'phase' => '4.08-seo-extension-event-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16243,6 +16307,11 @@ if ($action === 'seo.extension.events.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'seo.extension.events.detail') {
+    $eventId = isset($_GET['event_id']) ? (string) $_GET['event_id'] : '';
+    out_json(seo_extension_event_detail_snapshot($eventId));
 }
 
 if ($action === 'seo.extension.events.summary') {
