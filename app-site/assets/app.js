@@ -245,6 +245,7 @@
   const socialPlatforms = document.getElementById("socialPlatforms");
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
+  const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
@@ -306,6 +307,7 @@
   const seoCompareView = document.getElementById("seoCompareView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
+  let socialPlatformCatalogItems = [];
 
   async function apiGet(action) {
     const res = await fetch("/api/index.php?action=" + encodeURIComponent(action), {
@@ -2327,11 +2329,57 @@
     if (!socialPlatforms) return;
     try {
       const data = await apiGet("social.platforms.list");
+      socialPlatformCatalogItems = data && Array.isArray(data.items) ? data.items : [];
       socialPlatforms.textContent = JSON.stringify(data, null, 2);
+      const providerInput = document.getElementById("socialProvider");
+      if (providerInput && providerInput.value) {
+        applySocialProviderProfile(providerInput.value);
+      }
     } catch (err) {
       socialPlatforms.textContent = "Failed to load social platforms.";
     }
   }
+
+  const renderSocialProviderProfile = function (profile, message) {
+    if (!socialProviderProfile) return;
+    if (profile) {
+      socialProviderProfile.textContent = JSON.stringify(profile, null, 2);
+      return;
+    }
+    socialProviderProfile.textContent = message || "Select a provider to load defaults.";
+  };
+
+  const applySocialProviderProfile = function (providerValue) {
+    const provider = providerValue ? providerValue.trim().toLowerCase() : "";
+    if (!provider) {
+      renderSocialProviderProfile(null, "Select a provider to load defaults.");
+      return;
+    }
+    const profile = socialPlatformCatalogItems.find(function (item) {
+      return item && item.provider === provider;
+    });
+    if (!profile) {
+      renderSocialProviderProfile(null, "No catalog match. Manual setup is required for this provider.");
+      return;
+    }
+    const type = document.getElementById("socialType");
+    const auth = document.getElementById("socialAuth");
+    const caps = document.getElementById("socialCapabilities");
+    const accountLabel = document.getElementById("socialAccountLabel");
+    if (type && profile.default_type) {
+      type.value = profile.default_type;
+    }
+    if (auth && Array.isArray(profile.auth_modes) && profile.auth_modes.length > 0) {
+      auth.value = profile.auth_modes[0];
+    }
+    if (caps && Array.isArray(profile.capabilities)) {
+      caps.value = profile.capabilities.join(", ");
+    }
+    if (accountLabel && !accountLabel.value.trim() && profile.label) {
+      accountLabel.value = profile.label;
+    }
+    renderSocialProviderProfile(profile);
+  };
 
   async function loadSocialCapabilitiesSummary() {
     if (!socialCapabilitiesSummary) return;
@@ -3051,6 +3099,14 @@
     socialConnectorForm.addEventListener("submit", function (event) {
       event.preventDefault();
     });
+    const socialProviderInput = document.getElementById("socialProvider");
+    if (socialProviderInput) {
+      const syncSocialProviderProfile = function () {
+        applySocialProviderProfile(socialProviderInput.value);
+      };
+      socialProviderInput.addEventListener("change", syncSocialProviderProfile);
+      socialProviderInput.addEventListener("blur", syncSocialProviderProfile);
+    }
     const saveSocialBtn = document.getElementById("saveSocialConnectorBtn");
     if (saveSocialBtn) {
       saveSocialBtn.addEventListener("click", async function () {

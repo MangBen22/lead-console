@@ -435,6 +435,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="socialProvider">Provider</label>
                         <input id="socialProvider" type="text" placeholder="wordpress_social_bridge" required>
                     </div>
+                    <pre id="socialProviderProfile">Select a provider to load defaults.</pre>
                     <div class="form-row">
                         <label for="socialAccountLabel">Account label</label>
                         <input id="socialAccountLabel" type="text" placeholder="5N2 Facebook Page">

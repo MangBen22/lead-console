@@ -4291,7 +4291,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.38-social-watch',
+        'phase' => '2.39-social-provider-autofill',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7106,7 +7106,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.38-social-watch',
+        'phase' => '2.39-social-provider-autofill',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
