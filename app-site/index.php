@@ -251,6 +251,34 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Leads Inventory</h2>
+                <div class="actions">
+                    <button id="refreshLeadsInventoryBtn" type="button">Refresh Leads Inventory</button>
+                    <button id="refreshLeadsListBtn" type="button">Refresh Leads List</button>
+                </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="leadsListSearch">Search</label>
+                        <input id="leadsListSearch" type="text" placeholder="Business, city, category, email...">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsListSiteFilter">Site ID</label>
+                        <input id="leadsListSiteFilter" type="text" placeholder="Optional site filter">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsListStatusFilter">Status</label>
+                        <input id="leadsListStatusFilter" type="text" placeholder="Ready or Verified">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsListLimit">Limit</label>
+                        <input id="leadsListLimit" type="number" min="1" max="100" value="20">
+                    </div>
+                </div>
+                <pre id="leadsInventoryView">Loading...</pre>
+                <pre id="leadsListView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>CRM Connectors</h2>
                 <pre id="crmConnectors">Loading...</pre>
                 <form id="crmConnectorForm" class="inline-form">

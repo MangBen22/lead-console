@@ -409,6 +409,141 @@ function collect_approved_leads()
     ];
 }
 
+function leads_inventory_snapshot($limit = 10)
+{
+    $payload = collect_approved_leads();
+    $leads = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+    $sites = isset($payload['sites']) && is_array($payload['sites']) ? $payload['sites'] : [];
+    $statusMap = [];
+    $categoryMap = [];
+    $cityMap = [];
+    $summary = [
+        'total_leads' => count($leads),
+        'site_count' => count($sites),
+        'with_email' => 0,
+        'with_phone' => 0,
+        'with_website' => 0,
+    ];
+
+    foreach ($leads as $lead) {
+        if (!is_array($lead)) {
+            continue;
+        }
+        $status = trim((string) ($lead['status'] ?? 'unknown'));
+        $category = trim((string) ($lead['category'] ?? 'Uncategorized'));
+        $city = trim((string) ($lead['city'] ?? 'Unknown'));
+        if (!isset($statusMap[$status])) {
+            $statusMap[$status] = ['status' => $status, 'count' => 0];
+        }
+        if (!isset($categoryMap[$category])) {
+            $categoryMap[$category] = ['category' => $category, 'count' => 0];
+        }
+        if (!isset($cityMap[$city])) {
+            $cityMap[$city] = ['city' => $city, 'count' => 0];
+        }
+        $statusMap[$status]['count']++;
+        $categoryMap[$category]['count']++;
+        $cityMap[$city]['count']++;
+        if (trim((string) ($lead['email'] ?? '')) !== '') {
+            $summary['with_email']++;
+        }
+        if (trim((string) ($lead['phone'] ?? '')) !== '') {
+            $summary['with_phone']++;
+        }
+        if (trim((string) ($lead['website'] ?? '')) !== '') {
+            $summary['with_website']++;
+        }
+    }
+
+    usort($leads, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $topCategories = array_values($categoryMap);
+    usort($topCategories, static function ($a, $b) {
+        return ((int) ($a['count'] ?? 0) < (int) ($b['count'] ?? 0)) ? 1 : -1;
+    });
+    $topCities = array_values($cityMap);
+    usort($topCities, static function ($a, $b) {
+        return ((int) ($a['count'] ?? 0) < (int) ($b['count'] ?? 0)) ? 1 : -1;
+    });
+
+    return [
+        'summary' => $summary,
+        'sites' => $sites,
+        'statuses' => array_values($statusMap),
+        'top_categories' => array_slice($topCategories, 0, $limit),
+        'top_cities' => array_slice($topCities, 0, $limit),
+        'recent_leads' => array_slice($leads, 0, $limit),
+    ];
+}
+
+function leads_list_snapshot($query = [])
+{
+    $payload = collect_approved_leads();
+    $rows = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    $siteId = strtolower(trim((string) ($query['site_id'] ?? '')));
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+
+    $filtered = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ($siteId !== '' && strtolower((string) ($row['site_id'] ?? '')) !== $siteId) {
+            continue;
+        }
+        if ($status !== '' && strtolower((string) ($row['status'] ?? '')) !== $status) {
+            continue;
+        }
+        if ($search !== '') {
+            $haystacks = [
+                strtolower((string) ($row['business_name'] ?? '')),
+                strtolower((string) ($row['city'] ?? '')),
+                strtolower((string) ($row['category'] ?? '')),
+                strtolower((string) ($row['website'] ?? '')),
+                strtolower((string) ($row['email'] ?? '')),
+                strtolower((string) ($row['phone'] ?? '')),
+            ];
+            $matched = false;
+            foreach ($haystacks as $haystack) {
+                if ($haystack !== '' && strpos($haystack, $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $row;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -4920,7 +5055,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.53-social-draft-delivery-plan',
+        'phase' => '2.54-leads-inventory-workspace',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8311,7 +8446,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.53-social-draft-delivery-plan',
+        'phase' => '2.54-leads-inventory-workspace',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10118,6 +10253,32 @@ if ($action === 'leads.summary') {
             'pending_review' => 0,
         ],
         'sites' => $bySite,
+    ]);
+}
+
+if ($action === 'leads.inventory') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = leads_inventory_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'sites' => $snapshot['sites'],
+        'statuses' => $snapshot['statuses'],
+        'top_categories' => $snapshot['top_categories'],
+        'top_cities' => $snapshot['top_cities'],
+        'recent_leads' => $snapshot['recent_leads'],
+    ]);
+}
+
+if ($action === 'leads.list') {
+    $snapshot = leads_list_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

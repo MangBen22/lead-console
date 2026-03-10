@@ -211,6 +211,10 @@
     ["modSeo", "seo.summary"],
   ];
   const bridgeSites = document.getElementById("bridgeSites");
+  const refreshLeadsInventoryBtn = document.getElementById("refreshLeadsInventoryBtn");
+  const refreshLeadsListBtn = document.getElementById("refreshLeadsListBtn");
+  const leadsInventoryView = document.getElementById("leadsInventoryView");
+  const leadsListView = document.getElementById("leadsListView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2221,6 +2225,36 @@
     }
   })();
 
+  async function loadLeadsInventory() {
+    if (!leadsInventoryView) return;
+    try {
+      const data = await apiGetWithParams("leads.inventory", { limit: 8 });
+      leadsInventoryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsInventoryView.textContent = "Failed to load leads inventory.";
+    }
+  }
+
+  async function loadLeadsList() {
+    if (!leadsListView) return;
+    try {
+      const search = document.getElementById("leadsListSearch");
+      const site = document.getElementById("leadsListSiteFilter");
+      const status = document.getElementById("leadsListStatusFilter");
+      const limit = document.getElementById("leadsListLimit");
+      const data = await apiGetWithParams("leads.list", {
+        search: search && search.value ? search.value.trim() : "",
+        site_id: site && site.value ? site.value.trim() : "",
+        status: status && status.value ? status.value.trim() : "",
+        limit: limit && limit.value ? limit.value.trim() : "20",
+        page: 1,
+      });
+      leadsListView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsListView.textContent = "Failed to load leads list.";
+    }
+  }
+
   async function loadCrmConnectors() {
     if (!crmConnectors) return;
     try {
@@ -2773,6 +2807,8 @@
   }
 
   (async function initCrm() {
+    await loadLeadsInventory();
+    await loadLeadsList();
     await loadCrmConnectors();
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
@@ -3983,6 +4019,18 @@
   if (refreshAuditBtn) {
     refreshAuditBtn.addEventListener("click", async function () {
       await loadAuditLog();
+    });
+  }
+
+  if (refreshLeadsInventoryBtn) {
+    refreshLeadsInventoryBtn.addEventListener("click", async function () {
+      await loadLeadsInventory();
+    });
+  }
+
+  if (refreshLeadsListBtn) {
+    refreshLeadsListBtn.addEventListener("click", async function () {
+      await loadLeadsList();
     });
   }
 
