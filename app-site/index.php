@@ -382,6 +382,48 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>CRM Connectors</h2>
+                <form id="crmConnectorFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmConnectorFilterProvider">Provider</label>
+                        <input id="crmConnectorFilterProvider" type="text" placeholder="hubspot">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterStatus">Status</label>
+                        <select id="crmConnectorFilterStatus">
+                            <option value="">any</option>
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterSite">Site ID</label>
+                        <input id="crmConnectorFilterSite" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterRunMode">Run Mode</label>
+                        <select id="crmConnectorFilterRunMode">
+                            <option value="">any</option>
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterSearch">Search</label>
+                        <input id="crmConnectorFilterSearch" type="text" placeholder="connector id or endpoint">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterPage">Page</label>
+                        <input id="crmConnectorFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorFilterLimit">Limit</label>
+                        <input id="crmConnectorFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshCrmConnectorsBtn" type="button">Refresh CRM Connectors</button>
+                </div>
                 <pre id="crmConnectors">Loading...</pre>
                 <form id="crmConnectorForm" class="inline-form">
                     <div class="form-row">

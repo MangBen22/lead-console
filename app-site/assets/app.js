@@ -240,6 +240,14 @@
   const leadsReviewDuplicatesView = document.getElementById("leadsReviewDuplicatesView");
   const leadsReviewActionView = document.getElementById("leadsReviewActionView");
   const crmConnectors = document.getElementById("crmConnectors");
+  const refreshCrmConnectorsBtn = document.getElementById("refreshCrmConnectorsBtn");
+  const crmConnectorFilterProvider = document.getElementById("crmConnectorFilterProvider");
+  const crmConnectorFilterStatus = document.getElementById("crmConnectorFilterStatus");
+  const crmConnectorFilterSite = document.getElementById("crmConnectorFilterSite");
+  const crmConnectorFilterRunMode = document.getElementById("crmConnectorFilterRunMode");
+  const crmConnectorFilterSearch = document.getElementById("crmConnectorFilterSearch");
+  const crmConnectorFilterPage = document.getElementById("crmConnectorFilterPage");
+  const crmConnectorFilterLimit = document.getElementById("crmConnectorFilterLimit");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
@@ -2649,7 +2657,15 @@
   async function loadCrmConnectors() {
     if (!crmConnectors) return;
     try {
-      const data = await apiGet("crm.connectors.list");
+      const data = await apiGetWithParams("crm.connectors.list", {
+        provider: crmConnectorFilterProvider && crmConnectorFilterProvider.value ? crmConnectorFilterProvider.value.trim() : "",
+        status: crmConnectorFilterStatus && crmConnectorFilterStatus.value ? crmConnectorFilterStatus.value : "",
+        site_id: crmConnectorFilterSite && crmConnectorFilterSite.value ? crmConnectorFilterSite.value.trim() : "",
+        run_mode: crmConnectorFilterRunMode && crmConnectorFilterRunMode.value ? crmConnectorFilterRunMode.value : "",
+        search: crmConnectorFilterSearch && crmConnectorFilterSearch.value ? crmConnectorFilterSearch.value.trim() : "",
+        page: crmConnectorFilterPage && crmConnectorFilterPage.value ? crmConnectorFilterPage.value : 1,
+        limit: crmConnectorFilterLimit && crmConnectorFilterLimit.value ? crmConnectorFilterLimit.value : 10,
+      });
       crmConnectors.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       crmConnectors.textContent = "Failed to load CRM connectors.";
@@ -4475,6 +4491,12 @@
         }
       });
     }
+  }
+
+  if (refreshCrmConnectorsBtn) {
+    refreshCrmConnectorsBtn.addEventListener("click", async function () {
+      await loadCrmConnectors();
+    });
   }
 
   if (runCrmSyncBtn) {

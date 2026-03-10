@@ -80,6 +80,106 @@ function connector_by_id($connectorId)
     return null;
 }
 
+function crm_connectors_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $provider = strtolower(trim((string) ($query['provider'] ?? '')));
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $siteId = strtolower(trim((string) ($query['site_id'] ?? '')));
+    $runMode = strtolower(trim((string) ($query['run_mode'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $providerCounts = [];
+    $statusCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = mask_connector($row);
+        $itemProvider = strtolower((string) ($item['provider'] ?? 'custom'));
+        $itemStatus = strtolower((string) ($item['status'] ?? 'planned'));
+        $itemSiteId = strtolower((string) ($item['site_id'] ?? ''));
+        $itemRunMode = strtolower((string) (($item['config']['run_mode'] ?? 'dry_run')));
+        if (!isset($providerCounts[$itemProvider])) {
+            $providerCounts[$itemProvider] = 0;
+        }
+        if (!isset($statusCounts[$itemStatus])) {
+            $statusCounts[$itemStatus] = 0;
+        }
+        $providerCounts[$itemProvider]++;
+        $statusCounts[$itemStatus]++;
+        if ($provider !== '' && strpos($itemProvider, $provider) === false) {
+            continue;
+        }
+        if ($status !== '' && $itemStatus !== $status) {
+            continue;
+        }
+        if ($siteId !== '' && strpos($itemSiteId, $siteId) === false) {
+            continue;
+        }
+        if ($runMode !== '' && $itemRunMode !== $runMode) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['connector_id'] ?? ''),
+                (string) ($item['provider'] ?? ''),
+                (string) ($item['type'] ?? ''),
+                (string) ($item['site_id'] ?? ''),
+                (string) ($item['config']['endpoint_url'] ?? ''),
+                (string) ($item['config']['webhook_url'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $item['run_mode'] = $itemRunMode;
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        $updatedCompare = strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+        if ($updatedCompare !== 0) {
+            return $updatedCompare;
+        }
+        return strcmp((string) ($a['connector_id'] ?? ''), (string) ($b['connector_id'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'provider' => $provider,
+            'status' => $status,
+            'site_id' => $siteId,
+            'run_mode' => $runMode,
+            'search' => $search,
+            'provider_counts' => $providerCounts,
+            'status_counts' => $statusCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6534,7 +6634,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.21-seo-extension-summary-export',
+        'phase' => '5.01-crm-connector-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12485,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.21-seo-extension-summary-export',
+        'phase' => '5.01-crm-connector-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14411,13 +14511,12 @@ if ($action === 'leads.review.queue.bulk_action') {
 }
 
 if ($action === 'crm.connectors.list') {
-    $path = app_storage_path('crm_connectors.json');
-    $rows = app_read_json_file($path, []);
-    $publicRows = array_map('mask_connector', $rows);
+    $snapshot = crm_connectors_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($publicRows),
-        'items' => $publicRows,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 
