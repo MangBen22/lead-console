@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.03-social-sync-export',
+        'phase' => '3.04-social-activity-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8674,6 +8674,91 @@ function record_social_activity($type, $message, $meta = [])
     app_write_json_file(social_activity_feed_path(), $rows);
 }
 
+function social_activity_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(social_activity_feed_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $type = strtolower(trim((string) ($query['type'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    $ref = strtolower(trim((string) ($query['ref'] ?? '')));
+
+    $filtered = [];
+    $typeCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $item['meta'] = isset($row['meta']) && is_array($row['meta']) ? $row['meta'] : [];
+        $itemType = strtolower((string) ($item['type'] ?? 'unknown'));
+        if (!isset($typeCounts[$itemType])) {
+            $typeCounts[$itemType] = 0;
+        }
+        $typeCounts[$itemType]++;
+        if ($type !== '' && $itemType !== $type) {
+            continue;
+        }
+        if ($ref !== '') {
+            $matchedRef = false;
+            foreach ($item['meta'] as $value) {
+                if (strpos(strtolower((string) $value), $ref) !== false) {
+                    $matchedRef = true;
+                    break;
+                }
+            }
+            if (!$matchedRef) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['activity_id'] ?? ''),
+                (string) ($item['type'] ?? ''),
+                (string) ($item['message'] ?? ''),
+                json_encode($item['meta']),
+            ] as $haystack) {
+                if (strpos(strtolower((string) $haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    arsort($typeCounts);
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'type' => $type,
+            'search' => $search,
+            'ref' => $ref,
+            'type_counts' => $typeCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function social_retry_list_snapshot($query = [])
 {
     $rows = app_read_json_file(social_retry_queue_path(), []);
@@ -11012,7 +11097,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.03-social-sync-export',
+        'phase' => '3.04-social-activity-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14193,11 +14278,12 @@ if ($action === 'social.schedule.export') {
 }
 
 if ($action === 'social.activity.list') {
-    $rows = app_read_json_file(social_activity_feed_path(), []);
+    $snapshot = social_activity_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

@@ -2956,11 +2956,26 @@
   async function loadSocialActivityFeed() {
     if (!socialActivityFeed) return;
     try {
-      const data = await apiGet("social.activity.list");
+      const data = await apiGetWithParams("social.activity.list", socialActivityFilters());
       socialActivityFeed.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialActivityFeed.textContent = "Failed to load social activity feed.";
     }
+  }
+
+  function socialActivityFilters() {
+    const type = document.getElementById("socialActivityFilterType");
+    const ref = document.getElementById("socialActivityFilterRef");
+    const search = document.getElementById("socialActivityFilterSearch");
+    const page = document.getElementById("socialActivityFilterPage");
+    const limit = document.getElementById("socialActivityFilterLimit");
+    return {
+      type: type && type.value ? type.value.trim() : "",
+      ref: ref && ref.value ? ref.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
   }
 
   function socialInboxFilters() {

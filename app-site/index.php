@@ -958,7 +958,27 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>Social Activity Feed</h2>
-                <div class="actions">
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialActivityFilterType">Activity Type</label>
+                        <input id="socialActivityFilterType" type="text" placeholder="push_sync">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialActivityFilterRef">Activity Ref</label>
+                        <input id="socialActivityFilterRef" type="text" placeholder="social_sync_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialActivityFilterSearch">Activity Search</label>
+                        <input id="socialActivityFilterSearch" type="text" placeholder="message or meta">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialActivityFilterPage">Activity Page</label>
+                        <input id="socialActivityFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialActivityFilterLimit">Activity Limit</label>
+                        <input id="socialActivityFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
                     <button id="refreshSocialActivityBtn" type="button">Refresh Social Activity</button>
                 </div>
                 <pre id="socialActivityFeed">Loading...</pre>
