@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.04-seo-audit-filters',
+        'phase' => '4.05-seo-audit-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7409,6 +7409,68 @@ function seo_audits_list_snapshot($query = [])
             'source_counts' => $sourceCounts,
         ],
         'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
+function seo_audit_detail_snapshot($auditId = '')
+{
+    $rows = app_read_json_file(seo_audits_path(), []);
+    $item = null;
+    $selectedId = trim((string) $auditId);
+    if ($selectedId !== '') {
+        foreach ($rows as $row) {
+            if (is_array($row) && (string) ($row['audit_id'] ?? '') === $selectedId) {
+                $item = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($item)) {
+        $item = isset($rows[0]) && is_array($rows[0]) ? $rows[0] : null;
+    }
+    if (!is_array($item)) {
+        return [
+            'ok' => true,
+            'item' => null,
+            'message' => 'No SEO audit available.',
+        ];
+    }
+
+    $projectId = (string) ($item['project_id'] ?? '');
+    $project = $projectId !== '' ? seo_project_by_id($projectId) : null;
+    $projectAudits = array_values(array_filter($rows, static function ($row) use ($projectId) {
+        return (string) ($row['project_id'] ?? '') === $projectId;
+    }));
+    $currentIndex = 0;
+    foreach ($projectAudits as $index => $row) {
+        if (is_array($row) && (string) ($row['audit_id'] ?? '') === (string) ($item['audit_id'] ?? '')) {
+            $currentIndex = $index;
+            break;
+        }
+    }
+    $previous = isset($projectAudits[$currentIndex + 1]) && is_array($projectAudits[$currentIndex + 1]) ? $projectAudits[$currentIndex + 1] : null;
+    $issues = seo_issue_map_from_audit($item);
+    $prioritySummary = isset($item['priority_summary']) && is_array($item['priority_summary'])
+        ? $item['priority_summary']
+        : seo_issue_rollup_from_checks(isset($item['checks']) && is_array($item['checks']) ? $item['checks'] : [])['priority_summary'];
+    $score = isset($item['score']) ? (int) $item['score'] : null;
+    $previousScore = is_array($previous) && isset($previous['score']) ? (int) $previous['score'] : null;
+
+    return [
+        'ok' => true,
+        'item' => $item,
+        'project' => $project,
+        'meta' => [
+            'issue_count' => count($issues),
+            'check_count' => count(isset($item['checks']) && is_array($item['checks']) ? $item['checks'] : []),
+            'score_delta' => ($score !== null && $previousScore !== null) ? ($score - $previousScore) : null,
+            'has_previous_audit' => is_array($previous) ? 1 : 0,
+            'page_signal_keys' => count(array_keys(seo_normalize_page_signals(isset($item['page_signals']) && is_array($item['page_signals']) ? $item['page_signals'] : []))),
+        ],
+        'priority_summary' => $prioritySummary,
+        'issue_rollup' => array_values($issues),
+        'page_signals' => seo_normalize_page_signals(isset($item['page_signals']) && is_array($item['page_signals']) ? $item['page_signals'] : []),
+        'previous_audit' => $previous,
     ];
 }
 
@@ -12034,7 +12096,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.04-seo-audit-filters',
+        'phase' => '4.05-seo-audit-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15867,6 +15929,11 @@ if ($action === 'seo.audits.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'seo.audits.detail') {
+    $auditId = isset($_GET['audit_id']) ? (string) $_GET['audit_id'] : '';
+    out_json(seo_audit_detail_snapshot($auditId));
 }
 
 if ($action === 'seo.audit.run') {

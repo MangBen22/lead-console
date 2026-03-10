@@ -427,6 +427,8 @@
   const seoAuditFilterPage = document.getElementById("seoAuditFilterPage");
   const seoAuditFilterLimit = document.getElementById("seoAuditFilterLimit");
   const seoAudits = document.getElementById("seoAudits");
+  const loadSeoAuditDetailBtn = document.getElementById("loadSeoAuditDetailBtn");
+  const seoAuditDetail = document.getElementById("seoAuditDetail");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
@@ -4028,6 +4030,18 @@
     }
   }
 
+  async function loadSeoAuditDetail() {
+    if (!seoAuditDetail) return;
+    try {
+      const detailId = document.getElementById("seoAuditDetailId");
+      const auditId = detailId && detailId.value ? detailId.value.trim() : "";
+      const data = await apiGetWithParams("seo.audits.detail", { audit_id: auditId });
+      seoAuditDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoAuditDetail.textContent = "Failed to load SEO audit detail.";
+    }
+  }
+
   async function loadSeoIssuesSummary() {
     if (!seoIssuesSummary) return;
     try {
@@ -4208,6 +4222,7 @@
     await loadSeoHistorySummary();
     await loadSeoExtensionSummary();
     await loadSeoAudits();
+    await loadSeoAuditDetail();
     await loadSeoExtensionEvents();
     await loadSeoExtensionSessions();
     await loadSeoProjectSnapshot();
@@ -6807,6 +6822,12 @@
   if (refreshSeoAuditsBtn) {
     refreshSeoAuditsBtn.addEventListener("click", async function () {
       await loadSeoAudits();
+    });
+  }
+
+  if (loadSeoAuditDetailBtn) {
+    loadSeoAuditDetailBtn.addEventListener("click", async function () {
+      await loadSeoAuditDetail();
     });
   }
 

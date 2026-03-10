@@ -1618,6 +1618,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="seoExtensionSummary">Loading...</pre>
                 <h3>SEO Audits</h3>
                 <pre id="seoAudits">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoAuditDetailId">Audit Detail ID</label>
+                        <input id="seoAuditDetailId" type="text" placeholder="seo_audit_abc123">
+                    </div>
+                    <button id="loadSeoAuditDetailBtn" type="button">Load Audit Detail</button>
+                </div>
+                <pre id="seoAuditDetail">No SEO audit detail loaded.</pre>
                 <h3>Extension Events</h3>
                 <pre id="seoExtensionEvents">Loading...</pre>
             </section>
