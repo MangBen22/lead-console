@@ -263,6 +263,7 @@
   const socialInboxSummary = document.getElementById("socialInboxSummary");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
+  const socialInboxUpdateForm = document.getElementById("socialInboxUpdateForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
   const refreshWebopsIncidentsBtn = document.getElementById("refreshWebopsIncidentsBtn");
   const refreshWebopsActionsBtn = document.getElementById("refreshWebopsActionsBtn");
@@ -2370,6 +2371,17 @@
     }
   }
 
+  async function refreshSocialModuleSummary() {
+    const socialPanel = document.getElementById("modSocial");
+    if (!socialPanel) return;
+    try {
+      const socialData = await apiGet("social.summary");
+      socialPanel.textContent = JSON.stringify(socialData, null, 2);
+    } catch (err) {
+      socialPanel.textContent = "Failed to load social summary.";
+    }
+  }
+
   async function loadSocialPlatforms() {
     if (!socialPlatforms) return;
     try {
@@ -3378,11 +3390,59 @@
         await loadSocialInboxSummary();
         await loadSocialInboxThreads();
         await loadSocialActivityFeed();
-        const socialData = await apiGet("social.summary");
-        const socialPanel = document.getElementById("modSocial");
-        if (socialPanel) {
-          socialPanel.textContent = JSON.stringify(socialData, null, 2);
+        await refreshSocialModuleSummary();
+      });
+    }
+  }
+
+  if (socialInboxUpdateForm) {
+    socialInboxUpdateForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+    });
+    const updateBtn = document.getElementById("updateSocialInboxThreadBtn");
+    if (updateBtn) {
+      updateBtn.addEventListener("click", async function () {
+        const threadId = document.getElementById("socialInboxUpdateThreadId");
+        const status = document.getElementById("socialInboxStatus");
+        const priority = document.getElementById("socialInboxPriority");
+        const owner = document.getElementById("socialInboxOwner");
+        const internalNote = document.getElementById("socialInboxInternalNote");
+        const id = threadId && threadId.value ? threadId.value.trim() : "";
+        if (!id) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Enter Thread ID before updating the inbox thread.";
+          }
+          return;
         }
+        const payload = {
+          thread_id: id,
+        };
+        if (status && status.value) {
+          payload.status = status.value;
+        }
+        if (priority && priority.value) {
+          payload.priority = priority.value;
+        }
+        if (owner && owner.value !== "") {
+          payload.owner = owner.value.trim();
+        }
+        if (internalNote && internalNote.value !== "") {
+          payload.internal_note = internalNote.value.trim();
+        }
+        if (Object.keys(payload).length === 1) {
+          if (socialSyncResult) {
+            socialSyncResult.textContent = "Choose at least one inbox field to update.";
+          }
+          return;
+        }
+        const result = await apiPost("social.inbox.update", payload);
+        if (socialSyncResult) {
+          socialSyncResult.textContent = JSON.stringify(result, null, 2);
+        }
+        await loadSocialInboxSummary();
+        await loadSocialInboxThreads();
+        await loadSocialActivityFeed();
+        await refreshSocialModuleSummary();
       });
     }
   }
@@ -3467,11 +3527,7 @@
       await loadSocialSyncLog();
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
-      const socialData = await apiGet("social.summary");
-      const socialPanel = document.getElementById("modSocial");
-      if (socialPanel) {
-        socialPanel.textContent = JSON.stringify(socialData, null, 2);
-      }
+      await refreshSocialModuleSummary();
     });
   }
 
@@ -3483,11 +3539,7 @@
       }
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
-      const socialData = await apiGet("social.summary");
-      const socialPanel = document.getElementById("modSocial");
-      if (socialPanel) {
-        socialPanel.textContent = JSON.stringify(socialData, null, 2);
-      }
+      await refreshSocialModuleSummary();
     });
   }
 

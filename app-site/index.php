@@ -575,6 +575,40 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </div>
                     <button id="replySocialInboxBtn" type="button">Reply to Thread</button>
                 </form>
+                <form id="socialInboxUpdateForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialInboxUpdateThreadId">Thread ID</label>
+                        <input id="socialInboxUpdateThreadId" type="text" placeholder="social_thread_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxStatus">Status</label>
+                        <select id="socialInboxStatus">
+                            <option value="">Keep current</option>
+                            <option value="open">open</option>
+                            <option value="pending">pending</option>
+                            <option value="replied">replied</option>
+                            <option value="closed">closed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxPriority">Priority</label>
+                        <select id="socialInboxPriority">
+                            <option value="">Keep current</option>
+                            <option value="low">low</option>
+                            <option value="normal">normal</option>
+                            <option value="high">high</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxOwner">Owner</label>
+                        <input id="socialInboxOwner" type="text" placeholder="Ops team">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialInboxInternalNote">Internal note</label>
+                        <textarea id="socialInboxInternalNote" rows="4" placeholder="Internal handling note..."></textarea>
+                    </div>
+                    <button id="updateSocialInboxThreadBtn" type="button">Update Thread</button>
+                </form>
             </section>
 
             <section class="api-status">
