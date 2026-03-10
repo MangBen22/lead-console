@@ -4993,6 +4993,153 @@ function seo_operations_issues_summary($limit = 10)
     ];
 }
 
+function launch_operations_module_state($issuesSummary)
+{
+    $summary = isset($issuesSummary['summary']) && is_array($issuesSummary['summary']) ? $issuesSummary['summary'] : [];
+    $severityCounts = isset($summary['severity_counts']) && is_array($summary['severity_counts']) ? $summary['severity_counts'] : [];
+    $critical = (int) ($severityCounts['critical'] ?? 0);
+    $warning = (int) ($severityCounts['warning'] ?? 0);
+    if ($critical > 0) {
+        return 'blocked';
+    }
+    if ($warning > 0) {
+        return 'review_required';
+    }
+    return 'ready';
+}
+
+function launch_operations_snapshot($limit = 10, $freshnessMinutes = null)
+{
+    $safeLimit = max(1, min(50, (int) $limit));
+    $safeFreshness = $freshnessMinutes === null ? 30 : max(5, min(1440, (int) $freshnessMinutes));
+    $automation = get_automation_settings();
+    $lastRunAt = (string) ($automation['last_run_at'] ?? '');
+    $lastRunTs = $lastRunAt !== '' ? strtotime($lastRunAt) : 0;
+    $intervalSeconds = max(5, (int) ($automation['interval_minutes'] ?? 30)) * 60;
+    $elapsedSeconds = $lastRunTs > 0 ? (time() - $lastRunTs) : null;
+    $automationDueNow = $lastRunTs === 0 ? 1 : (($elapsedSeconds !== null && $elapsedSeconds >= $intervalSeconds) ? 1 : 0);
+
+    $deployment = [
+        'readiness' => deployment_cutover_readiness_snapshot(),
+        'release_gate' => deployment_release_gate_snapshot($safeFreshness),
+        'watchdogs' => deployment_watchdogs_status_snapshot($safeFreshness),
+        'incidents' => deployment_incident_summary_snapshot(),
+    ];
+
+    $crmSnapshot = crm_operations_snapshot($safeLimit);
+    $crmIssues = crm_operations_issues_summary($safeLimit);
+    $socialSnapshot = social_operations_snapshot($safeLimit);
+    $socialIssues = social_operations_issues_summary($safeLimit);
+    $webopsSnapshot = webops_operations_snapshot($safeLimit);
+    $webopsIssues = webops_operations_issues_summary($safeLimit);
+    $seoSnapshot = seo_operations_snapshot($safeLimit);
+    $seoIssues = seo_operations_issues_summary($safeLimit);
+
+    $modules = [
+        'crm' => [
+            'state' => launch_operations_module_state($crmIssues),
+            'snapshot' => $crmSnapshot,
+            'issues' => $crmIssues,
+        ],
+        'social' => [
+            'state' => launch_operations_module_state($socialIssues),
+            'snapshot' => $socialSnapshot,
+            'issues' => $socialIssues,
+        ],
+        'webops' => [
+            'state' => launch_operations_module_state($webopsIssues),
+            'snapshot' => $webopsSnapshot,
+            'issues' => $webopsIssues,
+        ],
+        'seo' => [
+            'state' => launch_operations_module_state($seoIssues),
+            'snapshot' => $seoSnapshot,
+            'issues' => $seoIssues,
+        ],
+    ];
+
+    $severityTotals = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    $blockedModules = 0;
+    $reviewModules = 0;
+    $readyModules = 0;
+    foreach ($modules as $module) {
+        $issueSummary = isset($module['issues']['summary']) && is_array($module['issues']['summary']) ? $module['issues']['summary'] : [];
+        $counts = isset($issueSummary['severity_counts']) && is_array($issueSummary['severity_counts']) ? $issueSummary['severity_counts'] : [];
+        foreach (array_keys($severityTotals) as $key) {
+            $severityTotals[$key] += (int) ($counts[$key] ?? 0);
+        }
+        $state = (string) ($module['state'] ?? 'ready');
+        if ($state === 'blocked') {
+            $blockedModules++;
+        } elseif ($state === 'review_required') {
+            $reviewModules++;
+        } else {
+            $readyModules++;
+        }
+    }
+
+    $readinessSummary = isset($deployment['readiness']['summary']) && is_array($deployment['readiness']['summary'])
+        ? $deployment['readiness']['summary']
+        : [];
+    $gateFailedItems = isset($deployment['release_gate']['failed_items']) && is_array($deployment['release_gate']['failed_items'])
+        ? $deployment['release_gate']['failed_items']
+        : [];
+    $watchdogsSummary = isset($deployment['watchdogs']['summary']) && is_array($deployment['watchdogs']['summary'])
+        ? $deployment['watchdogs']['summary']
+        : [];
+    $launchState = 'ready';
+    if ((string) ($deployment['readiness']['status'] ?? 'review_required') === 'blocked'
+        || empty($deployment['release_gate']['allowed'])
+        || (string) ($deployment['watchdogs']['status'] ?? 'ok') === 'critical'
+        || $blockedModules > 0
+    ) {
+        $launchState = 'blocked';
+    } elseif ((string) ($deployment['readiness']['status'] ?? 'review_required') !== 'ready'
+        || (string) ($deployment['watchdogs']['status'] ?? 'ok') === 'warning'
+        || $reviewModules > 0
+        || $severityTotals['info'] > 0
+    ) {
+        $launchState = 'review_required';
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'limit' => $safeLimit,
+        'freshness_minutes' => $safeFreshness,
+        'summary' => [
+            'launch_state' => $launchState,
+            'release_gate_allowed' => !empty($deployment['release_gate']['allowed']) ? 1 : 0,
+            'release_gate_failed_items' => count($gateFailedItems),
+            'readiness_status' => (string) ($deployment['readiness']['status'] ?? 'review_required'),
+            'watchdogs_status' => (string) ($deployment['watchdogs']['status'] ?? 'ok'),
+            'open_incidents' => (int) ($deployment['incidents']['open_total'] ?? 0),
+            'readiness_critical_failed' => (int) ($readinessSummary['critical_failed'] ?? 0),
+            'readiness_warning_failed' => (int) ($readinessSummary['warning_failed'] ?? 0),
+            'watchdogs_critical_count' => (int) ($watchdogsSummary['critical_count'] ?? 0),
+            'watchdogs_warning_count' => (int) ($watchdogsSummary['warning_count'] ?? 0),
+            'blocked_modules' => $blockedModules,
+            'review_modules' => $reviewModules,
+            'ready_modules' => $readyModules,
+            'module_issue_totals' => $severityTotals,
+            'automation_due_now' => $automationDueNow,
+            'automation_last_run_at' => $lastRunAt,
+        ],
+        'deployment' => $deployment,
+        'modules' => $modules,
+        'automation' => [
+            'settings' => $automation,
+            'due_now' => $automationDueNow,
+            'last_run_at' => $lastRunAt,
+            'elapsed_seconds' => $elapsedSeconds,
+            'interval_seconds' => $intervalSeconds,
+        ],
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8382,7 +8529,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.40-seo-operations-issues-summary',
+        'phase' => '5.41-launch-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14233,7 +14380,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.40-seo-operations-issues-summary',
+        'phase' => '5.41-launch-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17603,6 +17750,22 @@ if ($action === 'seo.operations.issues_summary') {
         'generated_at' => $issues['generated_at'],
         'summary' => $issues['summary'],
         'issues' => $issues['issues'],
+    ]);
+}
+
+if ($action === 'launch.operations.snapshot') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $snapshot = launch_operations_snapshot($limit, $freshness);
+    out_json([
+        'ok' => true,
+        'snapshot' => $snapshot,
     ]);
 }
 

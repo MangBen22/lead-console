@@ -519,6 +519,8 @@
   const seoOperationsHistoryView = document.getElementById("seoOperationsHistoryView");
   const seoOperationsHistorySummaryView = document.getElementById("seoOperationsHistorySummaryView");
   const seoOperationsIssuesSummaryView = document.getElementById("seoOperationsIssuesSummaryView");
+  const refreshLaunchOperationsSnapshotBtn = document.getElementById("refreshLaunchOperationsSnapshotBtn");
+  const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -4975,6 +4977,21 @@
     }
   }
 
+  async function loadLaunchOperationsSnapshot() {
+    if (!launchOperationsSnapshotView) return;
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const freshness = document.getElementById("launchOperationsFreshnessMinutes");
+    try {
+      const data = await apiGetWithParams("launch.operations.snapshot", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+        freshness_minutes: freshness && freshness.value ? Number(freshness.value) : 30,
+      });
+      launchOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsSnapshotView.textContent = "Failed to load launch operations snapshot.";
+    }
+  }
+
   async function downloadSeoOperationsSnapshot() {
     const limit = document.getElementById("seoOperationsSnapshotLimit");
     const data = await apiGetWithParams("seo.operations.export", {
@@ -5069,6 +5086,7 @@
     await loadSeoOperationsHistory();
     await loadSeoOperationsHistorySummary();
     await loadSeoOperationsIssuesSummary();
+    await loadLaunchOperationsSnapshot();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7926,6 +7944,12 @@
   if (downloadSeoOperationsSnapshotBtn) {
     downloadSeoOperationsSnapshotBtn.addEventListener("click", async function () {
       await downloadSeoOperationsSnapshot();
+    });
+  }
+
+  if (refreshLaunchOperationsSnapshotBtn) {
+    refreshLaunchOperationsSnapshotBtn.addEventListener("click", async function () {
+      await loadLaunchOperationsSnapshot();
     });
   }
 

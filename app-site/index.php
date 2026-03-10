@@ -2109,6 +2109,22 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Launch Operations Snapshot</h2>
+                <form id="launchOperationsSnapshotForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="launchOperationsSnapshotLimit">Snapshot Limit</label>
+                        <input id="launchOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <div class="form-row">
+                        <label for="launchOperationsFreshnessMinutes">Freshness Minutes</label>
+                        <input id="launchOperationsFreshnessMinutes" type="number" min="5" max="1440" value="30">
+                    </div>
+                    <button id="refreshLaunchOperationsSnapshotBtn" type="button">Refresh Launch Snapshot</button>
+                </form>
+                <pre id="launchOperationsSnapshotView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Backup + Audit</h2>
                 <div class="actions">
                     <button id="exportBackupBtn" type="button">Export Backup</button>
