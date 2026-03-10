@@ -287,6 +287,7 @@
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
+  const loadSocialRetryDetailBtn = document.getElementById("loadSocialRetryDetailBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -350,6 +351,7 @@
   const socialDeliveryWatchView = document.getElementById("socialDeliveryWatchView");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
+  const socialRetryDetail = document.getElementById("socialRetryDetail");
   const webopsMonitors = document.getElementById("webopsMonitors");
   const webopsTypes = document.getElementById("webopsTypes");
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
@@ -3391,6 +3393,27 @@
     }
   }
 
+  async function loadSocialRetryDetail() {
+    if (!socialRetryDetail) return;
+    const retryId = document.getElementById("socialRetryDetailId");
+    if (!retryId || !retryId.value) {
+      socialRetryDetail.textContent = "Enter a retry ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.retry.detail", { retry_id: retryId.value.trim() });
+      socialRetryDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const connectorId = document.getElementById("socialDeliveryConnectorId");
+        const connectorDetailId = document.getElementById("socialConnectorDetailId");
+        if (connectorId) connectorId.value = data.item.connector_id || "";
+        if (connectorDetailId) connectorDetailId.value = data.item.connector_id || "";
+      }
+    } catch (err) {
+      socialRetryDetail.textContent = "Failed to load social retry detail.";
+    }
+  }
+
   function socialRetryFilters() {
     const status = document.getElementById("socialRetryFilterStatus");
     const connector = document.getElementById("socialRetryFilterConnector");
@@ -4567,6 +4590,12 @@
   if (refreshSocialRetryQueueBtn) {
     refreshSocialRetryQueueBtn.addEventListener("click", async function () {
       await loadSocialRetryQueue();
+    });
+  }
+
+  if (loadSocialRetryDetailBtn) {
+    loadSocialRetryDetailBtn.addEventListener("click", async function () {
+      await loadSocialRetryDetail();
     });
   }
 

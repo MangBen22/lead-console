@@ -1172,6 +1172,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialRetryQueueBtn" type="button">Refresh Retry Queue</button>
                 </div>
                 <pre id="socialRetryQueue">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialRetryDetailId">Retry ID</label>
+                        <input id="socialRetryDetailId" type="text" placeholder="social_retry_abc123">
+                    </div>
+                    <button id="loadSocialRetryDetailBtn" type="button">Load Retry Detail</button>
+                </div>
+                <pre id="socialRetryDetail">No social retry detail loaded.</pre>
             </section>
 
             <section class="api-status">

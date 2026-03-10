@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.97-social-retry-filters',
+        'phase' => '2.98-social-retry-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8784,6 +8784,39 @@ function social_retry_list_snapshot($query = [])
     ];
 }
 
+function social_retry_detail_snapshot($retryId)
+{
+    $id = trim((string) $retryId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'retry_id is required.'];
+    }
+    $rows = app_read_json_file(social_retry_queue_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['retry_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $item['errors'] = isset($row['errors']) && is_array($row['errors']) ? array_values($row['errors']) : [];
+        $item['error_codes'] = isset($row['error_codes']) && is_array($row['error_codes']) ? array_values($row['error_codes']) : [];
+        $item['drafts'] = isset($row['drafts']) && is_array($row['drafts']) ? sanitize_social_retry_drafts($row['drafts']) : [];
+        $connector = social_connector_by_id((string) ($row['connector_id'] ?? ''));
+        $decorated = is_array($connector) ? decorate_social_connector($connector) : null;
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'draft_count' => count($item['drafts']),
+                'error_count' => count($item['errors']),
+                'error_code_count' => count($item['error_codes']),
+                'connector_found' => is_array($decorated) ? 1 : 0,
+                'last_result_status' => isset($item['last_result']['run_mode']) ? (string) ($item['status'] ?? '') : (string) ($item['status'] ?? ''),
+            ],
+            'connector' => $decorated,
+        ];
+    }
+    return ['ok' => false, 'error' => 'Retry item not found.'];
+}
+
 function social_inbox_threads_rows($seedIfEmpty = false)
 {
     $rows = app_read_json_file(social_inbox_threads_path(), []);
@@ -10743,7 +10776,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.97-social-retry-filters',
+        'phase' => '2.98-social-retry-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15417,6 +15450,12 @@ if ($action === 'social.retry.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.retry.detail') {
+    $retryId = isset($_GET['retry_id']) ? (string) $_GET['retry_id'] : '';
+    $snapshot = social_retry_detail_snapshot($retryId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.retry.run') {
