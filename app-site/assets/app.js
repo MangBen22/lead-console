@@ -249,6 +249,7 @@
   const crmConnectorFilterPage = document.getElementById("crmConnectorFilterPage");
   const crmConnectorFilterLimit = document.getElementById("crmConnectorFilterLimit");
   const refreshCrmConnectorDetailBtn = document.getElementById("refreshCrmConnectorDetailBtn");
+  const downloadCrmConnectorsExportBtn = document.getElementById("downloadCrmConnectorsExportBtn");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
@@ -2715,6 +2716,28 @@
     }
   }
 
+  async function downloadCrmConnectorsExport() {
+    const detailId = document.getElementById("crmConnectorDetailId");
+    const detailLimit = document.getElementById("crmConnectorDetailLimit");
+    const connectorId = detailId && detailId.value ? detailId.value.trim() : "";
+    const data = await apiGetWithParams("crm.connectors.export", {
+      provider: crmConnectorFilterProvider && crmConnectorFilterProvider.value ? crmConnectorFilterProvider.value.trim() : "",
+      status: crmConnectorFilterStatus && crmConnectorFilterStatus.value ? crmConnectorFilterStatus.value : "",
+      site_id: crmConnectorFilterSite && crmConnectorFilterSite.value ? crmConnectorFilterSite.value.trim() : "",
+      run_mode: crmConnectorFilterRunMode && crmConnectorFilterRunMode.value ? crmConnectorFilterRunMode.value : "",
+      search: crmConnectorFilterSearch && crmConnectorFilterSearch.value ? crmConnectorFilterSearch.value.trim() : "",
+      page: crmConnectorFilterPage && crmConnectorFilterPage.value ? crmConnectorFilterPage.value : 1,
+      limit: crmConnectorFilterLimit && crmConnectorFilterLimit.value ? crmConnectorFilterLimit.value : 10,
+      connector_id: connectorId,
+      detail_limit: detailLimit && detailLimit.value ? detailLimit.value : 10,
+      include_detail: connectorId ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "crm-connectors-export.json", data.export || data);
+    if (crmSyncResult) {
+      crmSyncResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadCrmSyncLog() {
     if (!crmSyncLog) return;
     try {
@@ -4539,6 +4562,12 @@
   if (refreshCrmConnectorsBtn) {
     refreshCrmConnectorsBtn.addEventListener("click", async function () {
       await loadCrmConnectors();
+    });
+  }
+
+  if (downloadCrmConnectorsExportBtn) {
+    downloadCrmConnectorsExportBtn.addEventListener("click", async function () {
+      await downloadCrmConnectorsExport();
     });
   }
 

@@ -423,6 +423,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <div class="actions">
                     <button id="refreshCrmConnectorsBtn" type="button">Refresh CRM Connectors</button>
+                    <button id="downloadCrmConnectorsExportBtn" type="button">Download Connector Export</button>
                 </div>
                 <pre id="crmConnectors">Loading...</pre>
                 <form id="crmConnectorDetailForm" class="inline-form">

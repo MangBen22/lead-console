@@ -6700,7 +6700,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.02-crm-connector-detail',
+        'phase' => '5.03-crm-connector-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12551,7 +12551,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.02-crm-connector-detail',
+        'phase' => '5.03-crm-connector-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14591,6 +14591,33 @@ if ($action === 'crm.connectors.detail') {
     $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
     $snapshot = crm_connector_detail_snapshot($connectorId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'crm.connectors.export') {
+    $snapshot = crm_connectors_list_snapshot($_GET);
+    $connectorId = isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '';
+    $limit = isset($_GET['detail_limit']) ? (int) $_GET['detail_limit'] : 10;
+    $includeDetail = !empty($_GET['include_detail']);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'connector_id' => $connectorId,
+        'include_detail' => $includeDetail ? 1 : 0,
+    ];
+    if ($includeDetail && $connectorId !== '') {
+        $payload['detail'] = crm_connector_detail_snapshot($connectorId, $limit);
+    }
+    audit_event('crm', 'connectors.export', [
+        'connector_id' => $connectorId,
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'include_detail' => $includeDetail ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_connectors_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'crm.connectors.save') {
