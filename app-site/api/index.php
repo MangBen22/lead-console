@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.01-social-sync-filters',
+        'phase' => '3.02-social-sync-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9005,6 +9005,54 @@ function social_sync_log_list_snapshot($query = [])
     ];
 }
 
+function social_sync_log_detail_snapshot($syncId)
+{
+    $id = trim((string) $syncId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'sync_id is required.'];
+    }
+    $rows = app_read_json_file(social_sync_log_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['sync_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $item['connectors'] = isset($row['connectors']) && is_array($row['connectors']) ? array_values($row['connectors']) : [];
+        $item['connector_results'] = isset($row['connector_results']) && is_array($row['connector_results']) ? array_values($row['connector_results']) : [];
+        $connectors = [];
+        foreach ($item['connectors'] as $connectorRef) {
+            $connectorId = (string) ($connectorRef['connector_id'] ?? '');
+            if ($connectorId === '') {
+                continue;
+            }
+            $connector = social_connector_by_id($connectorId);
+            if (is_array($connector)) {
+                $connectors[] = decorate_social_connector($connector);
+            }
+        }
+        $errorCount = 0;
+        foreach ($item['connector_results'] as $result) {
+            if (!is_array($result)) {
+                continue;
+            }
+            $errorCount += count(isset($result['errors']) && is_array($result['errors']) ? $result['errors'] : []);
+        }
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'connector_count' => count($item['connectors']),
+                'result_count' => count($item['connector_results']),
+                'error_count' => $errorCount,
+                'has_retry_id' => trim((string) ($item['retry_id'] ?? '')) !== '' ? 1 : 0,
+                'has_schedule_id' => trim((string) ($item['schedule_id'] ?? '')) !== '' ? 1 : 0,
+            ],
+            'connectors' => $connectors,
+        ];
+    }
+    return ['ok' => false, 'error' => 'Sync log item not found.'];
+}
+
 function social_inbox_threads_rows($seedIfEmpty = false)
 {
     $rows = app_read_json_file(social_inbox_threads_path(), []);
@@ -10964,7 +11012,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.01-social-sync-filters',
+        'phase' => '3.02-social-sync-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15538,6 +15586,12 @@ if ($action === 'social.push.log') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.push.detail') {
+    $syncId = isset($_GET['sync_id']) ? (string) $_GET['sync_id'] : '';
+    $snapshot = social_sync_log_detail_snapshot($syncId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.delivery.summary') {

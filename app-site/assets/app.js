@@ -291,6 +291,7 @@
   const downloadSocialRetryExportBtn = document.getElementById("downloadSocialRetryExportBtn");
   const runSocialRetryBulkUpdateBtn = document.getElementById("runSocialRetryBulkUpdateBtn");
   const refreshSocialSyncLogBtn = document.getElementById("refreshSocialSyncLogBtn");
+  const loadSocialSyncDetailBtn = document.getElementById("loadSocialSyncDetailBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -356,6 +357,7 @@
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const socialRetryDetail = document.getElementById("socialRetryDetail");
   const socialRetryBulkResult = document.getElementById("socialRetryBulkResult");
+  const socialSyncDetail = document.getElementById("socialSyncDetail");
   const webopsMonitors = document.getElementById("webopsMonitors");
   const webopsTypes = document.getElementById("webopsTypes");
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
@@ -3387,6 +3389,25 @@
     }
   }
 
+  async function loadSocialSyncDetail() {
+    if (!socialSyncDetail) return;
+    const syncId = document.getElementById("socialSyncDetailId");
+    if (!syncId || !syncId.value) {
+      socialSyncDetail.textContent = "Enter a sync ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.push.detail", { sync_id: syncId.value.trim() });
+      socialSyncDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const retryId = document.getElementById("socialRetryDetailId");
+        if (retryId && data.item.retry_id) retryId.value = data.item.retry_id;
+      }
+    } catch (err) {
+      socialSyncDetail.textContent = "Failed to load social sync detail.";
+    }
+  }
+
   function socialSyncFilters() {
     const status = document.getElementById("socialSyncFilterStatus");
     const source = document.getElementById("socialSyncFilterSource");
@@ -4668,6 +4689,12 @@
   if (refreshSocialSyncLogBtn) {
     refreshSocialSyncLogBtn.addEventListener("click", async function () {
       await loadSocialSyncLog();
+    });
+  }
+
+  if (loadSocialSyncDetailBtn) {
+    loadSocialSyncDetailBtn.addEventListener("click", async function () {
+      await loadSocialSyncDetail();
     });
   }
 

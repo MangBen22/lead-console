@@ -1162,6 +1162,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialSyncLogBtn" type="button">Refresh Sync Log</button>
                 </div>
                 <pre id="socialSyncLog">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialSyncDetailId">Sync ID</label>
+                        <input id="socialSyncDetailId" type="text" placeholder="social_sync_abc123">
+                    </div>
+                    <button id="loadSocialSyncDetailBtn" type="button">Load Sync Detail</button>
+                </div>
+                <pre id="socialSyncDetail">No social sync detail loaded.</pre>
                 <h3>Social Retry Queue</h3>
                 <div class="inline-form">
                     <div class="form-row">
