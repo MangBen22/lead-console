@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.18-social-connector-rule-audit-detail',
+        'phase' => '3.19-social-connector-rule-audit-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11702,7 +11702,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.18-social-connector-rule-audit-detail',
+        'phase' => '3.19-social-connector-rule-audit-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16204,6 +16204,28 @@ if ($action === 'social.connectors.rule_audit_detail') {
     $draftLimit = isset($_GET['draft_limit']) ? (int) $_GET['draft_limit'] : 5;
     $snapshot = social_connector_rule_audit_detail_snapshot($connectorId, $draftLimit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.connectors.rule_audit.export') {
+    $snapshot = social_connector_rule_audit_snapshot($_GET);
+    $connectorId = isset($_GET['connector_id']) ? trim((string) $_GET['connector_id']) : '';
+    $draftLimit = isset($_GET['draft_limit']) ? (int) $_GET['draft_limit'] : 5;
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'rule_audit' => $snapshot,
+    ];
+    if ($connectorId !== '') {
+        $payload['rule_audit_detail'] = social_connector_rule_audit_detail_snapshot($connectorId, $draftLimit);
+    }
+    audit_event('social', 'connectors.rule_audit.export', [
+        'connector_id' => $connectorId,
+        'draft_limit' => $draftLimit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_connector_rule_audit_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.connectors.export') {

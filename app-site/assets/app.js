@@ -288,6 +288,7 @@
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
   const refreshSocialConnectorRuleAuditBtn = document.getElementById("refreshSocialConnectorRuleAuditBtn");
   const loadSocialConnectorRuleAuditDetailBtn = document.getElementById("loadSocialConnectorRuleAuditDetailBtn");
+  const downloadSocialConnectorRuleAuditExportBtn = document.getElementById("downloadSocialConnectorRuleAuditExportBtn");
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
@@ -2828,6 +2829,25 @@
     }
   }
 
+  async function downloadSocialConnectorRuleAuditExport() {
+    const filters = socialConnectorFilters();
+    const connectorId = document.getElementById("socialConnectorRuleAuditDetailId");
+    const draftLimit = document.getElementById("socialConnectorRuleAuditDraftLimit");
+    const data = await apiGetWithParams("social.connectors.rule_audit.export", {
+      provider: filters.provider,
+      status: filters.status,
+      site_id: filters.site_id,
+      run_mode: filters.run_mode,
+      search: filters.search,
+      page: filters.page,
+      limit: filters.limit,
+      connector_id: connectorId && connectorId.value ? connectorId.value.trim() : "",
+      draft_limit: draftLimit && draftLimit.value ? Number(draftLimit.value) : 5,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("social-connector-rule-audit-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function downloadSocialConnectorsExport() {
     const connectorId = document.getElementById("socialConnectorDetailId");
     const limit = document.getElementById("socialConnectorDetailLimit");
@@ -4950,6 +4970,12 @@
   if (loadSocialConnectorRuleAuditDetailBtn) {
     loadSocialConnectorRuleAuditDetailBtn.addEventListener("click", async function () {
       await loadSocialConnectorRuleAuditDetail();
+    });
+  }
+
+  if (downloadSocialConnectorRuleAuditExportBtn) {
+    downloadSocialConnectorRuleAuditExportBtn.addEventListener("click", async function () {
+      await downloadSocialConnectorRuleAuditExport();
     });
   }
 
