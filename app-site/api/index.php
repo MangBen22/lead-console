@@ -246,6 +246,62 @@ function crm_connector_detail_snapshot($connectorId, $limit = 10)
     ];
 }
 
+function crm_connectors_bulk_update($payload = [])
+{
+    if (!is_array($payload)) {
+        return ['ok' => false, 'error' => 'Invalid payload.'];
+    }
+    $snapshot = crm_connectors_list_snapshot($payload);
+    $targets = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    if (empty($targets)) {
+        return ['ok' => false, 'error' => 'No CRM connectors matched the current filters.'];
+    }
+
+    $status = array_key_exists('bulk_status', $payload) ? strtolower(trim((string) $payload['bulk_status'])) : null;
+    $siteId = array_key_exists('bulk_site_id', $payload) ? preg_replace('/[^a-z0-9_\-]/i', '', (string) $payload['bulk_site_id']) : null;
+    $runMode = array_key_exists('bulk_run_mode', $payload) ? strtolower(trim((string) $payload['bulk_run_mode'])) : null;
+    if (($status === null || $status === '') && ($siteId === null || $siteId === '') && ($runMode === null || $runMode === '')) {
+        return ['ok' => false, 'error' => 'Choose at least one CRM connector field to update.'];
+    }
+
+    $allowedStatus = ['active', 'planned', 'paused'];
+    $allowedRunMode = ['dry_run', 'live'];
+    $targetIds = array_values(array_filter(array_map(static function ($item) {
+        return is_array($item) ? (string) ($item['connector_id'] ?? '') : '';
+    }, $targets)));
+    $rows = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $updated = [];
+    foreach ($rows as $index => $row) {
+        if (!is_array($row) || !in_array((string) ($row['connector_id'] ?? ''), $targetIds, true)) {
+            continue;
+        }
+        if ($status !== null && $status !== '' && in_array($status, $allowedStatus, true)) {
+            $row['status'] = $status;
+        }
+        if ($siteId !== null && $siteId !== '') {
+            $row['site_id'] = $siteId;
+        }
+        if ($runMode !== null && $runMode !== '' && in_array($runMode, $allowedRunMode, true)) {
+            if (!isset($row['config']) || !is_array($row['config'])) {
+                $row['config'] = [];
+            }
+            $row['config']['run_mode'] = $runMode;
+        }
+        $row['updated_at'] = gmdate('c');
+        $rows[$index] = $row;
+        $updated[] = mask_connector($row);
+    }
+    app_write_json_file(app_storage_path('crm_connectors.json'), $rows);
+
+    return [
+        'ok' => true,
+        'processed' => count($targetIds),
+        'updated' => count($updated),
+        'items' => $updated,
+        'summary' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+    ];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6700,7 +6756,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.03-crm-connector-export',
+        'phase' => '5.04-crm-connector-bulk-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12551,7 +12607,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.03-crm-connector-export',
+        'phase' => '5.04-crm-connector-bulk-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14618,6 +14674,21 @@ if ($action === 'crm.connectors.export') {
         'filename' => 'crm_connectors_export_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
     ]);
+}
+
+if ($action === 'crm.connectors.bulk_update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    $snapshot = crm_connectors_bulk_update(is_array($data) ? $data : []);
+    audit_event('crm', 'connectors.bulk_update', [
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'updated' => (int) ($snapshot['updated'] ?? 0),
+    ]);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'crm.connectors.save') {

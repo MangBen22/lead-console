@@ -250,6 +250,7 @@
   const crmConnectorFilterLimit = document.getElementById("crmConnectorFilterLimit");
   const refreshCrmConnectorDetailBtn = document.getElementById("refreshCrmConnectorDetailBtn");
   const downloadCrmConnectorsExportBtn = document.getElementById("downloadCrmConnectorsExportBtn");
+  const runCrmConnectorBulkUpdateBtn = document.getElementById("runCrmConnectorBulkUpdateBtn");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
@@ -260,6 +261,7 @@
   const runCrmDeliveryWatchBtn = document.getElementById("runCrmDeliveryWatchBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmConnectorDetail = document.getElementById("crmConnectorDetail");
+  const crmConnectorBulkResult = document.getElementById("crmConnectorBulkResult");
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
   const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
@@ -2738,6 +2740,29 @@
     }
   }
 
+  async function runCrmConnectorBulkUpdate() {
+    const result = await apiPost("crm.connectors.bulk_update", {
+      provider: crmConnectorFilterProvider && crmConnectorFilterProvider.value ? crmConnectorFilterProvider.value.trim() : "",
+      status: crmConnectorFilterStatus && crmConnectorFilterStatus.value ? crmConnectorFilterStatus.value : "",
+      site_id: crmConnectorFilterSite && crmConnectorFilterSite.value ? crmConnectorFilterSite.value.trim() : "",
+      run_mode: crmConnectorFilterRunMode && crmConnectorFilterRunMode.value ? crmConnectorFilterRunMode.value : "",
+      search: crmConnectorFilterSearch && crmConnectorFilterSearch.value ? crmConnectorFilterSearch.value.trim() : "",
+      page: crmConnectorFilterPage && crmConnectorFilterPage.value ? crmConnectorFilterPage.value : 1,
+      limit: crmConnectorFilterLimit && crmConnectorFilterLimit.value ? crmConnectorFilterLimit.value : 10,
+      bulk_status: document.getElementById("crmConnectorBulkStatus") && document.getElementById("crmConnectorBulkStatus").value ? document.getElementById("crmConnectorBulkStatus").value : "",
+      bulk_site_id: document.getElementById("crmConnectorBulkSiteId") && document.getElementById("crmConnectorBulkSiteId").value ? document.getElementById("crmConnectorBulkSiteId").value.trim() : "",
+      bulk_run_mode: document.getElementById("crmConnectorBulkRunMode") && document.getElementById("crmConnectorBulkRunMode").value ? document.getElementById("crmConnectorBulkRunMode").value : "",
+    });
+    if (crmConnectorBulkResult) {
+      crmConnectorBulkResult.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadCrmConnectors();
+    const detailId = document.getElementById("crmConnectorDetailId");
+    if (detailId && detailId.value) {
+      await loadCrmConnectorDetail();
+    }
+  }
+
   async function loadCrmSyncLog() {
     if (!crmSyncLog) return;
     try {
@@ -4568,6 +4593,12 @@
   if (downloadCrmConnectorsExportBtn) {
     downloadCrmConnectorsExportBtn.addEventListener("click", async function () {
       await downloadCrmConnectorsExport();
+    });
+  }
+
+  if (runCrmConnectorBulkUpdateBtn) {
+    runCrmConnectorBulkUpdateBtn.addEventListener("click", async function () {
+      await runCrmConnectorBulkUpdate();
     });
   }
 

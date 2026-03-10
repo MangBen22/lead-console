@@ -440,6 +440,33 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCrmConnectorDetailBtn" type="button">Load Connector Detail</button>
                 </div>
                 <pre id="crmConnectorDetail">No CRM connector detail loaded.</pre>
+                <form id="crmConnectorBulkForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmConnectorBulkStatus">Bulk Status</label>
+                        <select id="crmConnectorBulkStatus">
+                            <option value="">leave as-is</option>
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorBulkSiteId">Bulk Site ID</label>
+                        <input id="crmConnectorBulkSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorBulkRunMode">Bulk Run Mode</label>
+                        <select id="crmConnectorBulkRunMode">
+                            <option value="">leave as-is</option>
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="runCrmConnectorBulkUpdateBtn" type="button">Bulk Update Connectors</button>
+                </div>
+                <pre id="crmConnectorBulkResult">No CRM connector bulk update yet.</pre>
                 <form id="crmConnectorForm" class="inline-form">
                     <div class="form-row">
                         <label for="connectorId">Connector ID (optional for update)</label>
