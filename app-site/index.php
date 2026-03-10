@@ -817,6 +817,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
                 </form>
                 <pre id="crmEmailTemplateTestLog">Loading test log...</pre>
+                <form id="crmEmailTemplateLogDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogDetailId">Log ID</label>
+                        <input id="crmEmailTemplateLogDetailId" type="text" placeholder="email_tpl_test_abc123">
+                    </div>
+                    <button id="loadCrmEmailTemplateLogDetailBtn" type="button">Load Log Detail</button>
+                </form>
+                <pre id="crmEmailTemplateLogDetail">No template test log detail loaded.</pre>
             </section>
 
             <section class="api-status">

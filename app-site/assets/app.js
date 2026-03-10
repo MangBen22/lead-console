@@ -294,6 +294,7 @@
   const crmEmailTemplatesResult = document.getElementById("crmEmailTemplatesResult");
   const crmEmailTemplatePreview = document.getElementById("crmEmailTemplatePreview");
   const crmEmailTemplateTestLog = document.getElementById("crmEmailTemplateTestLog");
+  const crmEmailTemplateLogDetail = document.getElementById("crmEmailTemplateLogDetail");
   const crmEmailTemplateSites = document.getElementById("crmEmailTemplateSites");
   const downloadCrmEmailTemplatesExportBtn = document.getElementById("downloadCrmEmailTemplatesExportBtn");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
@@ -3105,6 +3106,35 @@
     }
   }
 
+  async function loadCrmEmailTemplateLogDetail() {
+    if (!crmEmailTemplateLogDetail) return null;
+    const logId = document.getElementById("crmEmailTemplateLogDetailId");
+    const siteId = document.getElementById("crmEmailTemplateLogSiteId");
+    if (!logId || !logId.value) {
+      crmEmailTemplateLogDetail.textContent = "Enter a log ID to load detail.";
+      return null;
+    }
+    try {
+      const data = await apiGetWithParams("crm.email_templates.test_log_detail", {
+        log_id: logId.value.trim(),
+        site_id: siteId && siteId.value ? siteId.value.trim() : "",
+      });
+      crmEmailTemplateLogDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const templateSiteId = document.getElementById("crmEmailTemplateSiteId");
+        const templateKey = document.getElementById("crmEmailTemplateKey");
+        const logSiteId = document.getElementById("crmEmailTemplateLogSiteId");
+        if (templateSiteId) templateSiteId.value = data.item.site_id || "";
+        if (logSiteId) logSiteId.value = data.item.site_id || "";
+        if (templateKey && data.item.template_key) templateKey.value = data.item.template_key;
+      }
+      return data;
+    } catch (err) {
+      crmEmailTemplateLogDetail.textContent = "Failed to load CRM email template log detail.";
+      return null;
+    }
+  }
+
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
@@ -5118,6 +5148,13 @@
   if (refreshCrmEmailTemplateLogBtn) {
     refreshCrmEmailTemplateLogBtn.addEventListener("click", async function () {
       await loadCrmEmailTemplateTestLog();
+    });
+  }
+
+  const loadCrmEmailTemplateLogDetailBtn = document.getElementById("loadCrmEmailTemplateLogDetailBtn");
+  if (loadCrmEmailTemplateLogDetailBtn) {
+    loadCrmEmailTemplateLogDetailBtn.addEventListener("click", async function () {
+      await loadCrmEmailTemplateLogDetail();
     });
   }
 

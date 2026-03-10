@@ -1072,6 +1072,46 @@ function crm_email_template_test_log_snapshot($query = [])
     ];
 }
 
+function crm_email_template_test_log_detail_snapshot($logId, $siteId = '')
+{
+    $id = trim((string) $logId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'log_id is required.'];
+    }
+    $snapshot = crm_email_template_test_log_snapshot([
+        'site_id' => (string) $siteId,
+        'limit' => 100,
+        'page' => 1,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    foreach ($items as $item) {
+        if (!is_array($item) || (string) ($item['log_id'] ?? '') !== $id) {
+            continue;
+        }
+        $site = site_by_id((string) ($item['site_id'] ?? ''));
+        $templates = is_array($site) ? crm_email_templates_fetch($site) : null;
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'success' => !empty($item['success']) ? 1 : 0,
+                'site_found' => is_array($site) ? 1 : 0,
+                'template_found' => !empty($templates['ok']) && is_array($templates['email_templates']['templates'] ?? null) && isset($templates['email_templates']['templates'][(string) ($item['template_key'] ?? '')]) ? 1 : 0,
+            ],
+            'site' => is_array($site) ? [
+                'site_id' => (string) ($site['site_id'] ?? ''),
+                'label' => (string) ($site['label'] ?? $site['base_url']),
+                'base_url' => (string) ($site['base_url'] ?? ''),
+            ] : null,
+            'current_template' => (!empty($templates['ok']) && is_array($templates['email_templates']['templates'] ?? null) && isset($templates['email_templates']['templates'][(string) ($item['template_key'] ?? '')]))
+                ? $templates['email_templates']['templates'][(string) ($item['template_key'] ?? '')]
+                : null,
+        ];
+    }
+
+    return ['ok' => false, 'error' => 'Template test log item not found.'];
+}
+
 function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $snapshot = crm_smtp_sites_snapshot();
@@ -7419,7 +7459,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.16-crm-email-template-test-log-filters',
+        'phase' => '5.17-crm-email-template-test-log-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13270,7 +13310,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.16-crm-email-template-test-log-filters',
+        'phase' => '5.17-crm-email-template-test-log-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16011,6 +16051,13 @@ if ($action === 'crm.email_templates.test_log') {
         'items' => $snapshot['items'],
         'count' => (int) ($snapshot['summary']['filtered_count'] ?? count($snapshot['items'])),
     ]);
+}
+
+if ($action === 'crm.email_templates.test_log_detail') {
+    $logId = isset($_GET['log_id']) ? (string) $_GET['log_id'] : '';
+    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
+    $snapshot = crm_email_template_test_log_detail_snapshot($logId, $siteId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'crm.email_templates.save') {
