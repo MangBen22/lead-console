@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.05-social-activity-detail',
+        'phase' => '3.06-social-activity-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11138,7 +11138,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.05-social-activity-detail',
+        'phase' => '3.06-social-activity-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14332,6 +14332,37 @@ if ($action === 'social.activity.detail') {
     $activityId = isset($_GET['activity_id']) ? (string) $_GET['activity_id'] : '';
     $snapshot = social_activity_detail_snapshot($activityId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.activity.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'type' => isset($_GET['type']) ? (string) $_GET['type'] : '',
+        'ref' => isset($_GET['ref']) ? (string) $_GET['ref'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $activityId = isset($_GET['activity_id']) ? trim((string) $_GET['activity_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'activity_feed' => social_activity_list_snapshot($filters),
+    ];
+    if ($activityId !== '') {
+        $payload['activity_detail'] = social_activity_detail_snapshot($activityId);
+    }
+    audit_event('social', 'activity.export', [
+        'activity_id' => $activityId,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_activity_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.inbox.list') {

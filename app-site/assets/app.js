@@ -294,6 +294,7 @@
   const loadSocialSyncDetailBtn = document.getElementById("loadSocialSyncDetailBtn");
   const downloadSocialSyncExportBtn = document.getElementById("downloadSocialSyncExportBtn");
   const loadSocialActivityDetailBtn = document.getElementById("loadSocialActivityDetailBtn");
+  const downloadSocialActivityExportBtn = document.getElementById("downloadSocialActivityExportBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3003,6 +3004,17 @@
     }
   }
 
+  async function downloadSocialActivityExport() {
+    const params = socialActivityFilters();
+    const activityId = document.getElementById("socialActivityDetailId");
+    if (activityId && activityId.value) {
+      params.activity_id = activityId.value.trim();
+    }
+    const data = await apiGetWithParams("social.activity.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-activity-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   function socialInboxFilters() {
     const status = document.getElementById("socialInboxFilterStatus");
     const priority = document.getElementById("socialInboxFilterPriority");
@@ -4808,6 +4820,12 @@
   if (loadSocialActivityDetailBtn) {
     loadSocialActivityDetailBtn.addEventListener("click", async function () {
       await loadSocialActivityDetail();
+    });
+  }
+
+  if (downloadSocialActivityExportBtn) {
+    downloadSocialActivityExportBtn.addEventListener("click", async function () {
+      await downloadSocialActivityExport();
     });
   }
 

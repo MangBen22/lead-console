@@ -980,6 +980,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="socialActivityFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSocialActivityBtn" type="button">Refresh Social Activity</button>
+                    <button id="downloadSocialActivityExportBtn" type="button">Download Activity Export</button>
                 </div>
                 <pre id="socialActivityFeed">Loading...</pre>
                 <div class="inline-form">
