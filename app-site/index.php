@@ -586,6 +586,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCrmSyncLogBtn" type="button">Refresh Sync Log</button>
                 </form>
                 <pre id="crmSyncLog">Loading...</pre>
+                <form id="crmSyncDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmSyncDetailId">Sync ID</label>
+                        <input id="crmSyncDetailId" type="text" placeholder="sync_abc123">
+                    </div>
+                    <button id="loadCrmSyncDetailBtn" type="button">Load Sync Detail</button>
+                </form>
+                <pre id="crmSyncDetail">No CRM sync detail loaded.</pre>
                 <h3>Retry Queue</h3>
                 <pre id="crmRetryQueue">Loading...</pre>
             </section>

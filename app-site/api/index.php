@@ -385,6 +385,45 @@ function crm_sync_log_list_snapshot($query = [])
     ];
 }
 
+function crm_sync_log_detail_snapshot($syncId)
+{
+    $id = trim((string) $syncId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'sync_id is required.'];
+    }
+    $rows = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['sync_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $results = isset($item['connector_results']) && is_array($item['connector_results']) ? $item['connector_results'] : [];
+        $acceptedTotal = 0;
+        $rejectedTotal = 0;
+        $errorCount = 0;
+        foreach ($results as $result) {
+            if (!is_array($result)) {
+                continue;
+            }
+            $acceptedTotal += (int) ($result['accepted'] ?? 0);
+            $rejectedTotal += (int) ($result['rejected'] ?? 0);
+            $errorCount += count(isset($result['errors']) && is_array($result['errors']) ? $result['errors'] : []);
+        }
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'connector_result_count' => count($results),
+                'site_count' => count(isset($item['sites']) && is_array($item['sites']) ? $item['sites'] : []),
+                'accepted_total' => $acceptedTotal,
+                'rejected_total' => $rejectedTotal,
+                'error_count' => $errorCount,
+            ],
+        ];
+    }
+    return ['ok' => false, 'error' => 'CRM sync log item not found.'];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6839,7 +6878,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.05-crm-sync-log-filters',
+        'phase' => '5.06-crm-sync-log-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12690,7 +12729,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.05-crm-sync-log-filters',
+        'phase' => '5.06-crm-sync-log-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14954,6 +14993,12 @@ if ($action === 'crm.push.log') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'crm.push.detail') {
+    $syncId = isset($_GET['sync_id']) ? (string) $_GET['sync_id'] : '';
+    $snapshot = crm_sync_log_detail_snapshot($syncId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'crm.delivery.summary') {

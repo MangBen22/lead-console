@@ -266,7 +266,9 @@
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
   const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
   const refreshCrmSyncLogBtn = document.getElementById("refreshCrmSyncLogBtn");
+  const loadCrmSyncDetailBtn = document.getElementById("loadCrmSyncDetailBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
+  const crmSyncDetail = document.getElementById("crmSyncDetail");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
   const refreshCrmSmtpWatchBtn = document.getElementById("refreshCrmSmtpWatchBtn");
@@ -2780,6 +2782,23 @@
     }
   }
 
+  async function loadCrmSyncDetail() {
+    if (!crmSyncDetail) return;
+    const syncId = document.getElementById("crmSyncDetailId");
+    if (!syncId || !syncId.value) {
+      crmSyncDetail.textContent = "Enter a sync ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("crm.push.detail", {
+        sync_id: syncId.value.trim(),
+      });
+      crmSyncDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmSyncDetail.textContent = "Failed to load CRM sync detail.";
+    }
+  }
+
   async function loadCrmDeliverySummary() {
     if (!crmDeliverySummary) return;
     try {
@@ -4679,6 +4698,12 @@
   if (refreshCrmSyncLogBtn) {
     refreshCrmSyncLogBtn.addEventListener("click", async function () {
       await loadCrmSyncLog();
+    });
+  }
+
+  if (loadCrmSyncDetailBtn) {
+    loadCrmSyncDetailBtn.addEventListener("click", async function () {
+      await loadCrmSyncDetail();
     });
   }
 
