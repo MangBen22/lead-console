@@ -394,6 +394,11 @@
   const webopsLog = document.getElementById("webopsLog");
   const webopsRetryQueue = document.getElementById("webopsRetryQueue");
   const seoProjects = document.getElementById("seoProjects");
+  const refreshSeoProjectsBtn = document.getElementById("refreshSeoProjectsBtn");
+  const seoProjectFilterStatus = document.getElementById("seoProjectFilterStatus");
+  const seoProjectFilterSearch = document.getElementById("seoProjectFilterSearch");
+  const seoProjectFilterPage = document.getElementById("seoProjectFilterPage");
+  const seoProjectFilterLimit = document.getElementById("seoProjectFilterLimit");
   let currentLeadsReviewDrafts = [];
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
@@ -3953,7 +3958,12 @@
   async function loadSeoProjects() {
     if (!seoProjects) return;
     try {
-      const data = await apiGet("seo.projects.list");
+      const data = await apiGetWithParams("seo.projects.list", {
+        status: seoProjectFilterStatus && seoProjectFilterStatus.value ? seoProjectFilterStatus.value : "",
+        search: seoProjectFilterSearch && seoProjectFilterSearch.value ? seoProjectFilterSearch.value.trim() : "",
+        page: seoProjectFilterPage && seoProjectFilterPage.value ? seoProjectFilterPage.value : 1,
+        limit: seoProjectFilterLimit && seoProjectFilterLimit.value ? seoProjectFilterLimit.value : 10,
+      });
       seoProjects.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       seoProjects.textContent = "Failed to load SEO projects.";
@@ -6712,6 +6722,12 @@
   if (refreshSeoIssuesBtn) {
     refreshSeoIssuesBtn.addEventListener("click", async function () {
       await loadSeoIssuesSummary();
+    });
+  }
+
+  if (refreshSeoProjectsBtn) {
+    refreshSeoProjectsBtn.addEventListener("click", async function () {
+      await loadSeoProjects();
     });
   }
 

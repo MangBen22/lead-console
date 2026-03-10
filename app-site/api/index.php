@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.21-social-provider-coverage-export',
+        'phase' => '4.01-seo-project-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7148,6 +7148,79 @@ function seo_project_by_id($projectId)
         }
     }
     return null;
+}
+
+function seo_projects_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(seo_projects_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $statusCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $itemStatus = strtolower((string) ($item['status'] ?? 'unknown'));
+        if (!isset($statusCounts[$itemStatus])) {
+            $statusCounts[$itemStatus] = 0;
+        }
+        $statusCounts[$itemStatus]++;
+        if ($status !== '' && $itemStatus !== $status) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['project_id'] ?? ''),
+                (string) ($item['name'] ?? ''),
+                (string) ($item['domain'] ?? ''),
+                (string) ($item['status'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        $updatedCompare = strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+        if ($updatedCompare !== 0) {
+            return $updatedCompare;
+        }
+        return strcmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'status' => $status,
+            'search' => $search,
+            'status_counts' => $statusCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
 }
 
 function default_automation_settings()
@@ -11772,7 +11845,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.21-social-provider-coverage-export',
+        'phase' => '4.01-seo-project-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15505,11 +15578,12 @@ if ($action === 'social.schedule.run') {
 }
 
 if ($action === 'seo.projects.list') {
-    $rows = app_read_json_file(seo_projects_path(), []);
+    $snapshot = seo_projects_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

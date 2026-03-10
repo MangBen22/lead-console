@@ -1511,6 +1511,29 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>SEO Projects</h2>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoProjectFilterStatus">Project Status</label>
+                        <select id="seoProjectFilterStatus">
+                            <option value="">all</option>
+                            <option value="active">active</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectFilterSearch">Project Search</label>
+                        <input id="seoProjectFilterSearch" type="text" placeholder="project id, name, domain">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectFilterPage">Project Page</label>
+                        <input id="seoProjectFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoProjectFilterLimit">Project Limit</label>
+                        <input id="seoProjectFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSeoProjectsBtn" type="button">Refresh SEO Projects</button>
+                </div>
                 <pre id="seoProjects">Loading...</pre>
                 <form id="seoProjectForm" class="inline-form">
                     <div class="form-row">
