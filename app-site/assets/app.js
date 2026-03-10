@@ -213,8 +213,10 @@
   const bridgeSites = document.getElementById("bridgeSites");
   const refreshLeadsInventoryBtn = document.getElementById("refreshLeadsInventoryBtn");
   const refreshLeadsListBtn = document.getElementById("refreshLeadsListBtn");
+  const refreshLeadsPushPlanBtn = document.getElementById("refreshLeadsPushPlanBtn");
   const leadsInventoryView = document.getElementById("leadsInventoryView");
   const leadsListView = document.getElementById("leadsListView");
+  const leadsPushPlanView = document.getElementById("leadsPushPlanView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2255,6 +2257,16 @@
     }
   }
 
+  async function loadLeadsPushPlan() {
+    if (!leadsPushPlanView) return;
+    try {
+      const data = await apiGetWithParams("leads.push.plan", { limit: 8 });
+      leadsPushPlanView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsPushPlanView.textContent = "Failed to load leads push plan.";
+    }
+  }
+
   async function loadCrmConnectors() {
     if (!crmConnectors) return;
     try {
@@ -2809,6 +2821,7 @@
   (async function initCrm() {
     await loadLeadsInventory();
     await loadLeadsList();
+    await loadLeadsPushPlan();
     await loadCrmConnectors();
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
@@ -4031,6 +4044,12 @@
   if (refreshLeadsListBtn) {
     refreshLeadsListBtn.addEventListener("click", async function () {
       await loadLeadsList();
+    });
+  }
+
+  if (refreshLeadsPushPlanBtn) {
+    refreshLeadsPushPlanBtn.addEventListener("click", async function () {
+      await loadLeadsPushPlan();
     });
   }
 

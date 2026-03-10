@@ -544,6 +544,84 @@ function leads_list_snapshot($query = [])
     ];
 }
 
+function leads_push_plan_snapshot($limit = 10)
+{
+    $payload = collect_approved_leads();
+    $leads = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+    $sites = isset($payload['sites']) && is_array($payload['sites']) ? $payload['sites'] : [];
+    $connectors = app_read_json_file(app_storage_path('crm_connectors.json'), []);
+    $activeConnectors = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $status = strtolower((string) ($connector['status'] ?? ''));
+        if (!in_array($status, ['active', 'enabled'], true)) {
+            continue;
+        }
+        $activeConnectors[] = mask_connector($connector);
+    }
+
+    $siteLeadMap = [];
+    foreach ($leads as $lead) {
+        if (!is_array($lead)) {
+            continue;
+        }
+        $siteId = (string) ($lead['site_id'] ?? '');
+        if (!isset($siteLeadMap[$siteId])) {
+            $siteLeadMap[$siteId] = 0;
+        }
+        $siteLeadMap[$siteId]++;
+    }
+
+    $connectorItems = [];
+    foreach ($activeConnectors as $connector) {
+        $connectorItems[] = [
+            'connector_id' => (string) ($connector['connector_id'] ?? ''),
+            'provider' => (string) ($connector['provider'] ?? ''),
+            'type' => (string) ($connector['type'] ?? ''),
+            'status' => (string) ($connector['status'] ?? ''),
+            'lead_count' => count($leads),
+            'site_count' => count($sites),
+        ];
+    }
+
+    $issues = [];
+    if (empty($activeConnectors)) {
+        $issues[] = 'no_active_crm_connectors';
+    }
+    if (empty($leads)) {
+        $issues[] = 'no_approved_leads';
+    }
+
+    $lastSyncLog = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $lastSync = isset($lastSyncLog[0]) && is_array($lastSyncLog[0]) ? $lastSyncLog[0] : null;
+
+    return [
+        'summary' => [
+            'approved_total' => count($leads),
+            'site_count' => count($sites),
+            'active_connector_count' => count($activeConnectors),
+            'delivery_pairs' => count($leads) * count($activeConnectors),
+            'issues_count' => count($issues),
+            'ready' => empty($issues) ? 1 : 0,
+        ],
+        'issues' => $issues,
+        'connectors' => array_slice($connectorItems, 0, $limit),
+        'sites' => array_slice(array_map(static function ($site) use ($siteLeadMap) {
+            $siteId = (string) ($site['site_id'] ?? '');
+            return [
+                'site_id' => $siteId,
+                'label' => (string) ($site['label'] ?? ''),
+                'connected' => !empty($site['connected']) ? 1 : 0,
+                'approved_count' => (int) ($site['approved_count'] ?? 0),
+                'lead_count' => (int) ($siteLeadMap[$siteId] ?? 0),
+            ];
+        }, $sites), 0, $limit),
+        'last_sync' => $lastSync,
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5055,7 +5133,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.54-leads-inventory-workspace',
+        'phase' => '2.55-leads-push-plan',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8446,7 +8524,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.54-leads-inventory-workspace',
+        'phase' => '2.55-leads-push-plan',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10279,6 +10357,22 @@ if ($action === 'leads.list') {
         'ok' => true,
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
+    ]);
+}
+
+if ($action === 'leads.push.plan') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = leads_push_plan_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'issues' => $snapshot['issues'],
+        'connectors' => $snapshot['connectors'],
+        'sites' => $snapshot['sites'],
+        'last_sync' => $snapshot['last_sync'],
     ]);
 }
 
