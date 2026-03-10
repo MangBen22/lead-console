@@ -840,6 +840,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadCrmOperationsSnapshotBtn" type="button">Download CRM Operations Snapshot</button>
                 </form>
                 <pre id="crmOperationsSnapshot">Loading...</pre>
+                <pre id="crmOperationsHistory">Loading...</pre>
             </section>
 
             <section class="api-status">
