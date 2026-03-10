@@ -543,7 +543,31 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>Social Platforms</h2>
-                <div class="actions">
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialPlatformFilterFamily">Platform Family</label>
+                        <input id="socialPlatformFilterFamily" type="text" placeholder="meta">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformFilterAuthMode">Auth Mode</label>
+                        <input id="socialPlatformFilterAuthMode" type="text" placeholder="oauth2">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformFilterCapability">Capability</label>
+                        <input id="socialPlatformFilterCapability" type="text" placeholder="can_schedule">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformFilterSearch">Platform Search</label>
+                        <input id="socialPlatformFilterSearch" type="text" placeholder="provider or label">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformFilterPage">Platform Page</label>
+                        <input id="socialPlatformFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformFilterLimit">Platform Limit</label>
+                        <input id="socialPlatformFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
                     <button id="refreshSocialPlatformsBtn" type="button">Refresh Social Platforms</button>
                 </div>
                 <pre id="socialPlatforms">Loading...</pre>

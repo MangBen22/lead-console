@@ -2586,6 +2586,87 @@ function social_platform_profile($provider)
     ];
 }
 
+function social_platforms_list_snapshot($query = [])
+{
+    $rows = social_platform_catalog();
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $family = strtolower(trim((string) ($query['family'] ?? '')));
+    $authMode = strtolower(trim((string) ($query['auth_mode'] ?? '')));
+    $capability = strtolower(trim((string) ($query['capability'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $familyCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $item['auth_modes'] = isset($row['auth_modes']) && is_array($row['auth_modes']) ? array_values($row['auth_modes']) : [];
+        $item['capabilities'] = isset($row['capabilities']) && is_array($row['capabilities']) ? array_values($row['capabilities']) : [];
+        $familyKey = strtolower((string) ($item['family'] ?? 'custom'));
+        if (!isset($familyCounts[$familyKey])) {
+            $familyCounts[$familyKey] = 0;
+        }
+        $familyCounts[$familyKey]++;
+        if ($family !== '' && $familyKey !== $family) {
+            continue;
+        }
+        if ($authMode !== '' && !in_array($authMode, array_map('strtolower', $item['auth_modes']), true)) {
+            continue;
+        }
+        if ($capability !== '' && !in_array($capability, array_map('strtolower', $item['capabilities']), true)) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['provider'] ?? ''),
+                (string) ($item['label'] ?? ''),
+                (string) ($item['family'] ?? ''),
+                implode(',', $item['capabilities']),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'family' => $family,
+            'auth_mode' => $authMode,
+            'capability' => $capability,
+            'search' => $search,
+            'family_counts' => $familyCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function normalize_social_capabilities($provider, $capabilities)
 {
     $profile = social_platform_profile($provider);
@@ -6277,7 +6358,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.06-social-activity-export',
+        'phase' => '3.07-social-platform-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11138,7 +11219,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.06-social-activity-export',
+        'phase' => '3.07-social-platform-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14083,11 +14164,12 @@ if ($action === 'seo.extension.sessions.list') {
 }
 
 if ($action === 'social.platforms.list') {
-    $items = social_platform_catalog();
+    $snapshot = social_platforms_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($items),
-        'items' => $items,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

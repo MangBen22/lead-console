@@ -3163,7 +3163,7 @@
   async function loadSocialPlatforms() {
     if (!socialPlatforms) return;
     try {
-      const data = await apiGet("social.platforms.list");
+      const data = await apiGetWithParams("social.platforms.list", socialPlatformFilters());
       socialPlatformCatalogItems = data && Array.isArray(data.items) ? data.items : [];
       socialPlatforms.textContent = JSON.stringify(data, null, 2);
       const providerInput = document.getElementById("socialProvider");
@@ -3173,6 +3173,23 @@
     } catch (err) {
       socialPlatforms.textContent = "Failed to load social platforms.";
     }
+  }
+
+  function socialPlatformFilters() {
+    const family = document.getElementById("socialPlatformFilterFamily");
+    const authMode = document.getElementById("socialPlatformFilterAuthMode");
+    const capability = document.getElementById("socialPlatformFilterCapability");
+    const search = document.getElementById("socialPlatformFilterSearch");
+    const page = document.getElementById("socialPlatformFilterPage");
+    const limit = document.getElementById("socialPlatformFilterLimit");
+    return {
+      family: family && family.value ? family.value.trim() : "",
+      auth_mode: authMode && authMode.value ? authMode.value.trim() : "",
+      capability: capability && capability.value ? capability.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
   }
 
   const renderSocialProviderProfile = function (profile, message) {
