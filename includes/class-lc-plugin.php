@@ -1212,6 +1212,18 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/run-reviews', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_run_reviews'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
+        register_rest_route('lc/v1', '/bridge/run-review', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_run_review'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/smtp-health', [
             'methods' => 'GET',
             'callback' => [$this, 'rest_bridge_smtp_health'],
@@ -1351,6 +1363,145 @@ class LC_Plugin
             'ok' => true,
             'count' => count($leads),
             'leads' => $leads,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_run_reviews($request)
+    {
+        global $wpdb;
+
+        $limit = absint($request->get_param('limit'));
+        if ($limit <= 0) {
+            $limit = 20;
+        }
+        $limit = min($limit, 100);
+        $review_status = sanitize_text_field((string) ($request->get_param('review_status') ?? 'pending'));
+        $runs_table = $this->db_table('lc_runs');
+        $drafts_table = $this->db_table('lc_run_drafts');
+
+        if ($review_status !== '') {
+            $runs = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, query_text, city, state, country, niche, services, captured_leads, save_mode, review_status, status, created_at, started_at, finished_at
+                     FROM {$runs_table}
+                     WHERE review_status = %s
+                     ORDER BY id DESC
+                     LIMIT %d",
+                    $review_status,
+                    $limit
+                ),
+                ARRAY_A
+            );
+        } else {
+            $runs = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, query_text, city, state, country, niche, services, captured_leads, save_mode, review_status, status, created_at, started_at, finished_at
+                     FROM {$runs_table}
+                     ORDER BY id DESC
+                     LIMIT %d",
+                    $limit
+                ),
+                ARRAY_A
+            );
+        }
+
+        $items = [];
+        foreach ((array) $runs as $run) {
+            $run_id = absint($run['id'] ?? 0);
+            $draft_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$drafts_table} WHERE run_id = %d", $run_id));
+            $items[] = [
+                'run_id' => $run_id,
+                'query_text' => (string) ($run['query_text'] ?? ''),
+                'city' => (string) ($run['city'] ?? ''),
+                'state' => (string) ($run['state'] ?? ''),
+                'country' => (string) ($run['country'] ?? ''),
+                'niche' => (string) ($run['niche'] ?? ''),
+                'services' => (string) ($run['services'] ?? ''),
+                'captured_leads' => (int) ($run['captured_leads'] ?? 0),
+                'draft_count' => $draft_count,
+                'save_mode' => (string) ($run['save_mode'] ?? ''),
+                'review_status' => (string) ($run['review_status'] ?? 'na'),
+                'status' => (string) ($run['status'] ?? ''),
+                'created_at' => (string) ($run['created_at'] ?? ''),
+                'started_at' => (string) ($run['started_at'] ?? ''),
+                'finished_at' => (string) ($run['finished_at'] ?? ''),
+            ];
+        }
+
+        $this->log_system_event('bridge', 'info', 'Bridge run reviews requested.', [
+            'review_status' => $review_status,
+            'count' => count($items),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'count' => count($items),
+            'items' => $items,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_run_review($request)
+    {
+        global $wpdb;
+
+        $run_id = absint($request->get_param('run_id'));
+        if ($run_id <= 0) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'run_id is required.'], 400);
+        }
+
+        $run = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, query_text, city, state, country, radius_miles, niche, services, website_focus, min_rating, min_reviews, max_places, captured_leads, save_mode, review_status, status, created_at, started_at, finished_at
+                 FROM {$this->db_table('lc_runs')}
+                 WHERE id = %d
+                 LIMIT 1",
+                $run_id
+            ),
+            ARRAY_A
+        );
+        if (!$run) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'Run not found.'], 404);
+        }
+
+        $logs = $wpdb->get_results($wpdb->prepare("SELECT level, message, created_at FROM {$this->db_table('lc_run_logs')} WHERE run_id = %d ORDER BY id ASC LIMIT 120", $run_id), ARRAY_A);
+        $draft_count = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$this->db_table('lc_run_drafts')} WHERE run_id = %d", $run_id));
+        $draft_preview = $wpdb->get_results($wpdb->prepare("SELECT id, business_name, city, category, website, phone, email, score, lead_type, notes, status, created_at FROM {$this->db_table('lc_run_drafts')} WHERE run_id = %d ORDER BY id DESC LIMIT 80", $run_id), ARRAY_A);
+
+        $this->log_system_event('bridge', 'info', 'Bridge run review requested.', [
+            'run_id' => $run_id,
+            'draft_count' => $draft_count,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'run' => [
+                'id' => (int) $run['id'],
+                'status' => (string) ($run['status'] ?? ''),
+                'review_status' => (string) ($run['review_status'] ?? 'na'),
+                'captured_leads' => (int) ($run['captured_leads'] ?? 0),
+                'draft_count' => $draft_count,
+                'save_mode' => (string) ($run['save_mode'] ?? ''),
+                'params' => [
+                    'query_text' => (string) ($run['query_text'] ?? ''),
+                    'city' => (string) ($run['city'] ?? ''),
+                    'state' => (string) ($run['state'] ?? ''),
+                    'country' => (string) ($run['country'] ?? ''),
+                    'niche' => (string) ($run['niche'] ?? ''),
+                    'services' => (string) ($run['services'] ?? ''),
+                    'radius_miles' => (int) ($run['radius_miles'] ?? 0),
+                    'min_rating' => (float) ($run['min_rating'] ?? 0),
+                    'min_reviews' => (int) ($run['min_reviews'] ?? 0),
+                    'max_places' => (int) ($run['max_places'] ?? 0),
+                    'website_focus' => (string) ($run['website_focus'] ?? 'any'),
+                ],
+                'created_at' => (string) ($run['created_at'] ?? ''),
+                'started_at' => (string) ($run['started_at'] ?? ''),
+                'finished_at' => (string) ($run['finished_at'] ?? ''),
+            ],
+            'logs' => is_array($logs) ? $logs : [],
+            'draft_preview' => is_array($draft_preview) ? $draft_preview : [],
             'time' => current_time('mysql'),
         ]);
     }

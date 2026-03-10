@@ -288,6 +288,22 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="leadsQualityView">Loading...</pre>
                 <pre id="leadsDeliveryHistoryView">Loading...</pre>
+                <div class="actions">
+                    <button id="refreshLeadsReviewQueueBtn" type="button">Refresh Review Queue</button>
+                    <button id="loadLeadsReviewDetailBtn" type="button">Load Review Detail</button>
+                </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="leadsReviewSiteId">Review Site ID</label>
+                        <input id="leadsReviewSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewRunId">Review Run ID</label>
+                        <input id="leadsReviewRunId" type="number" min="1" placeholder="123">
+                    </div>
+                </div>
+                <pre id="leadsReviewQueueView">Loading...</pre>
+                <pre id="leadsReviewDetailView">No review detail loaded.</pre>
             </section>
 
             <section class="api-status">

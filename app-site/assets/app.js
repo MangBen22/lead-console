@@ -216,6 +216,8 @@
   const refreshLeadsPushPlanBtn = document.getElementById("refreshLeadsPushPlanBtn");
   const refreshLeadsQualityBtn = document.getElementById("refreshLeadsQualityBtn");
   const refreshLeadsDeliveryHistoryBtn = document.getElementById("refreshLeadsDeliveryHistoryBtn");
+  const refreshLeadsReviewQueueBtn = document.getElementById("refreshLeadsReviewQueueBtn");
+  const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
@@ -225,6 +227,8 @@
   const leadsPushResultView = document.getElementById("leadsPushResultView");
   const leadsQualityView = document.getElementById("leadsQualityView");
   const leadsDeliveryHistoryView = document.getElementById("leadsDeliveryHistoryView");
+  const leadsReviewQueueView = document.getElementById("leadsReviewQueueView");
+  const leadsReviewDetailView = document.getElementById("leadsReviewDetailView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2299,6 +2303,31 @@
     }
   }
 
+  async function loadLeadsReviewQueue() {
+    if (!leadsReviewQueueView) return;
+    try {
+      const data = await apiGetWithParams("leads.review.queue", { limit: 8, review_status: "pending" });
+      leadsReviewQueueView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsReviewQueueView.textContent = "Failed to load leads review queue.";
+    }
+  }
+
+  async function loadLeadsReviewDetail() {
+    if (!leadsReviewDetailView) return;
+    try {
+      const siteId = document.getElementById("leadsReviewSiteId");
+      const runId = document.getElementById("leadsReviewRunId");
+      const data = await apiGetWithParams("leads.review.detail", {
+        site_id: siteId && siteId.value ? siteId.value.trim() : "",
+        run_id: runId && runId.value ? runId.value.trim() : "",
+      });
+      leadsReviewDetailView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsReviewDetailView.textContent = "Failed to load leads review detail.";
+    }
+  }
+
   async function refreshLeadsAndCrmModuleCards() {
     const leadsPanel = document.getElementById("modLeads");
     const crmPanel = document.getElementById("modCrm");
@@ -2873,6 +2902,7 @@
     await loadLeadsPushPlan();
     await loadLeadsQuality();
     await loadLeadsDeliveryHistory();
+    await loadLeadsReviewQueue();
     await loadCrmConnectors();
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
@@ -4113,6 +4143,18 @@
   if (refreshLeadsDeliveryHistoryBtn) {
     refreshLeadsDeliveryHistoryBtn.addEventListener("click", async function () {
       await loadLeadsDeliveryHistory();
+    });
+  }
+
+  if (refreshLeadsReviewQueueBtn) {
+    refreshLeadsReviewQueueBtn.addEventListener("click", async function () {
+      await loadLeadsReviewQueue();
+    });
+  }
+
+  if (loadLeadsReviewDetailBtn) {
+    loadLeadsReviewDetailBtn.addEventListener("click", async function () {
+      await loadLeadsReviewDetail();
     });
   }
 
