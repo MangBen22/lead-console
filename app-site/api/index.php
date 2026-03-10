@@ -746,12 +746,23 @@ function leads_delivery_history_snapshot($limit = 10)
     ];
 }
 
-function collect_leads_review_queue($limit = 10, $reviewStatus = 'pending')
+function collect_leads_review_queue($query = [])
 {
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $reviewStatus = isset($query['review_status']) ? strtolower(trim((string) $query['review_status'])) : 'pending';
+    $siteFilter = strtolower(trim((string) ($query['site_id'] ?? '')));
     $rows = [];
     foreach (all_sites() as $site) {
         $query = ['limit' => min(max(1, $limit), 100)];
-        if ($reviewStatus !== '') {
+        if ($reviewStatus !== '' && $reviewStatus !== 'all') {
             $query['review_status'] = $reviewStatus;
         }
         $res = app_bridge_request($site, 'GET', 'bridge/run-reviews', [], $query);
@@ -779,22 +790,36 @@ function collect_leads_review_queue($limit = 10, $reviewStatus = 'pending')
         return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
     });
 
+    $filtered = [];
     $pendingRuns = 0;
     $draftTotal = 0;
     foreach ($rows as $row) {
+        if ($siteFilter !== '' && strtolower((string) ($row['site_id'] ?? '')) !== $siteFilter) {
+            continue;
+        }
+        if ($reviewStatus !== '' && $reviewStatus !== 'all' && strtolower((string) ($row['review_status'] ?? '')) !== $reviewStatus) {
+            continue;
+        }
+        $filtered[] = $row;
         if (strtolower((string) ($row['review_status'] ?? '')) === 'pending') {
             $pendingRuns++;
         }
         $draftTotal += (int) ($row['draft_count'] ?? 0);
     }
+    $offset = ($page - 1) * $limit;
 
     return [
         'summary' => [
             'run_count' => count($rows),
+            'filtered_count' => count($filtered),
             'pending_runs' => $pendingRuns,
             'draft_total' => $draftTotal,
+            'page' => $page,
+            'limit' => $limit,
+            'review_status' => $reviewStatus,
+            'site_id' => $siteFilter,
         ],
-        'items' => array_slice($rows, 0, $limit),
+        'items' => array_slice($filtered, $offset, $limit),
     ];
 }
 
@@ -5370,7 +5395,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.61-leads-review-actions',
+        'phase' => '2.62-leads-review-queue-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8761,7 +8786,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.61-leads-review-actions',
+        'phase' => '2.62-leads-review-queue-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10667,12 +10692,7 @@ if ($action === 'leads.delivery.history') {
 }
 
 if ($action === 'leads.review.queue') {
-    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
-    $reviewStatus = isset($_GET['review_status']) ? (string) $_GET['review_status'] : 'pending';
-    if ($limit <= 0) {
-        $limit = 10;
-    }
-    $snapshot = collect_leads_review_queue($limit, $reviewStatus);
+    $snapshot = collect_leads_review_queue($_GET);
     out_json([
         'ok' => true,
         'summary' => $snapshot['summary'],

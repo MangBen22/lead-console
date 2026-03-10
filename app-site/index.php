@@ -296,6 +296,27 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <div class="inline-form">
                     <div class="form-row">
+                        <label for="leadsReviewStatusFilter">Review Status Filter</label>
+                        <select id="leadsReviewStatusFilter">
+                            <option value="pending">pending</option>
+                            <option value="all">all</option>
+                            <option value="saved">saved</option>
+                            <option value="discarded">discarded</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewQueueSiteFilter">Queue Site Filter</label>
+                        <input id="leadsReviewQueueSiteFilter" type="text" placeholder="Optional site filter">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewQueuePage">Queue Page</label>
+                        <input id="leadsReviewQueuePage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewQueueLimit">Queue Limit</label>
+                        <input id="leadsReviewQueueLimit" type="number" min="1" max="100" value="8">
+                    </div>
+                    <div class="form-row">
                         <label for="leadsReviewSiteId">Review Site ID</label>
                         <input id="leadsReviewSiteId" type="text" placeholder="hq-main">
                     </div>

@@ -2309,7 +2309,16 @@
   async function loadLeadsReviewQueue() {
     if (!leadsReviewQueueView) return;
     try {
-      const data = await apiGetWithParams("leads.review.queue", { limit: 8, review_status: "pending" });
+      const status = document.getElementById("leadsReviewStatusFilter");
+      const site = document.getElementById("leadsReviewQueueSiteFilter");
+      const page = document.getElementById("leadsReviewQueuePage");
+      const limit = document.getElementById("leadsReviewQueueLimit");
+      const data = await apiGetWithParams("leads.review.queue", {
+        review_status: status && status.value ? status.value : "pending",
+        site_id: site && site.value ? site.value.trim() : "",
+        page: page && page.value ? page.value.trim() : "1",
+        limit: limit && limit.value ? limit.value.trim() : "8",
+      });
       leadsReviewQueueView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       leadsReviewQueueView.textContent = "Failed to load leads review queue.";
