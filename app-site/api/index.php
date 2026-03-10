@@ -3130,6 +3130,46 @@ function social_operations_snapshot($limit = 5)
     ];
 }
 
+function social_operations_history_path()
+{
+    return app_storage_path('social_operations_history.json');
+}
+
+function social_operations_record_snapshot($snapshot, $source = 'manual_view')
+{
+    $payload = is_array($snapshot) ? $snapshot : [];
+    $entry = [
+        'snapshot_id' => 'social_ops_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => (string) $source,
+        'snapshot' => $payload,
+        'summary' => isset($payload['summary']) && is_array($payload['summary']) ? $payload['summary'] : [],
+    ];
+    $rows = app_read_json_file(social_operations_history_path(), []);
+    array_unshift($rows, $entry);
+    $rows = array_slice(array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    })), 0, 200);
+    app_write_json_file(social_operations_history_path(), $rows);
+    return $entry;
+}
+
+function social_operations_history_snapshot($limit = 10)
+{
+    $safeLimit = max(1, min(100, (int) $limit));
+    $rows = app_read_json_file(social_operations_history_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'limit' => $safeLimit,
+        ],
+        'items' => array_slice($rows, 0, $safeLimit),
+    ];
+}
+
 function social_inbox_workload_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -7719,7 +7759,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.26-social-operations-export',
+        'phase' => '5.27-social-operations-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13570,7 +13610,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.26-social-operations-export',
+        'phase' => '5.27-social-operations-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16644,9 +16684,11 @@ if ($action === 'social.operations.snapshot') {
         $limit = 5;
     }
     $snapshot = social_operations_snapshot($limit);
+    $record = social_operations_record_snapshot($snapshot, 'manual_view');
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+        'record' => $record,
     ]);
 }
 
@@ -16664,6 +16706,19 @@ if ($action === 'social.operations.export') {
         'ok' => true,
         'filename' => 'social_operations_snapshot_' . gmdate('Ymd_His') . '.json',
         'export' => $snapshot,
+    ]);
+}
+
+if ($action === 'social.operations.history') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $history = social_operations_history_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $history['summary'],
+        'items' => $history['items'],
     ]);
 }
 

@@ -354,6 +354,7 @@
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
+  const socialOpsHistoryView = document.getElementById("socialOpsHistoryView");
   const downloadSocialOpsSnapshotBtn = document.getElementById("downloadSocialOpsSnapshotBtn");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
@@ -3930,6 +3931,21 @@
     }
   }
 
+  async function loadSocialOperationsHistory() {
+    if (!socialOpsHistoryView) return null;
+    const limit = document.getElementById("socialOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("social.operations.history", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      socialOpsHistoryView.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      socialOpsHistoryView.textContent = "Failed to load social operations history.";
+      return null;
+    }
+  }
+
   async function downloadSocialOperationsSnapshot() {
     const limit = document.getElementById("socialOperationsSnapshotLimit");
     const data = await apiGetWithParams("social.operations.export", {
@@ -4800,6 +4816,7 @@
     await loadSocialCapabilitiesSummary();
     await loadSocialWatch();
     await loadSocialOperationsSnapshot();
+    await loadSocialOperationsHistory();
     await loadSocialDraftsPreview();
     await loadSocialDraftList();
     await loadSocialDraftRecommendations();
@@ -5744,6 +5761,7 @@
   if (refreshSocialOpsSnapshotBtn) {
     refreshSocialOpsSnapshotBtn.addEventListener("click", async function () {
       await loadSocialOperationsSnapshot();
+      await loadSocialOperationsHistory();
     });
   }
 

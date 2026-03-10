@@ -930,6 +930,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadSocialOpsSnapshotBtn" type="button">Download Social Snapshot</button>
                 </form>
                 <pre id="socialOpsSnapshotView">Loading...</pre>
+                <pre id="socialOpsHistoryView">Loading...</pre>
             </section>
 
             <section class="api-status">
