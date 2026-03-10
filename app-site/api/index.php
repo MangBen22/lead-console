@@ -978,6 +978,73 @@ function crm_delivery_connector_detail_snapshot($connectorId, $limit = 10)
     ];
 }
 
+function crm_delivery_watch_state_path()
+{
+    return app_storage_path('crm_delivery_watch_state.json');
+}
+
+function crm_delivery_watch_runs_path()
+{
+    return app_storage_path('crm_delivery_watch_runs.json');
+}
+
+function crm_delivery_watch_evaluate($source = 'manual', $emitNotification = false)
+{
+    $snapshot = crm_delivery_summary_snapshot(100);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    $degraded = array_values(array_filter($items, static function ($item) {
+        return (int) ($item['queued_retries'] ?? 0) > 0
+            || (int) ($item['rejected_total'] ?? 0) > 0
+            || (string) ($item['last_sync_status'] ?? '') === 'degraded';
+    }));
+    $run = [
+        'watch_id' => 'crmwatch_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => (string) $source,
+        'summary' => [
+            'connector_count' => isset($snapshot['summary']['connector_count']) ? (int) $snapshot['summary']['connector_count'] : count($items),
+            'degraded_count' => count($degraded),
+            'retry_backlog_connectors' => count(array_filter($degraded, static function ($item) {
+                return (int) ($item['queued_retries'] ?? 0) > 0;
+            })),
+            'rejection_connectors' => count(array_filter($degraded, static function ($item) {
+                return (int) ($item['rejected_total'] ?? 0) > 0;
+            })),
+            'attention_required' => !empty($degraded) ? 1 : 0,
+        ],
+        'items' => array_slice($degraded, 0, 25),
+    ];
+
+    app_write_json_file(crm_delivery_watch_state_path(), $run);
+    $runs = app_read_json_file(crm_delivery_watch_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 60);
+    app_write_json_file(crm_delivery_watch_runs_path(), $runs);
+
+    if ($emitNotification && !empty($degraded)) {
+        push_notification('warning', 'CRM delivery watch detected degraded connectors.', [
+            'watch_id' => (string) $run['watch_id'],
+            'degraded_count' => (int) $run['summary']['degraded_count'],
+        ]);
+    }
+
+    return $run;
+}
+
+function crm_delivery_watch_summary()
+{
+    $state = app_read_json_file(crm_delivery_watch_state_path(), []);
+    $runs = app_read_json_file(crm_delivery_watch_runs_path(), []);
+    if (!is_array($state) || empty($state)) {
+        $state = crm_delivery_watch_evaluate('bootstrap', false);
+    }
+    return [
+        'summary' => isset($state['summary']) && is_array($state['summary']) ? $state['summary'] : [],
+        'latest' => $state,
+        'runs' => array_slice(is_array($runs) ? $runs : [], 0, 10),
+    ];
+}
+
 function collect_leads_review_queue($query = [])
 {
     $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
@@ -5850,7 +5917,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.70-crm-delivery-export',
+        'phase' => '2.71-crm-delivery-watch',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9241,7 +9308,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.70-crm-delivery-export',
+        'phase' => '2.71-crm-delivery-watch',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -11502,6 +11569,33 @@ if ($action === 'crm.delivery.export') {
         'ok' => true,
         'filename' => 'crm_delivery_export_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
+    ]);
+}
+
+if ($action === 'crm.delivery.watch.summary') {
+    $snapshot = crm_delivery_watch_summary();
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'latest' => $snapshot['latest'],
+        'runs' => $snapshot['runs'],
+    ]);
+}
+
+if ($action === 'crm.delivery.watch.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $run = crm_delivery_watch_evaluate('manual', true);
+    audit_event('crm', 'delivery.watch.run', [
+        'watch_id' => (string) ($run['watch_id'] ?? ''),
+        'degraded_count' => (int) ($run['summary']['degraded_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'run' => $run,
     ]);
 }
 

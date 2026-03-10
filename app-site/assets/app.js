@@ -246,9 +246,12 @@
   const refreshCrmDeliverySummaryBtn = document.getElementById("refreshCrmDeliverySummaryBtn");
   const refreshCrmDeliveryDetailBtn = document.getElementById("refreshCrmDeliveryDetailBtn");
   const downloadCrmDeliveryExportBtn = document.getElementById("downloadCrmDeliveryExportBtn");
+  const refreshCrmDeliveryWatchBtn = document.getElementById("refreshCrmDeliveryWatchBtn");
+  const runCrmDeliveryWatchBtn = document.getElementById("runCrmDeliveryWatchBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
+  const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
@@ -2583,6 +2586,16 @@
     }
   }
 
+  async function loadCrmDeliveryWatch() {
+    if (!crmDeliveryWatchView) return;
+    try {
+      const data = await apiGet("crm.delivery.watch.summary");
+      crmDeliveryWatchView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmDeliveryWatchView.textContent = "Failed to load CRM delivery watch.";
+    }
+  }
+
   async function downloadCrmDeliveryExport() {
     const connectorId = document.getElementById("crmDeliveryConnectorId");
     const limit = document.getElementById("crmDeliveryConnectorLimit");
@@ -3144,6 +3157,7 @@
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
     await loadCrmDeliverySummary();
+    await loadCrmDeliveryWatch();
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadCrmSmtpSummary();
@@ -3306,6 +3320,7 @@
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadCrmDeliverySummary();
+      await loadCrmDeliveryWatch();
       await loadCrmSyncLog();
       await loadRetryQueue();
       modules.forEach(async function (entry) {
@@ -3325,6 +3340,7 @@
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadCrmDeliverySummary();
+      await loadCrmDeliveryWatch();
       await loadRetryQueue();
       const crmData = await apiGet("crm.summary");
       const crmPanel = document.getElementById("modCrm");
@@ -3349,6 +3365,22 @@
   if (downloadCrmDeliveryExportBtn) {
     downloadCrmDeliveryExportBtn.addEventListener("click", async function () {
       await downloadCrmDeliveryExport();
+    });
+  }
+
+  if (refreshCrmDeliveryWatchBtn) {
+    refreshCrmDeliveryWatchBtn.addEventListener("click", async function () {
+      await loadCrmDeliveryWatch();
+    });
+  }
+
+  if (runCrmDeliveryWatchBtn) {
+    runCrmDeliveryWatchBtn.addEventListener("click", async function () {
+      const result = await apiPost("crm.delivery.watch.run", {});
+      if (crmDeliveryWatchView) {
+        crmDeliveryWatchView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadNotifications();
     });
   }
 

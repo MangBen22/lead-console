@@ -456,6 +456,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runRetryQueueBtn" type="button">Run Retry Queue</button>
                     <button id="refreshCrmDeliverySummaryBtn" type="button">Refresh Delivery Summary</button>
                     <button id="downloadCrmDeliveryExportBtn" type="button">Download Delivery Export</button>
+                    <button id="refreshCrmDeliveryWatchBtn" type="button">Refresh Delivery Watch</button>
+                    <button id="runCrmDeliveryWatchBtn" type="button">Run Delivery Watch</button>
                 </div>
                 <pre id="crmSyncResult">No sync yet.</pre>
                 <h3>Delivery Summary</h3>
@@ -473,6 +475,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <h3>Delivery Connector Detail</h3>
                 <pre id="crmDeliveryConnectorDetail">No connector detail loaded.</pre>
+                <h3>Delivery Watch</h3>
+                <pre id="crmDeliveryWatchView">Loading...</pre>
                 <h3>Sync Log</h3>
                 <pre id="crmSyncLog">Loading...</pre>
                 <h3>Retry Queue</h3>
