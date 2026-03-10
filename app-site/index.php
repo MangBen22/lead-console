@@ -294,6 +294,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="loadLeadsReviewDetailBtn" type="button">Load Review Detail</button>
                     <button id="saveLeadsReviewBtn" type="button">Save Review Drafts</button>
                     <button id="discardLeadsReviewBtn" type="button">Discard Review Drafts</button>
+                    <button id="saveLeadsReviewQueueBtn" type="button">Save Queue Page</button>
+                    <button id="discardLeadsReviewQueueBtn" type="button">Discard Queue Page</button>
                 </div>
                 <div class="inline-form">
                     <div class="form-row">

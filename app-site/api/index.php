@@ -884,6 +884,53 @@ function leads_review_action($siteId, $runId, $action)
     ];
 }
 
+function leads_review_queue_bulk_action($action, $query = [])
+{
+    $mode = strtolower(trim((string) $action));
+    if ($mode !== 'save' && $mode !== 'discard') {
+        return ['ok' => false, 'error' => 'Invalid bulk action.'];
+    }
+    $snapshot = collect_leads_review_queue($query);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    $results = [];
+    $processed = 0;
+    $succeeded = 0;
+    foreach ($items as $item) {
+        $siteId = (string) ($item['site_id'] ?? '');
+        $runId = (int) ($item['run_id'] ?? 0);
+        if ($siteId === '' || $runId <= 0) {
+            continue;
+        }
+        $processed++;
+        $result = leads_review_action($siteId, $runId, $mode);
+        if (!empty($result['ok'])) {
+            $succeeded++;
+        }
+        $results[] = [
+            'site_id' => $siteId,
+            'run_id' => $runId,
+            'ok' => !empty($result['ok']),
+            'error' => !empty($result['ok']) ? '' : (string) ($result['error'] ?? 'Review action failed.'),
+            'result' => $result,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'action' => $mode,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'failed' => max(0, $processed - $succeeded),
+        'filters' => [
+            'review_status' => isset($snapshot['summary']['review_status']) ? (string) $snapshot['summary']['review_status'] : 'pending',
+            'site_id' => isset($snapshot['summary']['site_id']) ? (string) $snapshot['summary']['site_id'] : '',
+            'page' => isset($snapshot['summary']['page']) ? (int) $snapshot['summary']['page'] : 1,
+            'limit' => isset($snapshot['summary']['limit']) ? (int) $snapshot['summary']['limit'] : 10,
+        ],
+        'results' => $results,
+    ];
+}
+
 function leads_review_draft_update($siteId, $runId, $draftId, $fields)
 {
     $site = site_by_id((string) $siteId);
@@ -5424,7 +5471,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.65-leads-review-queue-export',
+        'phase' => '2.66-leads-review-queue-bulk-action',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8815,7 +8862,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.65-leads-review-queue-export',
+        'phase' => '2.66-leads-review-queue-bulk-action',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10808,6 +10855,22 @@ if ($action === 'leads.review.draft.update') {
         'ok' => !empty($snapshot['ok']) ? 1 : 0,
     ]);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'leads.review.queue.bulk_action') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    $snapshot = leads_review_queue_bulk_action((string) ($data['action'] ?? ''), is_array($data) ? $data : []);
+    audit_event('leads', 'review.queue.bulk_action', [
+        'action' => (string) ($data['action'] ?? ''),
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'succeeded' => (int) ($snapshot['succeeded'] ?? 0),
+    ]);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'crm.connectors.list') {

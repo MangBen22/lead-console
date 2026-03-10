@@ -221,6 +221,8 @@
   const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
   const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
   const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
+  const saveLeadsReviewQueueBtn = document.getElementById("saveLeadsReviewQueueBtn");
+  const discardLeadsReviewQueueBtn = document.getElementById("discardLeadsReviewQueueBtn");
   const updateLeadsReviewDraftBtn = document.getElementById("updateLeadsReviewDraftBtn");
   const leadsReviewDraftSelect = document.getElementById("leadsReviewDraftSelect");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
@@ -2434,6 +2436,22 @@
     await refreshLeadsAndCrmModuleCards();
   }
 
+  async function runLeadsReviewQueueBulkAction(action) {
+    const result = await apiPost("leads.review.queue.bulk_action", Object.assign({
+      action: action,
+    }, leadsReviewQueueFilters()));
+    if (leadsReviewActionView) {
+      leadsReviewActionView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadLeadsReviewQueue();
+    await loadLeadsReviewDetail();
+    await loadLeadsInventory();
+    await loadLeadsList();
+    await loadLeadsPushPlan();
+    await loadLeadsQuality();
+    await refreshLeadsAndCrmModuleCards();
+  }
+
   async function runLeadsReviewDraftUpdate() {
     const siteId = document.getElementById("leadsReviewSiteId");
     const runId = document.getElementById("leadsReviewRunId");
@@ -4315,6 +4333,18 @@
   if (discardLeadsReviewBtn) {
     discardLeadsReviewBtn.addEventListener("click", async function () {
       await runLeadsReviewAction("discard");
+    });
+  }
+
+  if (saveLeadsReviewQueueBtn) {
+    saveLeadsReviewQueueBtn.addEventListener("click", async function () {
+      await runLeadsReviewQueueBulkAction("save");
+    });
+  }
+
+  if (discardLeadsReviewQueueBtn) {
+    discardLeadsReviewQueueBtn.addEventListener("click", async function () {
+      await runLeadsReviewQueueBulkAction("discard");
     });
   }
 
