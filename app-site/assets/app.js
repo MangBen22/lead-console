@@ -428,6 +428,7 @@
   const webopsActionsLog = document.getElementById("webopsActionsLog");
   const webopsPostureView = document.getElementById("webopsPostureView");
   const webopsOperationsSnapshotView = document.getElementById("webopsOperationsSnapshotView");
+  const webopsOperationsHistoryView = document.getElementById("webopsOperationsHistoryView");
   const refreshWebopsOperationsSnapshotBtn = document.getElementById("refreshWebopsOperationsSnapshotBtn");
   const downloadWebopsOperationsSnapshotBtn = document.getElementById("downloadWebopsOperationsSnapshotBtn");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
@@ -4547,6 +4548,19 @@
     }
   }
 
+  async function loadWebopsOperationsHistory() {
+    if (!webopsOperationsHistoryView) return;
+    const limit = document.getElementById("webopsOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("webops.operations.history", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      webopsOperationsHistoryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsOperationsHistoryView.textContent = "Failed to load WebOps operations history.";
+    }
+  }
+
   async function downloadWebopsOperationsSnapshot() {
     const limit = document.getElementById("webopsOperationsSnapshotLimit");
     const data = await apiGetWithParams("webops.operations.export", {
@@ -4932,6 +4946,7 @@
     await loadWebopsActionsLog();
     await loadWebopsPosture();
     await loadWebopsOperationsSnapshot();
+    await loadWebopsOperationsHistory();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -6210,6 +6225,7 @@
   if (refreshWebopsOperationsSnapshotBtn) {
     refreshWebopsOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadWebopsOperationsSnapshot();
+      await loadWebopsOperationsHistory();
     });
   }
 

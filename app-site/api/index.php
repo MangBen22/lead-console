@@ -4487,6 +4487,46 @@ function webops_operations_snapshot($limit = 10)
     ];
 }
 
+function webops_operations_history_path()
+{
+    return app_storage_path('webops_operations_history.json');
+}
+
+function webops_operations_record_snapshot($snapshot, $source = 'manual_view')
+{
+    $payload = is_array($snapshot) ? $snapshot : [];
+    $entry = [
+        'snapshot_id' => 'webops_ops_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => (string) $source,
+        'snapshot' => $payload,
+        'summary' => isset($payload['summary']) && is_array($payload['summary']) ? $payload['summary'] : [],
+    ];
+    $rows = app_read_json_file(webops_operations_history_path(), []);
+    array_unshift($rows, $entry);
+    $rows = array_slice(array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    })), 0, 200);
+    app_write_json_file(webops_operations_history_path(), $rows);
+    return $entry;
+}
+
+function webops_operations_history_snapshot($limit = 10)
+{
+    $safeLimit = max(1, min(100, (int) $limit));
+    $rows = app_read_json_file(webops_operations_history_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'limit' => $safeLimit,
+        ],
+        'items' => array_slice($rows, 0, $safeLimit),
+    ];
+}
+
 function webops_monitor_catalog()
 {
     return [
@@ -8005,7 +8045,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.32-webops-operations-export',
+        'phase' => '5.33-webops-operations-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13856,7 +13896,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.32-webops-operations-export',
+        'phase' => '5.33-webops-operations-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17059,9 +17099,11 @@ if ($action === 'webops.operations.snapshot') {
         $limit = 10;
     }
     $snapshot = webops_operations_snapshot($limit);
+    $record = webops_operations_record_snapshot($snapshot, 'manual_view');
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+        'record' => $record,
     ]);
 }
 
@@ -17079,6 +17121,19 @@ if ($action === 'webops.operations.export') {
         'ok' => true,
         'filename' => 'webops_operations_snapshot_' . gmdate('Ymd_His') . '.json',
         'export' => $snapshot,
+    ]);
+}
+
+if ($action === 'webops.operations.history') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $history = webops_operations_history_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $history['summary'],
+        'items' => $history['items'],
     ]);
 }
 
