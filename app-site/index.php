@@ -592,6 +592,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <div class="actions">
                     <button id="refreshSocialPlatformCoverageBtn" type="button">Refresh Platform Coverage</button>
+                    <button id="downloadSocialPlatformCoverageExportBtn" type="button">Download Platform Coverage</button>
                 </div>
                 <pre id="socialPlatformCoverage">No social platform coverage loaded.</pre>
             </section>

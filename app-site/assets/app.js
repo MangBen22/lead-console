@@ -303,6 +303,7 @@
   const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
   const downloadSocialPlatformsExportBtn = document.getElementById("downloadSocialPlatformsExportBtn");
   const refreshSocialPlatformCoverageBtn = document.getElementById("refreshSocialPlatformCoverageBtn");
+  const downloadSocialPlatformCoverageExportBtn = document.getElementById("downloadSocialPlatformCoverageExportBtn");
   const refreshSocialExecutionPreviewBtn = document.getElementById("refreshSocialExecutionPreviewBtn");
   const downloadSocialExecutionPreviewBtn = document.getElementById("downloadSocialExecutionPreviewBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
@@ -3308,6 +3309,17 @@
     }
   }
 
+  async function downloadSocialPlatformCoverageExport() {
+    const family = document.getElementById("socialPlatformCoverageFamily");
+    const search = document.getElementById("socialPlatformCoverageSearch");
+    const data = await apiGetWithParams("social.platforms.coverage.export", {
+      family: family && family.value ? family.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+    });
+    const filename = data && data.filename ? String(data.filename) : ("social-platform-coverage-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function downloadSocialPlatformsExport() {
     const params = socialPlatformFilters();
     const provider = document.getElementById("socialPlatformDetailProvider");
@@ -4873,6 +4885,12 @@
   if (refreshSocialPlatformCoverageBtn) {
     refreshSocialPlatformCoverageBtn.addEventListener("click", async function () {
       await loadSocialPlatformCoverage();
+    });
+  }
+
+  if (downloadSocialPlatformCoverageExportBtn) {
+    downloadSocialPlatformCoverageExportBtn.addEventListener("click", async function () {
+      await downloadSocialPlatformCoverageExport();
     });
   }
 

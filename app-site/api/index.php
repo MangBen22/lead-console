@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.20-social-provider-coverage',
+        'phase' => '3.21-social-provider-coverage-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11772,7 +11772,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.20-social-provider-coverage',
+        'phase' => '3.21-social-provider-coverage-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14739,6 +14739,22 @@ if ($action === 'social.platforms.coverage') {
         'summary' => $snapshot['summary'],
         'count' => count(isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : []),
         'items' => $snapshot['items'],
+    ]);
+}
+
+if ($action === 'social.platforms.coverage.export') {
+    $snapshot = social_provider_coverage_snapshot($_GET);
+    audit_event('social', 'platforms.coverage.export', [
+        'family' => isset($_GET['family']) ? (string) $_GET['family'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_platform_coverage_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'coverage' => $snapshot,
+        ],
     ]);
 }
 
