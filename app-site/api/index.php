@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.08-seo-extension-event-detail',
+        'phase' => '4.09-seo-extension-event-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12258,7 +12258,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.08-seo-extension-event-detail',
+        'phase' => '4.09-seo-extension-event-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16312,6 +16312,32 @@ if ($action === 'seo.extension.events.list') {
 if ($action === 'seo.extension.events.detail') {
     $eventId = isset($_GET['event_id']) ? (string) $_GET['event_id'] : '';
     out_json(seo_extension_event_detail_snapshot($eventId));
+}
+
+if ($action === 'seo.extension.events.export') {
+    $snapshot = seo_extension_events_list_snapshot($_GET);
+    $eventId = isset($_GET['event_id']) ? (string) $_GET['event_id'] : '';
+    $includeDetail = !empty($_GET['include_detail']);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'event_id' => $eventId,
+        'include_detail' => $includeDetail ? 1 : 0,
+    ];
+    if ($includeDetail) {
+        $payload['detail'] = seo_extension_event_detail_snapshot($eventId);
+    }
+    audit_event('seo', 'extension.events.export', [
+        'event_id' => $eventId,
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'include_detail' => $includeDetail ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_extension_events_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'seo.extension.events.summary') {

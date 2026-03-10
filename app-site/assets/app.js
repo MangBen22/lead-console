@@ -410,6 +410,7 @@
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
   const refreshSeoExtensionEventsBtn = document.getElementById("refreshSeoExtensionEventsBtn");
   const downloadSeoAuditsExportBtn = document.getElementById("downloadSeoAuditsExportBtn");
+  const downloadSeoExtensionEventsExportBtn = document.getElementById("downloadSeoExtensionEventsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
@@ -4133,6 +4134,26 @@
     }
   }
 
+  async function downloadSeoExtensionEventsExport() {
+    const detailId = document.getElementById("seoExtensionEventDetailId");
+    const eventId = detailId && detailId.value ? detailId.value.trim() : "";
+    const data = await apiGetWithParams("seo.extension.events.export", {
+      project_id: seoExtensionEventFilterProjectId && seoExtensionEventFilterProjectId.value ? seoExtensionEventFilterProjectId.value.trim() : "",
+      session_id: seoExtensionEventFilterSessionId && seoExtensionEventFilterSessionId.value ? seoExtensionEventFilterSessionId.value.trim() : "",
+      search: seoExtensionEventFilterSearch && seoExtensionEventFilterSearch.value ? seoExtensionEventFilterSearch.value.trim() : "",
+      min_score: seoExtensionEventFilterMinScore && seoExtensionEventFilterMinScore.value ? seoExtensionEventFilterMinScore.value : "",
+      max_score: seoExtensionEventFilterMaxScore && seoExtensionEventFilterMaxScore.value ? seoExtensionEventFilterMaxScore.value : "",
+      page: seoExtensionEventFilterPage && seoExtensionEventFilterPage.value ? seoExtensionEventFilterPage.value : 1,
+      limit: seoExtensionEventFilterLimit && seoExtensionEventFilterLimit.value ? seoExtensionEventFilterLimit.value : 10,
+      event_id: eventId,
+      include_detail: eventId ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "seo-extension-events-export.json", data.export || data);
+    if (seoResult) {
+      seoResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadSeoExtensionSessions() {
     if (!seoExtensionSessions) return;
     try {
@@ -6886,6 +6907,12 @@
   if (loadSeoExtensionEventDetailBtn) {
     loadSeoExtensionEventDetailBtn.addEventListener("click", async function () {
       await loadSeoExtensionEventDetail();
+    });
+  }
+
+  if (downloadSeoExtensionEventsExportBtn) {
+    downloadSeoExtensionEventsExportBtn.addEventListener("click", async function () {
+      await downloadSeoExtensionEventsExport();
     });
   }
 
