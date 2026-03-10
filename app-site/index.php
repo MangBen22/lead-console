@@ -1134,6 +1134,33 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Social Delivery Watch</h3>
                 <pre id="socialDeliveryWatchView">Loading...</pre>
                 <h3>Social Sync Log</h3>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialSyncFilterStatus">Sync Status</label>
+                        <input id="socialSyncFilterStatus" type="text" placeholder="queued_to_connectors">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSyncFilterSource">Sync Source</label>
+                        <input id="socialSyncFilterSource" type="text" placeholder="automation_retry">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSyncFilterConnector">Sync Connector ID</label>
+                        <input id="socialSyncFilterConnector" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSyncFilterSearch">Sync Search</label>
+                        <input id="socialSyncFilterSearch" type="text" placeholder="sync id or retry id">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSyncFilterPage">Sync Page</label>
+                        <input id="socialSyncFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialSyncFilterLimit">Sync Limit</label>
+                        <input id="socialSyncFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSocialSyncLogBtn" type="button">Refresh Sync Log</button>
+                </div>
                 <pre id="socialSyncLog">Loading...</pre>
                 <h3>Social Retry Queue</h3>
                 <div class="inline-form">

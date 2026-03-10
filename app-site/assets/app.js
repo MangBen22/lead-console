@@ -290,6 +290,7 @@
   const loadSocialRetryDetailBtn = document.getElementById("loadSocialRetryDetailBtn");
   const downloadSocialRetryExportBtn = document.getElementById("downloadSocialRetryExportBtn");
   const runSocialRetryBulkUpdateBtn = document.getElementById("runSocialRetryBulkUpdateBtn");
+  const refreshSocialSyncLogBtn = document.getElementById("refreshSocialSyncLogBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3379,11 +3380,28 @@
   async function loadSocialSyncLog() {
     if (!socialSyncLog) return;
     try {
-      const data = await apiGet("social.push.log");
+      const data = await apiGetWithParams("social.push.log", socialSyncFilters());
       socialSyncLog.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialSyncLog.textContent = "Failed to load social sync log.";
     }
+  }
+
+  function socialSyncFilters() {
+    const status = document.getElementById("socialSyncFilterStatus");
+    const source = document.getElementById("socialSyncFilterSource");
+    const connector = document.getElementById("socialSyncFilterConnector");
+    const search = document.getElementById("socialSyncFilterSearch");
+    const page = document.getElementById("socialSyncFilterPage");
+    const limit = document.getElementById("socialSyncFilterLimit");
+    return {
+      status: status && status.value ? status.value.trim() : "",
+      source: source && source.value ? source.value.trim() : "",
+      connector_id: connector && connector.value ? connector.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
   }
 
   async function loadSocialRetryQueue() {
@@ -4644,6 +4662,12 @@
   if (runSocialRetryBulkUpdateBtn) {
     runSocialRetryBulkUpdateBtn.addEventListener("click", async function () {
       await runSocialRetryBulkUpdate();
+    });
+  }
+
+  if (refreshSocialSyncLogBtn) {
+    refreshSocialSyncLogBtn.addEventListener("click", async function () {
+      await loadSocialSyncLog();
     });
   }
 

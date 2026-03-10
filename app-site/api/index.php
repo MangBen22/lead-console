@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.00-social-retry-bulk-update',
+        'phase' => '3.01-social-sync-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8894,6 +8894,117 @@ function social_retry_bulk_update($payload)
     ];
 }
 
+function social_sync_log_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(social_sync_log_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $source = strtolower(trim((string) ($query['source'] ?? '')));
+    $connectorId = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $summary = [
+        'total_count' => count($rows),
+        'success_count' => 0,
+        'failure_count' => 0,
+        'draft_total' => 0,
+        'connector_total' => 0,
+    ];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $item['connectors'] = isset($row['connectors']) && is_array($row['connectors']) ? array_values($row['connectors']) : [];
+        $item['connector_results'] = isset($row['connector_results']) && is_array($row['connector_results']) ? array_values($row['connector_results']) : [];
+        $item['connector_count'] = (int) ($row['connector_count'] ?? count($item['connectors']));
+        $item['draft_total'] = (int) ($row['draft_total'] ?? 0);
+        $hasErrors = false;
+        foreach ($item['connector_results'] as $result) {
+            if (!is_array($result)) {
+                continue;
+            }
+            if ((int) ($result['rejected'] ?? 0) > 0 || !empty($result['errors'])) {
+                $hasErrors = true;
+                break;
+            }
+        }
+        $item['outcome'] = $hasErrors ? 'error' : 'ok';
+        if ($item['outcome'] === 'ok') {
+            $summary['success_count']++;
+        } else {
+            $summary['failure_count']++;
+        }
+        $summary['draft_total'] += $item['draft_total'];
+        $summary['connector_total'] += $item['connector_count'];
+
+        if ($status !== '' && strtolower((string) ($item['status'] ?? '')) !== $status) {
+            continue;
+        }
+        if ($source !== '' && strpos(strtolower((string) ($item['source'] ?? '')), $source) === false) {
+            continue;
+        }
+        if ($connectorId !== '') {
+            $matchedConnector = false;
+            foreach ($item['connectors'] as $connector) {
+                if (strpos(strtolower((string) ($connector['connector_id'] ?? '')), $connectorId) !== false) {
+                    $matchedConnector = true;
+                    break;
+                }
+            }
+            if (!$matchedConnector) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['sync_id'] ?? ''),
+                (string) ($item['status'] ?? ''),
+                (string) ($item['source'] ?? ''),
+                (string) ($item['retry_id'] ?? ''),
+                (string) ($item['schedule_id'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    $summary['filtered_count'] = count($filtered);
+    $summary['page'] = $page;
+    $summary['limit'] = $limit;
+    $summary['status'] = $status;
+    $summary['source'] = $source;
+    $summary['connector_id'] = $connectorId;
+    $summary['search'] = $search;
+
+    return [
+        'summary' => $summary,
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function social_inbox_threads_rows($seedIfEmpty = false)
 {
     $rows = app_read_json_file(social_inbox_threads_path(), []);
@@ -10853,7 +10964,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.00-social-retry-bulk-update',
+        'phase' => '3.01-social-sync-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15420,11 +15531,12 @@ if ($action === 'social.push.sync') {
 }
 
 if ($action === 'social.push.log') {
-    $logs = app_read_json_file(social_sync_log_path(), []);
+    $snapshot = social_sync_log_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($logs),
-        'items' => $logs,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 
