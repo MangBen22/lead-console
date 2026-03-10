@@ -214,12 +214,14 @@
   const refreshLeadsInventoryBtn = document.getElementById("refreshLeadsInventoryBtn");
   const refreshLeadsListBtn = document.getElementById("refreshLeadsListBtn");
   const refreshLeadsPushPlanBtn = document.getElementById("refreshLeadsPushPlanBtn");
+  const refreshLeadsQualityBtn = document.getElementById("refreshLeadsQualityBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const leadsInventoryView = document.getElementById("leadsInventoryView");
   const leadsListView = document.getElementById("leadsListView");
   const leadsPushPlanView = document.getElementById("leadsPushPlanView");
   const leadsPushResultView = document.getElementById("leadsPushResultView");
+  const leadsQualityView = document.getElementById("leadsQualityView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2270,6 +2272,16 @@
     }
   }
 
+  async function loadLeadsQuality() {
+    if (!leadsQualityView) return;
+    try {
+      const data = await apiGetWithParams("leads.quality", { limit: 8 });
+      leadsQualityView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsQualityView.textContent = "Failed to load leads quality.";
+    }
+  }
+
   async function refreshLeadsAndCrmModuleCards() {
     const leadsPanel = document.getElementById("modLeads");
     const crmPanel = document.getElementById("modCrm");
@@ -2842,6 +2854,7 @@
     await loadLeadsInventory();
     await loadLeadsList();
     await loadLeadsPushPlan();
+    await loadLeadsQuality();
     await loadCrmConnectors();
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
@@ -4073,6 +4086,12 @@
     });
   }
 
+  if (refreshLeadsQualityBtn) {
+    refreshLeadsQualityBtn.addEventListener("click", async function () {
+      await loadLeadsQuality();
+    });
+  }
+
   if (runLeadsCrmSyncBtn) {
     runLeadsCrmSyncBtn.addEventListener("click", async function () {
       const result = await apiPost("crm.push.sync", {});
@@ -4085,6 +4104,7 @@
       await loadLeadsPushPlan();
       await loadLeadsInventory();
       await loadLeadsList();
+      await loadLeadsQuality();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();
@@ -4101,6 +4121,7 @@
         crmSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadLeadsPushPlan();
+      await loadLeadsQuality();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();

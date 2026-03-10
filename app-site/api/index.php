@@ -622,6 +622,99 @@ function leads_push_plan_snapshot($limit = 10)
     ];
 }
 
+function leads_quality_snapshot($limit = 10)
+{
+    $payload = collect_approved_leads();
+    $rows = isset($payload['leads']) && is_array($payload['leads']) ? $payload['leads'] : [];
+    $summary = [
+        'total_leads' => count($rows),
+        'missing_email' => 0,
+        'missing_phone' => 0,
+        'missing_website' => 0,
+        'contact_ready' => 0,
+        'profile_complete' => 0,
+        'duplicate_groups' => 0,
+    ];
+    $duplicateBuckets = [];
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $email = trim((string) ($row['email'] ?? ''));
+        $phone = trim((string) ($row['phone'] ?? ''));
+        $website = trim((string) ($row['website'] ?? ''));
+        $business = strtolower(trim((string) ($row['business_name'] ?? '')));
+        $city = strtolower(trim((string) ($row['city'] ?? '')));
+        $category = trim((string) ($row['category'] ?? ''));
+
+        if ($email === '') {
+            $summary['missing_email']++;
+        }
+        if ($phone === '') {
+            $summary['missing_phone']++;
+        }
+        if ($website === '') {
+            $summary['missing_website']++;
+        }
+        if ($email !== '' || $phone !== '') {
+            $summary['contact_ready']++;
+        }
+        if ($business !== '' && $city !== '' && $category !== '' && $website !== '' && ($email !== '' || $phone !== '')) {
+            $summary['profile_complete']++;
+        }
+
+        $keys = [];
+        if ($website !== '') {
+            $keys[] = 'website:' . strtolower($website);
+        }
+        if ($email !== '') {
+            $keys[] = 'email:' . strtolower($email);
+        }
+        if ($business !== '' && $city !== '') {
+            $keys[] = 'business_city:' . $business . '|' . $city;
+        }
+        foreach ($keys as $key) {
+            if (!isset($duplicateBuckets[$key])) {
+                $duplicateBuckets[$key] = [
+                    'key' => $key,
+                    'count' => 0,
+                    'leads' => [],
+                ];
+            }
+            $duplicateBuckets[$key]['count']++;
+            $duplicateBuckets[$key]['leads'][] = [
+                'lead_id' => (int) ($row['lead_id'] ?? 0),
+                'site_id' => (string) ($row['site_id'] ?? ''),
+                'business_name' => (string) ($row['business_name'] ?? ''),
+                'city' => (string) ($row['city'] ?? ''),
+                'website' => $website,
+                'email' => $email,
+                'phone' => $phone,
+                'status' => (string) ($row['status'] ?? ''),
+            ];
+        }
+    }
+
+    $duplicateGroups = array_values(array_filter($duplicateBuckets, static function ($bucket) {
+        return (int) ($bucket['count'] ?? 0) > 1;
+    }));
+    usort($duplicateGroups, static function ($a, $b) {
+        $left = (int) ($a['count'] ?? 0);
+        $right = (int) ($b['count'] ?? 0);
+        if ($left === $right) {
+            return strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+    $summary['duplicate_groups'] = count($duplicateGroups);
+
+    return [
+        'summary' => $summary,
+        'duplicate_groups' => array_slice($duplicateGroups, 0, $limit),
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5133,7 +5226,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.56-leads-push-controls',
+        'phase' => '2.57-leads-quality-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8524,7 +8617,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.56-leads-push-controls',
+        'phase' => '2.57-leads-quality-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10373,6 +10466,19 @@ if ($action === 'leads.push.plan') {
         'connectors' => $snapshot['connectors'],
         'sites' => $snapshot['sites'],
         'last_sync' => $snapshot['last_sync'],
+    ]);
+}
+
+if ($action === 'leads.quality') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = leads_quality_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'duplicate_groups' => $snapshot['duplicate_groups'],
     ]);
 }
 
