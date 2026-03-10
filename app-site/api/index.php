@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.10-seo-extension-session-filters',
+        'phase' => '4.11-seo-extension-session-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7715,6 +7715,51 @@ function seo_extension_sessions_list_snapshot($query = [])
             'project_counts' => $projectCounts,
         ],
         'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
+function seo_extension_session_detail_snapshot($sessionId = '')
+{
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    $item = null;
+    $selectedId = trim((string) $sessionId);
+    if ($selectedId !== '') {
+        foreach ($rows as $row) {
+            if (is_array($row) && (string) ($row['session_id'] ?? '') === $selectedId) {
+                $item = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($item)) {
+        $item = isset($rows[0]) && is_array($rows[0]) ? $rows[0] : null;
+    }
+    if (!is_array($item)) {
+        return [
+            'ok' => true,
+            'item' => null,
+            'message' => 'No SEO extension session available.',
+        ];
+    }
+
+    $projectId = (string) ($item['project_id'] ?? '');
+    $project = $projectId !== '' ? seo_project_by_id($projectId) : null;
+    $events = array_values(array_filter(app_read_json_file(seo_extension_events_path(), []), static function ($row) use ($item) {
+        return (string) ($row['session_id'] ?? '') === (string) ($item['session_id'] ?? '');
+    }));
+
+    return [
+        'ok' => true,
+        'item' => seo_extension_mask_session($item),
+        'project' => $project,
+        'meta' => [
+            'event_count' => count($events),
+            'status' => (string) ($item['status'] ?? ''),
+            'has_project' => $projectId !== '' ? 1 : 0,
+            'has_last_used_at' => !empty($item['last_used_at']) ? 1 : 0,
+        ],
+        'latest_event' => isset($events[0]) && is_array($events[0]) ? $events[0] : null,
+        'recent_events' => array_slice($events, 0, 5),
     ];
 }
 
@@ -12340,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.10-seo-extension-session-filters',
+        'phase' => '4.11-seo-extension-session-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15282,6 +15327,11 @@ if ($action === 'seo.extension.sessions.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'seo.extension.sessions.detail') {
+    $sessionId = isset($_GET['session_id']) ? (string) $_GET['session_id'] : '';
+    out_json(seo_extension_session_detail_snapshot($sessionId));
 }
 
 if ($action === 'social.platforms.list') {

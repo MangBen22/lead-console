@@ -449,6 +449,8 @@
   const seoExtensionSessionFilterPage = document.getElementById("seoExtensionSessionFilterPage");
   const seoExtensionSessionFilterLimit = document.getElementById("seoExtensionSessionFilterLimit");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
+  const loadSeoExtensionSessionDetailBtn = document.getElementById("loadSeoExtensionSessionDetailBtn");
+  const seoExtensionSessionDetail = document.getElementById("seoExtensionSessionDetail");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectDetail = document.getElementById("seoProjectDetail");
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
@@ -4176,6 +4178,18 @@
     }
   }
 
+  async function loadSeoExtensionSessionDetail() {
+    if (!seoExtensionSessionDetail) return;
+    try {
+      const detailId = document.getElementById("seoExtensionSessionDetailId");
+      const sessionId = detailId && detailId.value ? detailId.value.trim() : "";
+      const data = await apiGetWithParams("seo.extension.sessions.detail", { session_id: sessionId });
+      seoExtensionSessionDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoExtensionSessionDetail.textContent = "Failed to load SEO extension session detail.";
+    }
+  }
+
   async function loadSeoProjectSnapshot() {
     if (!seoProjectSnapshot) return;
     try {
@@ -4310,6 +4324,7 @@
     await loadSeoExtensionEvents();
     await loadSeoExtensionEventDetail();
     await loadSeoExtensionSessions();
+    await loadSeoExtensionSessionDetail();
     await loadSeoProjectSnapshot();
     await loadSeoActionPlan();
     await loadSeoOpportunities();
@@ -6919,6 +6934,12 @@
   if (refreshSeoExtensionSessionsBtn) {
     refreshSeoExtensionSessionsBtn.addEventListener("click", async function () {
       await loadSeoExtensionSessions();
+    });
+  }
+
+  if (loadSeoExtensionSessionDetailBtn) {
+    loadSeoExtensionSessionDetailBtn.addEventListener("click", async function () {
+      await loadSeoExtensionSessionDetail();
     });
   }
 

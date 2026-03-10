@@ -1701,6 +1701,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoExtensionSessionsBtn" type="button">Refresh Sessions</button>
                 </div>
                 <pre id="seoExtensionSessions">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoExtensionSessionDetailId">Session Detail ID</label>
+                        <input id="seoExtensionSessionDetailId" type="text" placeholder="seo_ext_session_abc123">
+                    </div>
+                    <button id="loadSeoExtensionSessionDetailBtn" type="button">Load Session Detail</button>
+                </div>
+                <pre id="seoExtensionSessionDetail">No SEO extension session detail loaded.</pre>
                 <form id="seoExtensionSessionForm" class="inline-form">
                     <div class="form-row">
                         <label for="seoExtensionSessionProjectId">Project ID (optional)</label>
