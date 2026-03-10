@@ -303,6 +303,7 @@
   const downloadCrmOperationsSnapshotBtn = document.getElementById("downloadCrmOperationsSnapshotBtn");
   const crmOperationsHistory = document.getElementById("crmOperationsHistory");
   const crmOperationsHistorySummary = document.getElementById("crmOperationsHistorySummary");
+  const crmOperationsLatestCompare = document.getElementById("crmOperationsLatestCompare");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
@@ -3216,6 +3217,18 @@
     }
   }
 
+  async function loadCrmOperationsLatestCompare() {
+    if (!crmOperationsLatestCompare) return null;
+    try {
+      const data = await apiGet("crm.operations.latest_compare");
+      crmOperationsLatestCompare.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      crmOperationsLatestCompare.textContent = "Failed to load CRM operations latest compare.";
+      return null;
+    }
+  }
+
   async function downloadCrmOperationsSnapshot() {
     const limit = document.getElementById("crmOperationsSnapshotLimit");
     const data = await apiGetWithParams("crm.operations.export", {
@@ -4775,6 +4788,7 @@
     await loadCrmOperationsSnapshot();
     await loadCrmOperationsHistory();
     await loadCrmOperationsHistorySummary();
+    await loadCrmOperationsLatestCompare();
     await loadSocialConnectors();
     await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
@@ -5272,6 +5286,7 @@
       await loadCrmOperationsSnapshot();
       await loadCrmOperationsHistory();
       await loadCrmOperationsHistorySummary();
+      await loadCrmOperationsLatestCompare();
     });
   }
 
