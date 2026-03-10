@@ -244,8 +244,10 @@
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
   const refreshCrmDeliverySummaryBtn = document.getElementById("refreshCrmDeliverySummaryBtn");
+  const refreshCrmDeliveryDetailBtn = document.getElementById("refreshCrmDeliveryDetailBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
+  const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
@@ -2560,6 +2562,26 @@
     }
   }
 
+  async function loadCrmDeliveryConnectorDetail() {
+    if (!crmDeliveryConnectorDetail) return;
+    const connectorId = document.getElementById("crmDeliveryConnectorId");
+    const limit = document.getElementById("crmDeliveryConnectorLimit");
+    const connector_id = connectorId && connectorId.value ? connectorId.value.trim() : "";
+    if (!connector_id) {
+      crmDeliveryConnectorDetail.textContent = "Enter a connector ID to load delivery detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("crm.delivery.connector_detail", {
+        connector_id,
+        limit: limit && limit.value ? limit.value.trim() : "10",
+      });
+      crmDeliveryConnectorDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmDeliveryConnectorDetail.textContent = "Failed to load CRM connector delivery detail.";
+    }
+  }
+
   async function loadRetryQueue() {
     if (!crmRetryQueue) return;
     try {
@@ -3300,6 +3322,12 @@
   if (refreshCrmDeliverySummaryBtn) {
     refreshCrmDeliverySummaryBtn.addEventListener("click", async function () {
       await loadCrmDeliverySummary();
+    });
+  }
+
+  if (refreshCrmDeliveryDetailBtn) {
+    refreshCrmDeliveryDetailBtn.addEventListener("click", async function () {
+      await loadCrmDeliveryConnectorDetail();
     });
   }
 

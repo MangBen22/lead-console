@@ -459,6 +459,19 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="crmSyncResult">No sync yet.</pre>
                 <h3>Delivery Summary</h3>
                 <pre id="crmDeliverySummary">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="crmDeliveryConnectorId">Delivery Connector ID</label>
+                        <input id="crmDeliveryConnectorId" type="text" placeholder="connector_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmDeliveryConnectorLimit">Connector Detail Limit</label>
+                        <input id="crmDeliveryConnectorLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="refreshCrmDeliveryDetailBtn" type="button">Refresh Connector Detail</button>
+                </div>
+                <h3>Delivery Connector Detail</h3>
+                <pre id="crmDeliveryConnectorDetail">No connector detail loaded.</pre>
                 <h3>Sync Log</h3>
                 <pre id="crmSyncLog">Loading...</pre>
                 <h3>Retry Queue</h3>
