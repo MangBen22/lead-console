@@ -6390,7 +6390,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.11-social-draft-variants',
+        'phase' => '3.12-social-variant-execution',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9784,6 +9784,8 @@ function social_build_variant_for_connector($connector, $draft)
     $family = (string) (($decorated['profile']['family'] ?? 'custom'));
     $draft = is_array($draft) ? $draft : [];
     $variant = [
+        'source_site_id' => trim((string) ($draft['source_site_id'] ?? '')),
+        'lead_id' => (int) ($draft['lead_id'] ?? 0),
         'title' => trim((string) ($draft['title'] ?? '')),
         'message' => trim((string) ($draft['message'] ?? '')),
         'url' => trim((string) ($draft['url'] ?? '')),
@@ -10701,7 +10703,17 @@ function execute_social_connector_sync($connector, $drafts)
     $type = strtolower((string) ($connector['type'] ?? 'external_api'));
     $config = isset($connector['config']) && is_array($connector['config']) ? $connector['config'] : [];
     $runMode = strtolower((string) ($config['run_mode'] ?? 'dry_run'));
-    $validation = social_validate_drafts_for_connector($connector, $drafts);
+    $preparedDrafts = [];
+    $variantNotes = [];
+    foreach ((array) $drafts as $index => $draft) {
+        $variantBundle = social_build_variant_for_connector($connector, is_array($draft) ? $draft : []);
+        $preparedDrafts[] = isset($variantBundle['variant']) && is_array($variantBundle['variant']) ? $variantBundle['variant'] : [];
+        $variantNotes[] = [
+            'draft_index' => $index,
+            'notes' => isset($variantBundle['notes']) && is_array($variantBundle['notes']) ? $variantBundle['notes'] : [],
+        ];
+    }
+    $validation = social_validate_drafts_for_connector($connector, $preparedDrafts);
     $result = [
         'connector_id' => (string) ($connector['connector_id'] ?? ''),
         'provider' => $provider,
@@ -10714,12 +10726,15 @@ function execute_social_connector_sync($connector, $drafts)
         'warnings' => isset($validation['warning_messages']) && is_array($validation['warning_messages']) ? $validation['warning_messages'] : [],
         'warning_codes' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
         'validation' => $validation,
+        'prepared_draft_count' => count($preparedDrafts),
+        'variant_notes' => $variantNotes,
+        'payload_preview' => array_slice($preparedDrafts, 0, 3),
     ];
 
     if (empty($validation['ready'])) {
         $result['errors'] = isset($validation['issue_messages']) && is_array($validation['issue_messages']) ? $validation['issue_messages'] : ['Draft validation failed.'];
         $result['error_codes'] = isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [normalize_error_code('Draft validation failed.')];
-        $result['rejected'] = count($drafts);
+        $result['rejected'] = count($preparedDrafts);
         return $result;
     }
 
@@ -10730,26 +10745,26 @@ function execute_social_connector_sync($connector, $drafts)
             $msg = 'Social connector missing valid bridge_site_id.';
             $result['errors'][] = $msg;
             $result['error_codes'][] = normalize_error_code($msg);
-            $result['rejected'] = count($drafts);
+            $result['rejected'] = count($preparedDrafts);
             return $result;
         }
         if ($runMode !== 'live') {
-            $result['accepted'] = count($drafts);
+            $result['accepted'] = count($preparedDrafts);
             return $result;
         }
         $res = app_bridge_request($site, 'POST', 'bridge/social-intake', [
             'provider' => $provider,
             'connector_id' => (string) ($connector['connector_id'] ?? ''),
-            'drafts' => $drafts,
+            'drafts' => $preparedDrafts,
         ]);
         if (!empty($res['ok']) && isset($res['data']['accepted'])) {
             $result['accepted'] = (int) $res['data']['accepted'];
-            $result['rejected'] = max(0, count($drafts) - $result['accepted']);
+            $result['rejected'] = max(0, count($preparedDrafts) - $result['accepted']);
         } else {
             $msg = 'Social bridge intake request failed.';
             $result['errors'][] = $msg;
             $result['error_codes'][] = normalize_error_code($msg);
-            $result['rejected'] = count($drafts);
+            $result['rejected'] = count($preparedDrafts);
         }
         return $result;
     }
@@ -10760,29 +10775,29 @@ function execute_social_connector_sync($connector, $drafts)
             $msg = 'Missing webhook_url for social_webhook connector.';
             $result['errors'][] = $msg;
             $result['error_codes'][] = normalize_error_code($msg);
-            $result['rejected'] = count($drafts);
+            $result['rejected'] = count($preparedDrafts);
             return $result;
         }
         if ($runMode !== 'live') {
-            $result['accepted'] = count($drafts);
+            $result['accepted'] = count($preparedDrafts);
             return $result;
         }
         $res = app_http_json_request('POST', $webhook, [], [
             'connector_id' => (string) ($connector['connector_id'] ?? ''),
-            'drafts' => $drafts,
+            'drafts' => $preparedDrafts,
         ], 15);
         if (!empty($res['ok'])) {
-            $result['accepted'] = count($drafts);
+            $result['accepted'] = count($preparedDrafts);
         } else {
             $msg = 'Social webhook HTTP ' . (int) ($res['status'] ?? 0);
             $result['errors'][] = $msg;
             $result['error_codes'][] = normalize_error_code($msg);
-            $result['rejected'] = count($drafts);
+            $result['rejected'] = count($preparedDrafts);
         }
         return $result;
     }
 
-    $result['accepted'] = count($drafts);
+    $result['accepted'] = count($preparedDrafts);
     $msg = 'No social adapter implementation; treated as dry mapping only.';
     $result['errors'][] = $msg;
     $result['error_codes'][] = normalize_error_code($msg);
@@ -11388,7 +11403,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.11-social-draft-variants',
+        'phase' => '3.12-social-variant-execution',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
