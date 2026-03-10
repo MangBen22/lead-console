@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.14-seo-action-plan-export',
+        'phase' => '4.15-seo-url-history-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.14-seo-action-plan-export',
+        'phase' => '4.15-seo-url-history-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16842,6 +16842,64 @@ if ($action === 'seo.url.history') {
         'items' => $items,
         'timeline' => array_slice($timeline, 0, 25),
         'message' => empty($items) ? 'No matching URL history found yet.' : '',
+    ]);
+}
+
+if ($action === 'seo.url.history.export') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $urlFilter = isset($_GET['url']) ? seo_normalize_history_url((string) $_GET['url']) : '';
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $project = null;
+    if ($projectId !== '') {
+        foreach ($projects as $row) {
+            if (is_array($row) && (string) ($row['project_id'] ?? '') === $projectId) {
+                $project = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($project)) {
+        $project = isset($projects[0]) && is_array($projects[0]) ? $projects[0] : null;
+    }
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'project' => $project,
+        'filter_url' => $urlFilter,
+        'summary' => ['url_count' => 0, 'audit_count' => 0],
+        'items' => [],
+        'timeline' => [],
+        'message' => 'No SEO project configured.',
+    ];
+    if (is_array($project)) {
+        $selectedProjectId = (string) ($project['project_id'] ?? '');
+        $audits = array_values(array_filter(app_read_json_file(seo_audits_path(), []), static function ($row) use ($selectedProjectId) {
+            return (string) ($row['project_id'] ?? '') === $selectedProjectId;
+        }));
+        $snapshot = seo_project_url_history_snapshot($project, $audits, $urlFilter);
+        $payload = [
+            'exported_at' => gmdate('c'),
+            'project' => $project,
+            'filter_url' => $urlFilter,
+            'summary' => [
+                'url_count' => count($snapshot['items']),
+                'audit_count' => array_sum(array_map(static function ($item) {
+                    return (int) ($item['audit_count'] ?? 0);
+                }, $snapshot['items'])),
+            ],
+            'items' => $snapshot['items'],
+            'timeline' => array_slice($snapshot['timeline'], 0, 100),
+            'message' => empty($snapshot['items']) ? 'No matching URL history found yet.' : '',
+        ];
+    }
+    audit_event('seo', 'url.history.export', [
+        'project_id' => $projectId,
+        'filter_url' => $urlFilter,
+        'url_count' => (int) ($payload['summary']['url_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_url_history_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
     ]);
 }
 

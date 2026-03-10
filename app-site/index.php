@@ -1739,6 +1739,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runSeoRegressionsBtn" type="button">Run Regression Watch</button>
                     <button id="downloadSeoRegressionsExportBtn" type="button">Download Regressions</button>
                     <button id="refreshSeoUrlHistoryBtn" type="button">Refresh URL History</button>
+                    <button id="downloadSeoUrlHistoryExportBtn" type="button">Download URL History</button>
                     <button id="refreshSeoCompareBtn" type="button">Refresh Audit Compare</button>
                 </div>
                 <label>URL history filter<input id="seoHistoryUrlFilter" type="text" placeholder="https://example.com/service-page"></label>

@@ -422,6 +422,7 @@
   const runSeoRegressionsBtn = document.getElementById("runSeoRegressionsBtn");
   const downloadSeoRegressionsExportBtn = document.getElementById("downloadSeoRegressionsExportBtn");
   const refreshSeoUrlHistoryBtn = document.getElementById("refreshSeoUrlHistoryBtn");
+  const downloadSeoUrlHistoryExportBtn = document.getElementById("downloadSeoUrlHistoryExportBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
@@ -7070,6 +7071,21 @@
   if (refreshSeoUrlHistoryBtn) {
     refreshSeoUrlHistoryBtn.addEventListener("click", async function () {
       await loadSeoUrlHistory();
+    });
+  }
+
+  if (downloadSeoUrlHistoryExportBtn) {
+    downloadSeoUrlHistoryExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const urlFilter = document.getElementById("seoHistoryUrlFilter");
+      const data = await apiGetWithParams("seo.url.history.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+        url: urlFilter && urlFilter.value ? urlFilter.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-url-history-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 
