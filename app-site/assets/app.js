@@ -399,6 +399,7 @@
   const seoProjectFilterSearch = document.getElementById("seoProjectFilterSearch");
   const seoProjectFilterPage = document.getElementById("seoProjectFilterPage");
   const seoProjectFilterLimit = document.getElementById("seoProjectFilterLimit");
+  const loadSeoProjectDetailBtn = document.getElementById("loadSeoProjectDetailBtn");
   let currentLeadsReviewDrafts = [];
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
@@ -420,6 +421,7 @@
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
+  const seoProjectDetail = document.getElementById("seoProjectDetail");
   const seoProjectSnapshot = document.getElementById("seoProjectSnapshot");
   const seoActionPlanView = document.getElementById("seoActionPlanView");
   const seoOpportunitiesView = document.getElementById("seoOpportunitiesView");
@@ -3970,6 +3972,18 @@
     }
   }
 
+  async function loadSeoProjectDetail() {
+    if (!seoProjectDetail) return;
+    try {
+      const detailId = document.getElementById("seoProjectDetailId");
+      const projectId = detailId && detailId.value ? detailId.value.trim() : "";
+      const data = await apiGetWithParams("seo.projects.detail", { project_id: projectId });
+      seoProjectDetail.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoProjectDetail.textContent = "Failed to load SEO project detail.";
+    }
+  }
+
   async function loadSeoAudits() {
     if (!seoAudits) return;
     try {
@@ -4155,6 +4169,7 @@
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
+    await loadSeoProjectDetail();
     await loadSeoIssuesSummary();
     await loadSeoHistorySummary();
     await loadSeoExtensionSummary();
@@ -6728,6 +6743,12 @@
   if (refreshSeoProjectsBtn) {
     refreshSeoProjectsBtn.addEventListener("click", async function () {
       await loadSeoProjects();
+    });
+  }
+
+  if (loadSeoProjectDetailBtn) {
+    loadSeoProjectDetailBtn.addEventListener("click", async function () {
+      await loadSeoProjectDetail();
     });
   }
 

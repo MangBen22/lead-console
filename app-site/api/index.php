@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.01-seo-project-filters',
+        'phase' => '4.02-seo-project-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7220,6 +7220,100 @@ function seo_projects_list_snapshot($query = [])
             'status_counts' => $statusCounts,
         ],
         'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
+function seo_project_detail_snapshot($projectId = '')
+{
+    $rows = app_read_json_file(seo_projects_path(), []);
+    $project = null;
+    $selectedId = trim((string) $projectId);
+    if ($selectedId !== '') {
+        foreach ($rows as $row) {
+            if (is_array($row) && (string) ($row['project_id'] ?? '') === $selectedId) {
+                $project = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($project)) {
+        $project = isset($rows[0]) && is_array($rows[0]) ? $rows[0] : null;
+    }
+    if (!is_array($project)) {
+        return [
+            'ok' => true,
+            'project' => null,
+            'message' => 'No SEO project configured.',
+        ];
+    }
+
+    $selectedId = (string) ($project['project_id'] ?? '');
+    $audits = array_values(array_filter(app_read_json_file(seo_audits_path(), []), static function ($row) use ($selectedId) {
+        return (string) ($row['project_id'] ?? '') === $selectedId;
+    }));
+    $events = array_values(array_filter(app_read_json_file(seo_extension_events_path(), []), static function ($row) use ($selectedId) {
+        return (string) ($row['project_id'] ?? '') === $selectedId;
+    }));
+    $sessions = array_values(array_filter(app_read_json_file(seo_extension_sessions_path(), []), static function ($row) use ($selectedId) {
+        return (string) ($row['project_id'] ?? '') === $selectedId;
+    }));
+
+    $averageScore = count($audits) > 0 ? round(array_sum(array_map(static function ($row) {
+        return (int) ($row['score'] ?? 0);
+    }, $audits)) / count($audits), 2) : 0;
+    $sourceCounts = [];
+    $issueCounts = [];
+    foreach ($audits as $audit) {
+        if (!is_array($audit)) {
+            continue;
+        }
+        $source = (string) ($audit['source'] ?? 'unknown');
+        if (!isset($sourceCounts[$source])) {
+            $sourceCounts[$source] = 0;
+        }
+        $sourceCounts[$source]++;
+        foreach (seo_issue_map_from_audit($audit) as $check => $issue) {
+            if (!isset($issueCounts[$check])) {
+                $issueCounts[$check] = [
+                    'check' => $check,
+                    'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+                    'occurrences' => 0,
+                ];
+            }
+            $issueCounts[$check]['occurrences'] += max(1, (int) ($issue['occurrences'] ?? 0));
+            if (seo_priority_rank((string) ($issue['priority'] ?? 'nice_to_have')) > seo_priority_rank((string) ($issueCounts[$check]['priority'] ?? 'nice_to_have'))) {
+                $issueCounts[$check]['priority'] = (string) ($issue['priority'] ?? 'nice_to_have');
+            }
+        }
+    }
+    $topIssues = array_values($issueCounts);
+    usort($topIssues, static function ($a, $b) {
+        $priorityDiff = seo_priority_rank((string) ($b['priority'] ?? 'nice_to_have')) <=> seo_priority_rank((string) ($a['priority'] ?? 'nice_to_have'));
+        if ($priorityDiff !== 0) {
+            return $priorityDiff;
+        }
+        return (int) ($b['occurrences'] ?? 0) <=> (int) ($a['occurrences'] ?? 0);
+    });
+
+    return [
+        'ok' => true,
+        'project' => $project,
+        'meta' => [
+            'audit_count' => count($audits),
+            'extension_event_count' => count($events),
+            'extension_session_count' => count($sessions),
+            'average_score' => $averageScore,
+            'latest_audit_at' => isset($audits[0]['created_at']) ? (string) $audits[0]['created_at'] : '',
+            'latest_event_at' => isset($events[0]['created_at']) ? (string) $events[0]['created_at'] : '',
+            'latest_session_at' => isset($sessions[0]['updated_at']) ? (string) $sessions[0]['updated_at'] : '',
+            'audit_source_counts' => $sourceCounts,
+        ],
+        'latest_audit' => isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null,
+        'latest_event' => isset($events[0]) && is_array($events[0]) ? $events[0] : null,
+        'top_issues' => array_slice($topIssues, 0, 10),
+        'recent_audits' => array_slice($audits, 0, 5),
+        'recent_extension_events' => array_slice($events, 0, 5),
+        'extension_sessions' => array_slice(array_map('seo_extension_mask_session', $sessions), 0, 5),
     ];
 }
 
@@ -11845,7 +11939,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.01-seo-project-filters',
+        'phase' => '4.02-seo-project-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15585,6 +15679,11 @@ if ($action === 'seo.projects.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'seo.projects.detail') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    out_json(seo_project_detail_snapshot($projectId));
 }
 
 if ($action === 'seo.projects.save') {

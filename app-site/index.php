@@ -1535,6 +1535,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoProjectsBtn" type="button">Refresh SEO Projects</button>
                 </div>
                 <pre id="seoProjects">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoProjectDetailId">Detail Project ID</label>
+                        <input id="seoProjectDetailId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <button id="loadSeoProjectDetailBtn" type="button">Load Project Detail</button>
+                </div>
+                <pre id="seoProjectDetail">No SEO project detail loaded.</pre>
                 <form id="seoProjectForm" class="inline-form">
                     <div class="form-row">
                         <label for="seoProjectId">Project ID (optional for update)</label>
