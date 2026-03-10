@@ -180,6 +180,72 @@ function crm_connectors_list_snapshot($query = [])
     ];
 }
 
+function crm_connector_detail_snapshot($connectorId, $limit = 10)
+{
+    $id = trim((string) $connectorId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'connector_id is required.'];
+    }
+    $connector = connector_by_id($id);
+    if (!is_array($connector)) {
+        return ['ok' => false, 'error' => 'Connector not found.'];
+    }
+    $masked = mask_connector($connector);
+    $syncLog = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $retryQueue = app_read_json_file(retry_queue_path(), []);
+    $syncItems = [];
+    $acceptedTotal = 0;
+    $rejectedTotal = 0;
+    $errorCount = 0;
+    foreach ($syncLog as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $matchedResult = null;
+        foreach ((array) ($row['connector_results'] ?? []) as $result) {
+            if (!is_array($result) || (string) ($result['connector_id'] ?? '') !== $id) {
+                continue;
+            }
+            $matchedResult = $result;
+            break;
+        }
+        if (!is_array($matchedResult)) {
+            continue;
+        }
+        $acceptedTotal += (int) ($matchedResult['accepted'] ?? 0);
+        $rejectedTotal += (int) ($matchedResult['rejected'] ?? 0);
+        $errorCount += count(isset($matchedResult['errors']) && is_array($matchedResult['errors']) ? $matchedResult['errors'] : []);
+        $syncItems[] = [
+            'sync_id' => (string) ($row['sync_id'] ?? ''),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'status' => (string) ($row['status'] ?? ''),
+            'approved_total' => (int) ($row['approved_total'] ?? 0),
+            'site_count' => (int) ($row['site_count'] ?? 0),
+            'result' => $matchedResult,
+        ];
+    }
+    $syncItems = array_slice($syncItems, 0, max(1, $limit));
+    $retryItems = array_values(array_filter($retryQueue, static function ($row) use ($id) {
+        return is_array($row) && (string) ($row['connector_id'] ?? '') === $id;
+    }));
+    $retryItems = array_slice($retryItems, 0, max(1, $limit));
+
+    return [
+        'ok' => true,
+        'item' => $masked,
+        'meta' => [
+            'sync_count' => count($syncItems),
+            'retry_count' => count($retryItems),
+            'accepted_total' => $acceptedTotal,
+            'rejected_total' => $rejectedTotal,
+            'error_count' => $errorCount,
+            'run_mode' => (string) (($masked['config']['run_mode'] ?? 'dry_run')),
+        ],
+        'recent_sync' => $syncItems,
+        'retry_queue' => $retryItems,
+    ];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6634,7 +6700,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.01-crm-connector-filters',
+        'phase' => '5.02-crm-connector-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12485,7 +12551,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.01-crm-connector-filters',
+        'phase' => '5.02-crm-connector-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14518,6 +14584,13 @@ if ($action === 'crm.connectors.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'crm.connectors.detail') {
+    $connectorId = isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '';
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $snapshot = crm_connector_detail_snapshot($connectorId, $limit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'crm.connectors.save') {

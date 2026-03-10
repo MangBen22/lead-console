@@ -248,6 +248,7 @@
   const crmConnectorFilterSearch = document.getElementById("crmConnectorFilterSearch");
   const crmConnectorFilterPage = document.getElementById("crmConnectorFilterPage");
   const crmConnectorFilterLimit = document.getElementById("crmConnectorFilterLimit");
+  const refreshCrmConnectorDetailBtn = document.getElementById("refreshCrmConnectorDetailBtn");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
@@ -257,6 +258,7 @@
   const refreshCrmDeliveryWatchBtn = document.getElementById("refreshCrmDeliveryWatchBtn");
   const runCrmDeliveryWatchBtn = document.getElementById("runCrmDeliveryWatchBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
+  const crmConnectorDetail = document.getElementById("crmConnectorDetail");
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
   const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
@@ -2672,6 +2674,47 @@
     }
   }
 
+  async function loadCrmConnectorDetail() {
+    if (!crmConnectorDetail) return;
+    const connectorId = document.getElementById("crmConnectorDetailId");
+    const limit = document.getElementById("crmConnectorDetailLimit");
+    if (!connectorId || !connectorId.value) {
+      crmConnectorDetail.textContent = "Enter a connector ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("crm.connectors.detail", {
+        connector_id: connectorId.value.trim(),
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      crmConnectorDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const formId = document.getElementById("connectorId");
+        const provider = document.getElementById("connectorProvider");
+        const type = document.getElementById("connectorType");
+        const status = document.getElementById("connectorStatus");
+        const auth = document.getElementById("connectorAuth");
+        const caps = document.getElementById("connectorCapabilities");
+        const siteId = document.getElementById("connectorSiteId");
+        const runMode = document.getElementById("connectorRunMode");
+        const endpoint = document.getElementById("connectorEndpoint");
+        const webhook = document.getElementById("connectorWebhook");
+        if (formId) formId.value = data.item.connector_id || "";
+        if (provider) provider.value = data.item.provider || "";
+        if (type) type.value = data.item.type || "external_api";
+        if (status) status.value = data.item.status || "planned";
+        if (auth) auth.value = data.item.auth_mode || "api_key";
+        if (caps) caps.value = Array.isArray(data.item.capabilities) ? data.item.capabilities.join(",") : "";
+        if (siteId) siteId.value = data.item.site_id || "";
+        if (runMode) runMode.value = (data.item.config && data.item.config.run_mode) ? data.item.config.run_mode : "dry_run";
+        if (endpoint) endpoint.value = (data.item.config && data.item.config.endpoint_url) ? data.item.config.endpoint_url : "";
+        if (webhook) webhook.value = (data.item.config && data.item.config.webhook_url) ? data.item.config.webhook_url : "";
+      }
+    } catch (err) {
+      crmConnectorDetail.textContent = "Failed to load CRM connector detail.";
+    }
+  }
+
   async function loadCrmSyncLog() {
     if (!crmSyncLog) return;
     try {
@@ -4496,6 +4539,12 @@
   if (refreshCrmConnectorsBtn) {
     refreshCrmConnectorsBtn.addEventListener("click", async function () {
       await loadCrmConnectors();
+    });
+  }
+
+  if (refreshCrmConnectorDetailBtn) {
+    refreshCrmConnectorDetailBtn.addEventListener("click", async function () {
+      await loadCrmConnectorDetail();
     });
   }
 

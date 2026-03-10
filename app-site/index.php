@@ -425,6 +425,20 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCrmConnectorsBtn" type="button">Refresh CRM Connectors</button>
                 </div>
                 <pre id="crmConnectors">Loading...</pre>
+                <form id="crmConnectorDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmConnectorDetailId">Connector ID</label>
+                        <input id="crmConnectorDetailId" type="text" placeholder="connector_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmConnectorDetailLimit">Detail Limit</label>
+                        <input id="crmConnectorDetailLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshCrmConnectorDetailBtn" type="button">Load Connector Detail</button>
+                </div>
+                <pre id="crmConnectorDetail">No CRM connector detail loaded.</pre>
                 <form id="crmConnectorForm" class="inline-form">
                     <div class="form-row">
                         <label for="connectorId">Connector ID (optional for update)</label>
