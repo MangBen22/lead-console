@@ -837,6 +837,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="crmOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
                     </div>
                     <button id="refreshCrmOperationsSnapshotBtn" type="button">Refresh CRM Operations Snapshot</button>
+                    <button id="downloadCrmOperationsSnapshotBtn" type="button">Download CRM Operations Snapshot</button>
                 </form>
                 <pre id="crmOperationsSnapshot">Loading...</pre>
             </section>

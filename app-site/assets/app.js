@@ -300,6 +300,7 @@
   const downloadCrmEmailTemplatesExportBtn = document.getElementById("downloadCrmEmailTemplatesExportBtn");
   const downloadCrmEmailTemplateLogExportBtn = document.getElementById("downloadCrmEmailTemplateLogExportBtn");
   const crmOperationsSnapshot = document.getElementById("crmOperationsSnapshot");
+  const downloadCrmOperationsSnapshotBtn = document.getElementById("downloadCrmOperationsSnapshotBtn");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
@@ -3183,6 +3184,18 @@
     }
   }
 
+  async function downloadCrmOperationsSnapshot() {
+    const limit = document.getElementById("crmOperationsSnapshotLimit");
+    const data = await apiGetWithParams("crm.operations.export", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("crm-operations-snapshot-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (crmOperationsSnapshot) {
+      crmOperationsSnapshot.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
@@ -5223,6 +5236,12 @@
   if (refreshCrmOperationsSnapshotBtn) {
     refreshCrmOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadCrmOperationsSnapshot();
+    });
+  }
+
+  if (downloadCrmOperationsSnapshotBtn) {
+    downloadCrmOperationsSnapshotBtn.addEventListener("click", async function () {
+      await downloadCrmOperationsSnapshot();
     });
   }
 
