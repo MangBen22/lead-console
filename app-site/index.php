@@ -767,6 +767,37 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialConnectorDetailBtn" type="button">Load Connector Detail</button>
                 </div>
                 <pre id="socialConnectorDetail">No social connector detail loaded.</pre>
+                <form id="socialConnectorBulkUpdateForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialConnectorBulkStatus">Bulk Status</label>
+                        <select id="socialConnectorBulkStatus">
+                            <option value="">leave as-is</option>
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorBulkSite">Bulk Site ID</label>
+                        <input id="socialConnectorBulkSite" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorBulkRunMode">Bulk Run Mode</label>
+                        <select id="socialConnectorBulkRunMode">
+                            <option value="">leave as-is</option>
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorBulkExpiresAt">Bulk Expiry</label>
+                        <input id="socialConnectorBulkExpiresAt" type="datetime-local">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="runSocialConnectorBulkUpdateBtn" type="button">Bulk Update Connectors</button>
+                </div>
+                <pre id="socialConnectorBulkResult">No social connector bulk update yet.</pre>
                 <form id="socialConnectorForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialConnectorId">Connector ID (optional for update)</label>

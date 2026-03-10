@@ -285,6 +285,7 @@
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
+  const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -308,6 +309,7 @@
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorDetail = document.getElementById("socialConnectorDetail");
+  const socialConnectorBulkResult = document.getElementById("socialConnectorBulkResult");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
   const socialScheduleSummary = document.getElementById("socialScheduleSummary");
@@ -2771,6 +2773,34 @@
     downloadJsonFile(filename, data);
   }
 
+  async function runSocialConnectorBulkUpdate() {
+    if (!socialConnectorBulkResult) return;
+    const filters = socialConnectorFilters();
+    const status = document.getElementById("socialConnectorBulkStatus");
+    const site = document.getElementById("socialConnectorBulkSite");
+    const runMode = document.getElementById("socialConnectorBulkRunMode");
+    const expiresAt = document.getElementById("socialConnectorBulkExpiresAt");
+    const payload = {
+      filter_provider: filters.provider,
+      filter_status: filters.status,
+      filter_site_id: filters.site_id,
+      filter_run_mode: filters.run_mode,
+      filter_search: filters.search,
+      filter_page: filters.page,
+      filter_limit: filters.limit,
+      status: status && status.value ? status.value : "",
+      site_id: site && site.value ? site.value.trim() : "",
+      run_mode: runMode && runMode.value ? runMode.value : "",
+      expires_at: expiresAt && expiresAt.value ? expiresAt.value : "",
+    };
+    const data = await apiPost("social.connectors.bulk_update", payload);
+    socialConnectorBulkResult.textContent = JSON.stringify(data, null, 2);
+    await loadSocialConnectors();
+    await loadSocialWatch();
+    await loadSocialOperationsSnapshot();
+    await refreshSocialModuleSummary();
+  }
+
   function socialConnectorFilters() {
     const provider = document.getElementById("socialConnectorFilterProvider");
     const status = document.getElementById("socialConnectorFilterStatus");
@@ -4505,6 +4535,12 @@
   if (downloadSocialConnectorsExportBtn) {
     downloadSocialConnectorsExportBtn.addEventListener("click", async function () {
       await downloadSocialConnectorsExport();
+    });
+  }
+
+  if (runSocialConnectorBulkUpdateBtn) {
+    runSocialConnectorBulkUpdateBtn.addEventListener("click", async function () {
+      await runSocialConnectorBulkUpdate();
     });
   }
 

@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.95-social-connectors-export',
+        'phase' => '2.96-social-connectors-bulk-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8507,6 +8507,99 @@ function social_connector_detail_snapshot($connectorId, $limit = 10)
     ];
 }
 
+function social_connectors_bulk_update($payload)
+{
+    $data = is_array($payload) ? $payload : [];
+    $snapshot = social_connectors_list_snapshot([
+        'provider' => isset($data['filter_provider']) ? (string) $data['filter_provider'] : '',
+        'status' => isset($data['filter_status']) ? (string) $data['filter_status'] : '',
+        'site_id' => isset($data['filter_site_id']) ? (string) $data['filter_site_id'] : '',
+        'run_mode' => isset($data['filter_run_mode']) ? (string) $data['filter_run_mode'] : '',
+        'search' => isset($data['filter_search']) ? (string) $data['filter_search'] : '',
+        'page' => isset($data['filter_page']) ? (int) $data['filter_page'] : 1,
+        'limit' => isset($data['filter_limit']) ? (int) $data['filter_limit'] : 10,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    if (empty($items)) {
+        return ['ok' => false, 'error' => 'No social connectors matched the current filters.'];
+    }
+
+    $status = strtolower(trim((string) ($data['status'] ?? '')));
+    $siteId = preg_replace('/[^a-z0-9_\-]/i', '', (string) ($data['site_id'] ?? ''));
+    $runMode = strtolower(trim((string) ($data['run_mode'] ?? '')));
+    $expiresAt = trim((string) ($data['expires_at'] ?? ''));
+    if ($status === '' && $siteId === '' && $runMode === '' && $expiresAt === '') {
+        return ['ok' => false, 'error' => 'At least one bulk connector field is required.'];
+    }
+    if ($status !== '' && !in_array($status, ['active', 'planned', 'paused'], true)) {
+        return ['ok' => false, 'error' => 'Invalid connector status.'];
+    }
+    if ($runMode !== '' && !in_array($runMode, ['dry_run', 'live'], true)) {
+        return ['ok' => false, 'error' => 'Invalid connector run mode.'];
+    }
+
+    $connectorIds = array_flip(array_map(static function ($item) {
+        return (string) ($item['connector_id'] ?? '');
+    }, $items));
+    $rows = app_read_json_file(social_connectors_path(), []);
+    $updated = 0;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $connectorId = (string) ($row['connector_id'] ?? '');
+        if ($connectorId === '' || !isset($connectorIds[$connectorId])) {
+            continue;
+        }
+        $changed = false;
+        if ($status !== '' && strtolower((string) ($row['status'] ?? '')) !== $status) {
+            $row['status'] = $status;
+            $changed = true;
+        }
+        if ($siteId !== '' && (string) ($row['site_id'] ?? '') !== $siteId) {
+            $row['site_id'] = $siteId;
+            $changed = true;
+        }
+        if ($runMode !== '') {
+            $config = isset($row['config']) && is_array($row['config']) ? $row['config'] : [];
+            if (strtolower((string) ($config['run_mode'] ?? '')) !== $runMode) {
+                $config['run_mode'] = $runMode;
+                $row['config'] = $config;
+                $changed = true;
+            }
+        }
+        if ($expiresAt !== '' && (string) ($row['expires_at'] ?? '') !== $expiresAt) {
+            $row['expires_at'] = $expiresAt;
+            $changed = true;
+        }
+        if ($changed) {
+            $row['updated_at'] = gmdate('c');
+            $rows[$index] = $row;
+            $updated++;
+        }
+    }
+
+    app_write_json_file(social_connectors_path(), $rows);
+    audit_event('social', 'connectors.bulk_update', [
+        'processed' => count($items),
+        'updated' => $updated,
+    ]);
+    record_social_activity('connectors_bulk_updated', 'Social connectors bulk update applied.', [
+        'processed' => count($items),
+        'updated' => $updated,
+    ]);
+
+    return [
+        'ok' => true,
+        'processed' => count($items),
+        'updated' => $updated,
+        'filters' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        'items' => array_values(array_map(static function ($item) {
+            return (string) ($item['connector_id'] ?? '');
+        }, $items)),
+    ];
+}
+
 function enqueue_social_retry_item($item)
 {
     $queue = app_read_json_file(social_retry_queue_path(), []);
@@ -10540,7 +10633,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.95-social-connectors-export',
+        'phase' => '2.96-social-connectors-bulk-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14934,6 +15027,20 @@ if ($action === 'social.connectors.export') {
         'filename' => 'social_connectors_export_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
     ]);
+}
+
+if ($action === 'social.connectors.bulk_update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $snapshot = social_connectors_bulk_update($data);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.connectors.save') {
