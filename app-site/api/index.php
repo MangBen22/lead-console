@@ -884,6 +884,35 @@ function leads_review_action($siteId, $runId, $action)
     ];
 }
 
+function leads_review_draft_update($siteId, $runId, $draftId, $fields)
+{
+    $site = site_by_id((string) $siteId);
+    if (!is_array($site)) {
+        return ['ok' => false, 'error' => 'Site not found.'];
+    }
+    $payload = array_merge([
+        'run_id' => (int) $runId,
+        'draft_id' => (int) $draftId,
+    ], is_array($fields) ? $fields : []);
+    $res = app_bridge_request($site, 'POST', 'bridge/run-review/draft-update', $payload);
+    if (empty($res['ok']) || !is_array($res['data'])) {
+        return [
+            'ok' => false,
+            'error' => (string) ($res['error'] ?? 'Bridge request failed.'),
+            'status' => (int) ($res['status'] ?? 0),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'site' => [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+        ],
+        'result' => $res['data'],
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5395,7 +5424,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.62-leads-review-queue-filters',
+        'phase' => '2.63-leads-review-draft-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8786,7 +8815,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.62-leads-review-queue-filters',
+        'phase' => '2.63-leads-review-draft-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10725,6 +10754,32 @@ if ($action === 'leads.review.save' || $action === 'leads.review.discard') {
     audit_event('leads', 'review.' . $mode, [
         'site_id' => (string) ($data['site_id'] ?? ''),
         'run_id' => (int) ($data['run_id'] ?? 0),
+        'ok' => !empty($snapshot['ok']) ? 1 : 0,
+    ]);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'leads.review.draft.update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || empty($data['run_id']) || empty($data['draft_id'])) {
+        out_json(['ok' => false, 'error' => 'site_id, run_id, and draft_id are required.'], 400);
+    }
+    $fields = [];
+    foreach (['business_name', 'city', 'category', 'website', 'phone', 'email', 'status', 'notes'] as $field) {
+        if (array_key_exists($field, $data)) {
+            $fields[$field] = (string) $data[$field];
+        }
+    }
+    $snapshot = leads_review_draft_update((string) $data['site_id'], (int) $data['run_id'], (int) $data['draft_id'], $fields);
+    audit_event('leads', 'review.draft.update', [
+        'site_id' => (string) ($data['site_id'] ?? ''),
+        'run_id' => (int) ($data['run_id'] ?? 0),
+        'draft_id' => (int) ($data['draft_id'] ?? 0),
         'ok' => !empty($snapshot['ok']) ? 1 : 0,
     ]);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);

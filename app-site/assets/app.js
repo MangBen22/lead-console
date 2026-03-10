@@ -220,6 +220,7 @@
   const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
   const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
   const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
+  const updateLeadsReviewDraftBtn = document.getElementById("updateLeadsReviewDraftBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
@@ -2361,6 +2362,39 @@
     await refreshLeadsAndCrmModuleCards();
   }
 
+  async function runLeadsReviewDraftUpdate() {
+    const siteId = document.getElementById("leadsReviewSiteId");
+    const runId = document.getElementById("leadsReviewRunId");
+    const draftId = document.getElementById("leadsReviewDraftId");
+    const businessName = document.getElementById("leadsReviewDraftBusiness");
+    const city = document.getElementById("leadsReviewDraftCity");
+    const category = document.getElementById("leadsReviewDraftCategory");
+    const website = document.getElementById("leadsReviewDraftWebsite");
+    const phone = document.getElementById("leadsReviewDraftPhone");
+    const email = document.getElementById("leadsReviewDraftEmail");
+    const status = document.getElementById("leadsReviewDraftStatus");
+    const notes = document.getElementById("leadsReviewDraftNotes");
+    const payload = {
+      site_id: siteId && siteId.value ? siteId.value.trim() : "",
+      run_id: runId && runId.value ? runId.value.trim() : "",
+      draft_id: draftId && draftId.value ? draftId.value.trim() : "",
+      business_name: businessName && businessName.value ? businessName.value.trim() : "",
+      city: city && city.value ? city.value.trim() : "",
+      category: category && category.value ? category.value.trim() : "",
+      website: website && website.value ? website.value.trim() : "",
+      phone: phone && phone.value ? phone.value.trim() : "",
+      email: email && email.value ? email.value.trim() : "",
+      status: status && status.value ? status.value.trim() : "",
+      notes: notes && notes.value ? notes.value.trim() : "",
+    };
+    const result = await apiPost("leads.review.draft.update", payload);
+    if (leadsReviewActionView) {
+      leadsReviewActionView.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadLeadsReviewQueue();
+    await loadLeadsReviewDetail();
+  }
+
   async function refreshLeadsAndCrmModuleCards() {
     const leadsPanel = document.getElementById("modLeads");
     const crmPanel = document.getElementById("modCrm");
@@ -4200,6 +4234,12 @@
   if (discardLeadsReviewBtn) {
     discardLeadsReviewBtn.addEventListener("click", async function () {
       await runLeadsReviewAction("discard");
+    });
+  }
+
+  if (updateLeadsReviewDraftBtn) {
+    updateLeadsReviewDraftBtn.addEventListener("click", async function () {
+      await runLeadsReviewDraftUpdate();
     });
   }
 

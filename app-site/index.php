@@ -324,6 +324,45 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="leadsReviewRunId">Review Run ID</label>
                         <input id="leadsReviewRunId" type="number" min="1" placeholder="123">
                     </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftId">Review Draft ID</label>
+                        <input id="leadsReviewDraftId" type="number" min="1" placeholder="456">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftBusiness">Draft Business Name</label>
+                        <input id="leadsReviewDraftBusiness" type="text" placeholder="Business name">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftCity">Draft City</label>
+                        <input id="leadsReviewDraftCity" type="text" placeholder="City">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftCategory">Draft Category</label>
+                        <input id="leadsReviewDraftCategory" type="text" placeholder="Category">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftWebsite">Draft Website</label>
+                        <input id="leadsReviewDraftWebsite" type="text" placeholder="https://example.com">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftPhone">Draft Phone</label>
+                        <input id="leadsReviewDraftPhone" type="text" placeholder="Phone">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftEmail">Draft Email</label>
+                        <input id="leadsReviewDraftEmail" type="email" placeholder="name@example.com">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftStatus">Draft Status</label>
+                        <input id="leadsReviewDraftStatus" type="text" placeholder="New">
+                    </div>
+                    <div class="form-row">
+                        <label for="leadsReviewDraftNotes">Draft Notes</label>
+                        <textarea id="leadsReviewDraftNotes" rows="3" placeholder="Notes"></textarea>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button id="updateLeadsReviewDraftBtn" type="button">Update Review Draft</button>
                 </div>
                 <pre id="leadsReviewQueueView">Loading...</pre>
                 <pre id="leadsReviewDetailView">No review detail loaded.</pre>

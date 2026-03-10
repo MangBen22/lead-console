@@ -1236,6 +1236,12 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/run-review/draft-update', [
+            'methods' => 'POST',
+            'callback' => [$this, 'rest_bridge_run_review_draft_update'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/smtp-health', [
             'methods' => 'GET',
             'callback' => [$this, 'rest_bridge_smtp_health'],
@@ -1594,6 +1600,85 @@ class LC_Plugin
             'ok' => true,
             'run_id' => $run_id,
             'discarded' => true,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_run_review_draft_update($request)
+    {
+        global $wpdb;
+
+        $payload = $request->get_json_params();
+        if (!is_array($payload)) {
+            $payload = [];
+        }
+        $run_id = absint($payload['run_id'] ?? 0);
+        $draft_id = absint($payload['draft_id'] ?? 0);
+        if ($run_id <= 0 || $draft_id <= 0) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'run_id and draft_id are required.'], 400);
+        }
+
+        $update = [];
+        $format = [];
+        $fieldMap = [
+            'business_name' => 'sanitize_text_field',
+            'city' => 'sanitize_text_field',
+            'category' => 'sanitize_text_field',
+            'website' => 'esc_url_raw',
+            'phone' => 'sanitize_text_field',
+            'email' => 'sanitize_email',
+            'status' => 'sanitize_text_field',
+            'notes' => 'sanitize_textarea_field',
+        ];
+        foreach ($fieldMap as $field => $sanitizer) {
+            if (!array_key_exists($field, $payload)) {
+                continue;
+            }
+            $value = call_user_func($sanitizer, (string) $payload[$field]);
+            if ($field === 'status') {
+                $value = $this->normalize_status($value);
+            }
+            $update[$field] = $value;
+            $format[] = '%s';
+        }
+        if (empty($update)) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'No draft fields provided.'], 400);
+        }
+
+        $updated = $wpdb->update(
+            $this->db_table('lc_run_drafts'),
+            $update,
+            ['id' => $draft_id, 'run_id' => $run_id],
+            $format,
+            ['%d', '%d']
+        );
+        if ($updated === false) {
+            return new WP_REST_Response(['ok' => false, 'error' => 'Draft update failed.'], 500);
+        }
+
+        $draft = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT id, run_id, business_name, city, category, website, phone, email, score, lead_type, notes, status, created_at
+                 FROM {$this->db_table('lc_run_drafts')}
+                 WHERE id = %d AND run_id = %d
+                 LIMIT 1",
+                $draft_id,
+                $run_id
+            ),
+            ARRAY_A
+        );
+
+        $this->log_system_event('bridge', 'info', 'Bridge run review draft updated.', [
+            'run_id' => $run_id,
+            'draft_id' => $draft_id,
+            'fields' => array_keys($update),
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'run_id' => $run_id,
+            'draft_id' => $draft_id,
+            'draft' => $draft,
             'time' => current_time('mysql'),
         ]);
     }
