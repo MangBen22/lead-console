@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.09-seo-extension-event-export',
+        'phase' => '4.10-seo-extension-session-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7633,6 +7633,88 @@ function seo_extension_event_detail_snapshot($eventId = '')
         'issue_rollup' => $issueRollup,
         'page_signals' => seo_normalize_page_signals(isset($item['page_signals']) && is_array($item['page_signals']) ? $item['page_signals'] : []),
         'linked_audit' => $linkedAudit,
+    ];
+}
+
+function seo_extension_sessions_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(seo_extension_sessions_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $projectId = trim((string) ($query['project_id'] ?? ''));
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $statusCounts = [];
+    $projectCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $itemStatus = strtolower((string) ($item['status'] ?? 'unknown'));
+        $itemProjectId = (string) ($item['project_id'] ?? '');
+        $projectKey = $itemProjectId !== '' ? $itemProjectId : 'unassigned';
+        if (!isset($statusCounts[$itemStatus])) {
+            $statusCounts[$itemStatus] = 0;
+        }
+        if (!isset($projectCounts[$projectKey])) {
+            $projectCounts[$projectKey] = 0;
+        }
+        $statusCounts[$itemStatus]++;
+        $projectCounts[$projectKey]++;
+        if ($projectId !== '' && $itemProjectId !== $projectId) {
+            continue;
+        }
+        if ($status !== '' && $itemStatus !== $status) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['session_id'] ?? ''),
+                $itemProjectId,
+                (string) ($item['label'] ?? ''),
+                (string) ($item['status'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = seo_extension_mask_session($item);
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['updated_at'] ?? ''), (string) ($a['updated_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'project_id' => $projectId,
+            'status' => $status,
+            'search' => $search,
+            'status_counts' => $statusCounts,
+            'project_counts' => $projectCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
     ];
 }
 
@@ -12258,7 +12340,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.09-seo-extension-event-export',
+        'phase' => '4.10-seo-extension-session-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15193,12 +15275,12 @@ if ($action === 'seo.history.summary') {
 }
 
 if ($action === 'seo.extension.sessions.list') {
-    $rows = app_read_json_file(seo_extension_sessions_path(), []);
-    $items = array_map('seo_extension_mask_session', $rows);
+    $snapshot = seo_extension_sessions_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($items),
-        'items' => $items,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

@@ -1673,6 +1673,33 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>SEO Extension Sessions</h2>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoExtensionSessionFilterProjectId">Session Project ID</label>
+                        <input id="seoExtensionSessionFilterProjectId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionFilterStatus">Session Status</label>
+                        <select id="seoExtensionSessionFilterStatus">
+                            <option value="">all</option>
+                            <option value="active">active</option>
+                            <option value="revoked">revoked</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionFilterSearch">Session Search</label>
+                        <input id="seoExtensionSessionFilterSearch" type="text" placeholder="session id, label, project">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionFilterPage">Session Page</label>
+                        <input id="seoExtensionSessionFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionSessionFilterLimit">Session Limit</label>
+                        <input id="seoExtensionSessionFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSeoExtensionSessionsBtn" type="button">Refresh Sessions</button>
+                </div>
                 <pre id="seoExtensionSessions">Loading...</pre>
                 <form id="seoExtensionSessionForm" class="inline-form">
                     <div class="form-row">

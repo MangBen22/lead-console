@@ -409,6 +409,7 @@
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
   const refreshSeoExtensionEventsBtn = document.getElementById("refreshSeoExtensionEventsBtn");
+  const refreshSeoExtensionSessionsBtn = document.getElementById("refreshSeoExtensionSessionsBtn");
   const downloadSeoAuditsExportBtn = document.getElementById("downloadSeoAuditsExportBtn");
   const downloadSeoExtensionEventsExportBtn = document.getElementById("downloadSeoExtensionEventsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
@@ -442,6 +443,11 @@
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const loadSeoExtensionEventDetailBtn = document.getElementById("loadSeoExtensionEventDetailBtn");
   const seoExtensionEventDetail = document.getElementById("seoExtensionEventDetail");
+  const seoExtensionSessionFilterProjectId = document.getElementById("seoExtensionSessionFilterProjectId");
+  const seoExtensionSessionFilterStatus = document.getElementById("seoExtensionSessionFilterStatus");
+  const seoExtensionSessionFilterSearch = document.getElementById("seoExtensionSessionFilterSearch");
+  const seoExtensionSessionFilterPage = document.getElementById("seoExtensionSessionFilterPage");
+  const seoExtensionSessionFilterLimit = document.getElementById("seoExtensionSessionFilterLimit");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
   const seoProjectDetail = document.getElementById("seoProjectDetail");
@@ -4157,7 +4163,13 @@
   async function loadSeoExtensionSessions() {
     if (!seoExtensionSessions) return;
     try {
-      const data = await apiGet("seo.extension.sessions.list");
+      const data = await apiGetWithParams("seo.extension.sessions.list", {
+        project_id: seoExtensionSessionFilterProjectId && seoExtensionSessionFilterProjectId.value ? seoExtensionSessionFilterProjectId.value.trim() : "",
+        status: seoExtensionSessionFilterStatus && seoExtensionSessionFilterStatus.value ? seoExtensionSessionFilterStatus.value : "",
+        search: seoExtensionSessionFilterSearch && seoExtensionSessionFilterSearch.value ? seoExtensionSessionFilterSearch.value.trim() : "",
+        page: seoExtensionSessionFilterPage && seoExtensionSessionFilterPage.value ? seoExtensionSessionFilterPage.value : 1,
+        limit: seoExtensionSessionFilterLimit && seoExtensionSessionFilterLimit.value ? seoExtensionSessionFilterLimit.value : 10,
+      });
       seoExtensionSessions.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       seoExtensionSessions.textContent = "Failed to load SEO extension sessions.";
@@ -6901,6 +6913,12 @@
   if (refreshSeoExtensionEventsBtn) {
     refreshSeoExtensionEventsBtn.addEventListener("click", async function () {
       await loadSeoExtensionEvents();
+    });
+  }
+
+  if (refreshSeoExtensionSessionsBtn) {
+    refreshSeoExtensionSessionsBtn.addEventListener("click", async function () {
+      await loadSeoExtensionSessions();
     });
   }
 
