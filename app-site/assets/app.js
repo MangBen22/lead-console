@@ -405,6 +405,7 @@
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
+  const downloadSeoIssuesExportBtn = document.getElementById("downloadSeoIssuesExportBtn");
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
@@ -6911,6 +6912,19 @@
   if (refreshSeoIssuesBtn) {
     refreshSeoIssuesBtn.addEventListener("click", async function () {
       await loadSeoIssuesSummary();
+    });
+  }
+
+  if (downloadSeoIssuesExportBtn) {
+    downloadSeoIssuesExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.issues.summary.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-issues-summary-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 

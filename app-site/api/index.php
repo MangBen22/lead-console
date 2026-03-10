@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.18-seo-compare-export',
+        'phase' => '4.19-seo-issues-summary-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.18-seo-compare-export',
+        'phase' => '4.19-seo-issues-summary-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15246,6 +15246,94 @@ if ($action === 'seo.issues.summary') {
         'priority_summary' => $prioritySummary,
         'issues' => $issues,
         'project_id' => $projectId,
+    ]);
+}
+
+if ($action === 'seo.issues.summary.export') {
+    $rows = app_read_json_file(seo_audits_path(), []);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    if ($projectId !== '') {
+        $rows = array_values(array_filter($rows, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $prioritySummary = [
+        'critical' => 0,
+        'fix_soon' => 0,
+        'nice_to_have' => 0,
+    ];
+    $issueMap = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $rollup = isset($row['issue_rollup']) && is_array($row['issue_rollup'])
+            ? $row['issue_rollup']
+            : seo_issue_rollup_from_checks(isset($row['checks']) && is_array($row['checks']) ? $row['checks'] : [])['issues'];
+        $priorities = isset($row['priority_summary']) && is_array($row['priority_summary'])
+            ? $row['priority_summary']
+            : seo_issue_rollup_from_checks(isset($row['checks']) && is_array($row['checks']) ? $row['checks'] : [])['priority_summary'];
+        foreach (['critical', 'fix_soon', 'nice_to_have'] as $key) {
+            $prioritySummary[$key] += (int) ($priorities[$key] ?? 0);
+        }
+        foreach ($rollup as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+            $check = (string) ($issue['check'] ?? 'unknown');
+            if (!isset($issueMap[$check])) {
+                $issueMap[$check] = [
+                    'check' => $check,
+                    'priority' => (string) ($issue['priority'] ?? 'nice_to_have'),
+                    'occurrences' => 0,
+                    'messages' => [],
+                    'statuses' => [],
+                ];
+            }
+            $issueMap[$check]['occurrences'] += (int) ($issue['occurrences'] ?? 0);
+            foreach ((array) ($issue['messages'] ?? []) as $message) {
+                $msg = trim((string) $message);
+                if ($msg !== '' && !in_array($msg, $issueMap[$check]['messages'], true)) {
+                    $issueMap[$check]['messages'][] = $msg;
+                }
+            }
+            foreach ((array) ($issue['statuses'] ?? []) as $status) {
+                $state = trim((string) $status);
+                if ($state !== '' && !in_array($state, $issueMap[$check]['statuses'], true)) {
+                    $issueMap[$check]['statuses'][] = $state;
+                }
+            }
+            $currentPriority = (string) ($issueMap[$check]['priority'] ?? 'nice_to_have');
+            $nextPriority = (string) ($issue['priority'] ?? 'nice_to_have');
+            if ($currentPriority !== 'critical' && ($nextPriority === 'critical' || ($currentPriority === 'nice_to_have' && $nextPriority === 'fix_soon'))) {
+                $issueMap[$check]['priority'] = $nextPriority;
+            }
+        }
+    }
+    $issues = array_values($issueMap);
+    usort($issues, static function ($a, $b) {
+        $rank = ['critical' => 0, 'fix_soon' => 1, 'nice_to_have' => 2];
+        $aRank = $rank[(string) ($a['priority'] ?? 'nice_to_have')] ?? 9;
+        $bRank = $rank[(string) ($b['priority'] ?? 'nice_to_have')] ?? 9;
+        if ($aRank !== $bRank) {
+            return $aRank <=> $bRank;
+        }
+        return (int) ($b['occurrences'] ?? 0) <=> (int) ($a['occurrences'] ?? 0);
+    });
+    audit_event('seo', 'issues.summary.export', [
+        'project_id' => $projectId,
+        'issue_count' => count($issues),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_issues_summary_export_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'audit_count' => count($rows),
+            'priority_summary' => $prioritySummary,
+            'issues' => $issues,
+            'project_id' => $projectId,
+        ],
     ]);
 }
 
