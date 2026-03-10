@@ -265,6 +265,7 @@
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
   const crmDeliveryWatchView = document.getElementById("crmDeliveryWatchView");
+  const refreshCrmSyncLogBtn = document.getElementById("refreshCrmSyncLogBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
@@ -2766,7 +2767,13 @@
   async function loadCrmSyncLog() {
     if (!crmSyncLog) return;
     try {
-      const data = await apiGet("crm.push.log");
+      const data = await apiGetWithParams("crm.push.log", {
+        status: document.getElementById("crmSyncFilterStatus") && document.getElementById("crmSyncFilterStatus").value ? document.getElementById("crmSyncFilterStatus").value.trim() : "",
+        connector_id: document.getElementById("crmSyncFilterConnector") && document.getElementById("crmSyncFilterConnector").value ? document.getElementById("crmSyncFilterConnector").value.trim() : "",
+        search: document.getElementById("crmSyncFilterSearch") && document.getElementById("crmSyncFilterSearch").value ? document.getElementById("crmSyncFilterSearch").value.trim() : "",
+        page: document.getElementById("crmSyncFilterPage") && document.getElementById("crmSyncFilterPage").value ? document.getElementById("crmSyncFilterPage").value : 1,
+        limit: document.getElementById("crmSyncFilterLimit") && document.getElementById("crmSyncFilterLimit").value ? document.getElementById("crmSyncFilterLimit").value : 10,
+      });
       crmSyncLog.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       crmSyncLog.textContent = "Failed to load CRM sync log.";
@@ -4666,6 +4673,12 @@
   if (refreshCrmDeliveryWatchBtn) {
     refreshCrmDeliveryWatchBtn.addEventListener("click", async function () {
       await loadCrmDeliveryWatch();
+    });
+  }
+
+  if (refreshCrmSyncLogBtn) {
+    refreshCrmSyncLogBtn.addEventListener("click", async function () {
+      await loadCrmSyncLog();
     });
   }
 

@@ -562,6 +562,29 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h3>Delivery Watch</h3>
                 <pre id="crmDeliveryWatchView">Loading...</pre>
                 <h3>Sync Log</h3>
+                <form id="crmSyncFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmSyncFilterStatus">Sync Status</label>
+                        <input id="crmSyncFilterStatus" type="text" placeholder="queued_to_connectors">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSyncFilterConnector">Connector ID</label>
+                        <input id="crmSyncFilterConnector" type="text" placeholder="connector_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSyncFilterSearch">Sync Search</label>
+                        <input id="crmSyncFilterSearch" type="text" placeholder="sync id or site">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSyncFilterPage">Sync Page</label>
+                        <input id="crmSyncFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmSyncFilterLimit">Sync Limit</label>
+                        <input id="crmSyncFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshCrmSyncLogBtn" type="button">Refresh Sync Log</button>
+                </form>
                 <pre id="crmSyncLog">Loading...</pre>
                 <h3>Retry Queue</h3>
                 <pre id="crmRetryQueue">Loading...</pre>

@@ -302,6 +302,89 @@ function crm_connectors_bulk_update($payload = [])
     ];
 }
 
+function crm_sync_log_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $connectorId = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $statusCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $itemStatus = strtolower((string) ($item['status'] ?? 'unknown'));
+        if (!isset($statusCounts[$itemStatus])) {
+            $statusCounts[$itemStatus] = 0;
+        }
+        $statusCounts[$itemStatus]++;
+        if ($status !== '' && $itemStatus !== $status) {
+            continue;
+        }
+        if ($connectorId !== '') {
+            $matchedConnector = false;
+            foreach ((array) ($item['connectors'] ?? []) as $connector) {
+                if (strpos(strtolower((string) ($connector['connector_id'] ?? '')), $connectorId) !== false) {
+                    $matchedConnector = true;
+                    break;
+                }
+            }
+            if (!$matchedConnector) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['sync_id'] ?? ''),
+                (string) ($item['status'] ?? ''),
+                json_encode($item['connectors'] ?? []),
+                json_encode($item['sites'] ?? []),
+            ] as $haystack) {
+                if (strpos(strtolower((string) $haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'status' => $status,
+            'connector_id' => $connectorId,
+            'search' => $search,
+            'status_counts' => $statusCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6756,7 +6839,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.04-crm-connector-bulk-update',
+        'phase' => '5.05-crm-sync-log-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12607,7 +12690,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.04-crm-connector-bulk-update',
+        'phase' => '5.05-crm-sync-log-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14864,11 +14947,12 @@ if ($action === 'crm.push.sync') {
 }
 
 if ($action === 'crm.push.log') {
-    $logs = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $snapshot = crm_sync_log_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($logs),
-        'items' => $logs,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 
