@@ -4132,7 +4132,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.33-crm-smtp-watch',
+        'phase' => '2.34-crm-smtp-watch-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6558,7 +6558,7 @@ function execute_automation_run($settings, $source = 'manual')
         'created_at' => gmdate('c'),
         'source' => (string) $source,
         'settings_snapshot' => $settings,
-        'crm' => ['processed' => 0, 'failed' => 0],
+        'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
         'social' => ['processed' => 0, 'failed' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
@@ -6591,6 +6591,9 @@ function execute_automation_run($settings, $source = 'manual')
                 ]);
             }
         }
+        $smtpWatch = crm_smtp_watch_snapshot('automation_' . (string) $source, true);
+        $summary['crm']['smtp_disconnected_sites'] = (int) (($smtpWatch['run']['summary']['disconnected_sites'] ?? 0));
+        $summary['crm']['smtp_watch_run_id'] = (string) ($smtpWatch['run']['run_id'] ?? '');
     }
 
     if (!empty($settings['modules']['social'])) {
@@ -6673,7 +6676,11 @@ function execute_automation_run($settings, $source = 'manual')
     $runs = array_slice($runs, 0, 200);
     app_write_json_file(automation_runs_path(), $runs);
 
-    $failTotal = $summary['crm']['failed'] + $summary['social']['failed'] + $summary['webops']['failed'] + $summary['seo']['failed'];
+    $failTotal = $summary['crm']['failed']
+        + (int) ($summary['crm']['smtp_disconnected_sites'] ?? 0)
+        + $summary['social']['failed']
+        + $summary['webops']['failed']
+        + $summary['seo']['failed'];
     if ($failTotal > 0) {
         push_notification('critical', 'Automation run completed with issues.', [
             'automation_id' => $automationId,
@@ -6779,7 +6786,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.33-crm-smtp-watch',
+        'phase' => '2.34-crm-smtp-watch-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8860,11 +8867,13 @@ if ($action === 'crm.smtp.probe') {
         out_json(['ok' => false, 'error' => 'Site not found.'], 404);
     }
     $res = app_bridge_request($site, 'POST', 'bridge/smtp-probe', []);
+    $watch = crm_smtp_watch_snapshot('smtp_probe', true);
     audit_event('crm', 'smtp.probe', ['site_id' => (string) ($site['site_id'] ?? ''), 'ok' => !empty($res['ok']) ? 1 : 0]);
     out_json([
         'ok' => !empty($res['ok']),
         'site_id' => (string) ($site['site_id'] ?? ''),
         'response' => $res,
+        'smtp_watch' => $watch['run'],
     ], !empty($res['ok']) ? 200 : 502);
 }
 
@@ -8884,6 +8893,7 @@ if ($action === 'crm.smtp.send_test') {
     }
     $toEmail = trim((string) $data['to_email']);
     $res = app_bridge_request($site, 'POST', 'bridge/smtp-send-test', ['to_email' => $toEmail]);
+    $watch = crm_smtp_watch_snapshot('smtp_send_test', true);
     audit_event('crm', 'smtp.send_test', [
         'site_id' => (string) ($site['site_id'] ?? ''),
         'to_email' => $toEmail,
@@ -8893,6 +8903,7 @@ if ($action === 'crm.smtp.send_test') {
         'ok' => !empty($res['ok']),
         'site_id' => (string) ($site['site_id'] ?? ''),
         'response' => $res,
+        'smtp_watch' => $watch['run'],
     ], !empty($res['ok']) ? 200 : 502);
 }
 
@@ -8915,6 +8926,7 @@ if ($action === 'crm.smtp.confirm') {
         'to_email' => trim((string) ($data['to_email'] ?? '')),
     ];
     $res = app_bridge_request($site, 'POST', 'bridge/smtp-confirm', $payload);
+    $watch = crm_smtp_watch_snapshot('smtp_confirm', true);
     audit_event('crm', 'smtp.confirm', [
         'site_id' => (string) ($site['site_id'] ?? ''),
         'received' => !empty($payload['received']) ? 1 : 0,
@@ -8924,6 +8936,7 @@ if ($action === 'crm.smtp.confirm') {
         'ok' => !empty($res['ok']),
         'site_id' => (string) ($site['site_id'] ?? ''),
         'response' => $res,
+        'smtp_watch' => $watch['run'],
     ], !empty($res['ok']) ? 200 : 502);
 }
 

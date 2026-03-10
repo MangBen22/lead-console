@@ -2797,6 +2797,7 @@
         crmSmtpResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadCrmSmtpSummary();
+      await loadCrmSmtpWatch();
       const crmData = await apiGet("crm.summary");
       const crmPanel = document.getElementById("modCrm");
       if (crmPanel) {
