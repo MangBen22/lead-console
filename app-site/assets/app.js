@@ -407,6 +407,7 @@
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
+  const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
@@ -418,6 +419,13 @@
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoExtensionSummary = document.getElementById("seoExtensionSummary");
+  const seoAuditFilterProjectId = document.getElementById("seoAuditFilterProjectId");
+  const seoAuditFilterSource = document.getElementById("seoAuditFilterSource");
+  const seoAuditFilterSearch = document.getElementById("seoAuditFilterSearch");
+  const seoAuditFilterMinScore = document.getElementById("seoAuditFilterMinScore");
+  const seoAuditFilterMaxScore = document.getElementById("seoAuditFilterMaxScore");
+  const seoAuditFilterPage = document.getElementById("seoAuditFilterPage");
+  const seoAuditFilterLimit = document.getElementById("seoAuditFilterLimit");
   const seoAudits = document.getElementById("seoAudits");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
@@ -4005,7 +4013,15 @@
   async function loadSeoAudits() {
     if (!seoAudits) return;
     try {
-      const data = await apiGet("seo.audits.list");
+      const data = await apiGetWithParams("seo.audits.list", {
+        project_id: seoAuditFilterProjectId && seoAuditFilterProjectId.value ? seoAuditFilterProjectId.value.trim() : "",
+        source: seoAuditFilterSource && seoAuditFilterSource.value ? seoAuditFilterSource.value.trim() : "",
+        search: seoAuditFilterSearch && seoAuditFilterSearch.value ? seoAuditFilterSearch.value.trim() : "",
+        min_score: seoAuditFilterMinScore && seoAuditFilterMinScore.value ? seoAuditFilterMinScore.value : "",
+        max_score: seoAuditFilterMaxScore && seoAuditFilterMaxScore.value ? seoAuditFilterMaxScore.value : "",
+        page: seoAuditFilterPage && seoAuditFilterPage.value ? seoAuditFilterPage.value : 1,
+        limit: seoAuditFilterLimit && seoAuditFilterLimit.value ? seoAuditFilterLimit.value : 10,
+      });
       seoAudits.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       seoAudits.textContent = "Failed to load SEO audits.";
@@ -6785,6 +6801,12 @@
   if (refreshSeoExtensionSummaryBtn) {
     refreshSeoExtensionSummaryBtn.addEventListener("click", async function () {
       await loadSeoExtensionSummary();
+    });
+  }
+
+  if (refreshSeoAuditsBtn) {
+    refreshSeoAuditsBtn.addEventListener("click", async function () {
+      await loadSeoAudits();
     });
   }
 

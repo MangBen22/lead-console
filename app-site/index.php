@@ -1579,6 +1579,37 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoExtensionSummaryBtn" type="button">Refresh Extension Summary</button>
                     <button id="downloadSeoReportBtn" type="button">Download SEO Report</button>
                 </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoAuditFilterProjectId">Audit Project ID</label>
+                        <input id="seoAuditFilterProjectId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterSource">Audit Source</label>
+                        <input id="seoAuditFilterSource" type="text" placeholder="manual|browser_extension">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterSearch">Audit Search</label>
+                        <input id="seoAuditFilterSearch" type="text" placeholder="audit id, url, project">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterMinScore">Min Score</label>
+                        <input id="seoAuditFilterMinScore" type="number" min="0" max="100" placeholder="0">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterMaxScore">Max Score</label>
+                        <input id="seoAuditFilterMaxScore" type="number" min="0" max="100" placeholder="100">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterPage">Audit Page</label>
+                        <input id="seoAuditFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoAuditFilterLimit">Audit Limit</label>
+                        <input id="seoAuditFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSeoAuditsBtn" type="button">Refresh SEO Audits</button>
+                </div>
                 <h3>Issue Summary</h3>
                 <pre id="seoIssuesSummary">Loading...</pre>
                 <h3>History Summary</h3>
