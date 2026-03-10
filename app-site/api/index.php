@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.87-social-drafts-export',
+        'phase' => '2.88-social-drafts-list',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9272,6 +9272,77 @@ function collect_social_drafts()
     return $drafts;
 }
 
+function social_drafts_list_snapshot($query = [])
+{
+    $drafts = collect_social_drafts();
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $sourceSiteId = strtolower(trim((string) ($query['source_site_id'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    $hasUrl = strtolower(trim((string) ($query['has_url'] ?? '')));
+
+    $filtered = [];
+    foreach ($drafts as $index => $draft) {
+        if (!is_array($draft)) {
+            continue;
+        }
+        $item = $draft;
+        $item['draft_index'] = $index;
+        $item['message_length'] = strlen((string) ($item['message'] ?? ''));
+        $item['has_url'] = trim((string) ($item['url'] ?? '')) !== '' ? 1 : 0;
+        if ($sourceSiteId !== '' && strpos(strtolower((string) ($item['source_site_id'] ?? '')), $sourceSiteId) === false) {
+            continue;
+        }
+        if ($hasUrl === 'yes' && empty($item['has_url'])) {
+            continue;
+        }
+        if ($hasUrl === 'no' && !empty($item['has_url'])) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['title'] ?? ''),
+                (string) ($item['message'] ?? ''),
+                (string) ($item['url'] ?? ''),
+                (string) ($item['source_site_id'] ?? ''),
+                (string) ($item['lead_id'] ?? ''),
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($drafts),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'source_site_id' => $sourceSiteId,
+            'search' => $search,
+            'has_url' => $hasUrl,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function execute_social_connector_sync($connector, $drafts)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -9965,7 +10036,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.87-social-drafts-export',
+        'phase' => '2.88-social-drafts-list',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13005,6 +13076,15 @@ if ($action === 'social.drafts.plan') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
         'draft_count' => count($drafts),
+    ]);
+}
+
+if ($action === 'social.drafts.list') {
+    $snapshot = social_drafts_list_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

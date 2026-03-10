@@ -584,6 +584,40 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Draft List</h2>
+                <form id="socialDraftFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialDraftFilterSite">Draft Site ID</label>
+                        <input id="socialDraftFilterSite" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftFilterHasUrl">Has URL</label>
+                        <select id="socialDraftFilterHasUrl">
+                            <option value="">any</option>
+                            <option value="yes">yes</option>
+                            <option value="no">no</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftFilterSearch">Draft Search</label>
+                        <input id="socialDraftFilterSearch" type="text" placeholder="title, message, lead id">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftFilterPage">Draft Page</label>
+                        <input id="socialDraftFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftFilterLimit">Draft Limit</label>
+                        <input id="socialDraftFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshSocialDraftListBtn" type="button">Refresh Draft List</button>
+                </div>
+                <pre id="socialDraftList">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Draft Validation</h2>
                 <div class="actions">
                     <button id="refreshSocialDraftValidationBtn" type="button">Refresh Draft Validation</button>

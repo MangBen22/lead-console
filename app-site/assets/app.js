@@ -277,6 +277,7 @@
   const runSocialWatchBtn = document.getElementById("runSocialWatchBtn");
   const refreshSocialOpsSnapshotBtn = document.getElementById("refreshSocialOpsSnapshotBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
+  const refreshSocialDraftListBtn = document.getElementById("refreshSocialDraftListBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -291,6 +292,7 @@
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
+  const socialDraftList = document.getElementById("socialDraftList");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -3071,6 +3073,31 @@
     }
   }
 
+  function socialDraftFilters() {
+    const site = document.getElementById("socialDraftFilterSite");
+    const hasUrl = document.getElementById("socialDraftFilterHasUrl");
+    const search = document.getElementById("socialDraftFilterSearch");
+    const page = document.getElementById("socialDraftFilterPage");
+    const limit = document.getElementById("socialDraftFilterLimit");
+    return {
+      source_site_id: site && site.value ? site.value.trim() : "",
+      has_url: hasUrl && hasUrl.value ? hasUrl.value : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
+  }
+
+  async function loadSocialDraftList() {
+    if (!socialDraftList) return;
+    try {
+      const data = await apiGetWithParams("social.drafts.list", socialDraftFilters());
+      socialDraftList.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDraftList.textContent = "Failed to load social draft list.";
+    }
+  }
+
   async function downloadSocialDraftsExport() {
     const data = await apiGetWithParams("social.drafts.export", { limit: 20 });
     const filename = data && data.filename ? String(data.filename) : ("social-drafts-export-" + Date.now() + ".json");
@@ -3417,6 +3444,7 @@
     await loadSocialWatch();
     await loadSocialOperationsSnapshot();
     await loadSocialDraftsPreview();
+    await loadSocialDraftList();
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
     await loadSocialDeliverySummary();
@@ -4211,6 +4239,12 @@
   if (refreshSocialDraftsBtn) {
     refreshSocialDraftsBtn.addEventListener("click", async function () {
       await loadSocialDraftsPreview();
+    });
+  }
+
+  if (refreshSocialDraftListBtn) {
+    refreshSocialDraftListBtn.addEventListener("click", async function () {
+      await loadSocialDraftList();
     });
   }
 
