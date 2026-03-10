@@ -217,6 +217,7 @@
   const refreshLeadsQualityBtn = document.getElementById("refreshLeadsQualityBtn");
   const refreshLeadsDeliveryHistoryBtn = document.getElementById("refreshLeadsDeliveryHistoryBtn");
   const refreshLeadsReviewQueueBtn = document.getElementById("refreshLeadsReviewQueueBtn");
+  const downloadLeadsReviewQueueBtn = document.getElementById("downloadLeadsReviewQueueBtn");
   const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
   const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
   const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
@@ -2309,19 +2310,23 @@
     }
   }
 
+  function leadsReviewQueueFilters() {
+    const status = document.getElementById("leadsReviewStatusFilter");
+    const site = document.getElementById("leadsReviewQueueSiteFilter");
+    const page = document.getElementById("leadsReviewQueuePage");
+    const limit = document.getElementById("leadsReviewQueueLimit");
+    return {
+      review_status: status && status.value ? status.value : "pending",
+      site_id: site && site.value ? site.value.trim() : "",
+      page: page && page.value ? page.value.trim() : "1",
+      limit: limit && limit.value ? limit.value.trim() : "8",
+    };
+  }
+
   async function loadLeadsReviewQueue() {
     if (!leadsReviewQueueView) return;
     try {
-      const status = document.getElementById("leadsReviewStatusFilter");
-      const site = document.getElementById("leadsReviewQueueSiteFilter");
-      const page = document.getElementById("leadsReviewQueuePage");
-      const limit = document.getElementById("leadsReviewQueueLimit");
-      const data = await apiGetWithParams("leads.review.queue", {
-        review_status: status && status.value ? status.value : "pending",
-        site_id: site && site.value ? site.value.trim() : "",
-        page: page && page.value ? page.value.trim() : "1",
-        limit: limit && limit.value ? limit.value.trim() : "8",
-      });
+      const data = await apiGetWithParams("leads.review.queue", leadsReviewQueueFilters());
       leadsReviewQueueView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       leadsReviewQueueView.textContent = "Failed to load leads review queue.";
@@ -4283,6 +4288,15 @@
   if (refreshLeadsReviewQueueBtn) {
     refreshLeadsReviewQueueBtn.addEventListener("click", async function () {
       await loadLeadsReviewQueue();
+    });
+  }
+
+  if (downloadLeadsReviewQueueBtn) {
+    downloadLeadsReviewQueueBtn.addEventListener("click", async function () {
+      const data = await apiGetWithParams("leads.review.queue.export", leadsReviewQueueFilters());
+      if (data && data.ok && data.export) {
+        downloadJsonFile(data.filename || "leads-review-queue.json", data.export);
+      }
     });
   }
 

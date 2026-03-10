@@ -5424,7 +5424,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.64-leads-review-draft-selector',
+        'phase' => '2.65-leads-review-queue-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8815,7 +8815,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.64-leads-review-draft-selector',
+        'phase' => '2.65-leads-review-queue-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10726,6 +10726,31 @@ if ($action === 'leads.review.queue') {
         'ok' => true,
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
+    ]);
+}
+
+if ($action === 'leads.review.queue.export') {
+    $snapshot = collect_leads_review_queue($_GET);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'filters' => [
+            'review_status' => isset($_GET['review_status']) ? (string) $_GET['review_status'] : 'pending',
+            'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+            'limit' => isset($snapshot['summary']['limit']) ? (int) $snapshot['summary']['limit'] : 10,
+            'page' => isset($snapshot['summary']['page']) ? (int) $snapshot['summary']['page'] : 1,
+        ],
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+    ];
+    audit_event('leads', 'review.queue.export', [
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+        'review_status' => isset($_GET['review_status']) ? (string) $_GET['review_status'] : 'pending',
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'leads_review_queue_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
     ]);
 }
 
