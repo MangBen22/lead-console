@@ -426,6 +426,7 @@
   const refreshSeoUrlHistoryBtn = document.getElementById("refreshSeoUrlHistoryBtn");
   const downloadSeoUrlHistoryExportBtn = document.getElementById("downloadSeoUrlHistoryExportBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
+  const downloadSeoCompareExportBtn = document.getElementById("downloadSeoCompareExportBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
   const seoHistorySummary = document.getElementById("seoHistorySummary");
   const seoExtensionSummary = document.getElementById("seoExtensionSummary");
@@ -7120,6 +7121,19 @@
   if (refreshSeoCompareBtn) {
     refreshSeoCompareBtn.addEventListener("click", async function () {
       await loadSeoCompare();
+    });
+  }
+
+  if (downloadSeoCompareExportBtn) {
+    downloadSeoCompareExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.compare.latest.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-compare-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 

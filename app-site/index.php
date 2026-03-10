@@ -1743,6 +1743,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoUrlHistoryBtn" type="button">Refresh URL History</button>
                     <button id="downloadSeoUrlHistoryExportBtn" type="button">Download URL History</button>
                     <button id="refreshSeoCompareBtn" type="button">Refresh Audit Compare</button>
+                    <button id="downloadSeoCompareExportBtn" type="button">Download Compare</button>
                 </div>
                 <label>URL history filter<input id="seoHistoryUrlFilter" type="text" placeholder="https://example.com/service-page"></label>
                 <pre id="seoProjectSnapshot">Loading...</pre>

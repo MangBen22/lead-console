@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.17-seo-project-snapshot-export',
+        'phase' => '4.18-seo-compare-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.17-seo-project-snapshot-export',
+        'phase' => '4.18-seo-compare-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17328,6 +17328,89 @@ if ($action === 'seo.compare.latest') {
         'added_checks' => $added,
         'cleared_checks' => $cleared,
         'changed_priorities' => $changed,
+    ]);
+}
+
+if ($action === 'seo.compare.latest.export') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $audits = app_read_json_file(seo_audits_path(), []);
+    if ($projectId !== '') {
+        $audits = array_values(array_filter($audits, static function ($row) use ($projectId) {
+            return (string) ($row['project_id'] ?? '') === $projectId;
+        }));
+    }
+    $latest = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+    $previous = isset($audits[1]) && is_array($audits[1]) ? $audits[1] : null;
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'message' => 'No SEO audit available for comparison.',
+        'latest' => null,
+        'previous' => null,
+    ];
+    if (is_array($latest)) {
+        $latestChecks = [];
+        foreach ((array) ($latest['issue_rollup'] ?? []) as $issue) {
+            if (is_array($issue) && !empty($issue['check'])) {
+                $latestChecks[(string) $issue['check']] = (string) ($issue['priority'] ?? 'nice_to_have');
+            }
+        }
+        if (empty($latestChecks)) {
+            foreach ((array) ($latest['checks'] ?? []) as $check) {
+                if (!is_array($check)) {
+                    continue;
+                }
+                $latestChecks[(string) ($check['check'] ?? 'unknown')] = seo_check_priority($check);
+            }
+        }
+        $previousChecks = [];
+        if (is_array($previous)) {
+            foreach ((array) ($previous['issue_rollup'] ?? []) as $issue) {
+                if (is_array($issue) && !empty($issue['check'])) {
+                    $previousChecks[(string) $issue['check']] = (string) ($issue['priority'] ?? 'nice_to_have');
+                }
+            }
+            if (empty($previousChecks)) {
+                foreach ((array) ($previous['checks'] ?? []) as $check) {
+                    if (!is_array($check)) {
+                        continue;
+                    }
+                    $previousChecks[(string) ($check['check'] ?? 'unknown')] = seo_check_priority($check);
+                }
+            }
+        }
+        $added = array_values(array_diff(array_keys($latestChecks), array_keys($previousChecks)));
+        $cleared = array_values(array_diff(array_keys($previousChecks), array_keys($latestChecks)));
+        $changed = [];
+        foreach ($latestChecks as $check => $priority) {
+            if (isset($previousChecks[$check]) && $previousChecks[$check] !== $priority) {
+                $changed[] = [
+                    'check' => $check,
+                    'from' => $previousChecks[$check],
+                    'to' => $priority,
+                ];
+            }
+        }
+        $payload = [
+            'exported_at' => gmdate('c'),
+            'project_id' => (string) ($latest['project_id'] ?? $projectId),
+            'latest' => $latest,
+            'previous' => $previous,
+            'score_delta' => is_array($previous) ? ((int) ($latest['score'] ?? 0) - (int) ($previous['score'] ?? 0)) : null,
+            'added_checks' => $added,
+            'cleared_checks' => $cleared,
+            'changed_priorities' => $changed,
+            'message' => !is_array($previous) ? 'Only one audit is available, so compare data is limited.' : '',
+        ];
+    }
+    audit_event('seo', 'compare.latest.export', [
+        'project_id' => $projectId,
+        'has_latest' => is_array($latest) ? 1 : 0,
+        'has_previous' => is_array($previous) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_compare_latest_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
     ]);
 }
 
