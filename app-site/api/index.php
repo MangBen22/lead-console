@@ -6214,7 +6214,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.84-social-schedule-detail',
+        'phase' => '2.85-social-schedule-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9902,7 +9902,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.84-social-schedule-detail',
+        'phase' => '2.85-social-schedule-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12986,6 +12986,28 @@ if ($action === 'social.schedule.detail') {
     $scheduleId = isset($_GET['schedule_id']) ? (string) $_GET['schedule_id'] : '';
     $snapshot = social_schedule_detail_snapshot($scheduleId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.schedule.export') {
+    $snapshot = social_schedule_list_snapshot($_GET);
+    $scheduleId = isset($_GET['schedule_id']) ? trim((string) $_GET['schedule_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'filters' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+    ];
+    if ($scheduleId !== '') {
+        $payload['schedule_detail'] = social_schedule_detail_snapshot($scheduleId);
+    }
+    audit_event('social', 'schedule.export', [
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'schedule_id' => $scheduleId,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_schedule_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.activity.list') {

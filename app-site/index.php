@@ -671,6 +671,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h2>Social Schedule Queue</h2>
                 <div class="actions">
                     <button id="refreshSocialScheduleSummaryBtn" type="button">Refresh Schedule Health</button>
+                    <button id="downloadSocialScheduleExportBtn" type="button">Download Schedule Export</button>
                 </div>
                 <div class="inline-form">
                     <div class="form-row">

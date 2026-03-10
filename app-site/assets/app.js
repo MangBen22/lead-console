@@ -298,6 +298,7 @@
   const socialScheduleSummary = document.getElementById("socialScheduleSummary");
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleDetail = document.getElementById("socialScheduleDetail");
+  const downloadSocialScheduleExportBtn = document.getElementById("downloadSocialScheduleExportBtn");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialScheduleTargetValidation = document.getElementById("socialScheduleTargetValidation");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
@@ -2765,6 +2766,17 @@
     }
   }
 
+  async function downloadSocialScheduleExport() {
+    const detailId = document.getElementById("socialScheduleDetailId");
+    const params = socialScheduleFilters();
+    if (detailId && detailId.value) {
+      params.schedule_id = detailId.value.trim();
+    }
+    const data = await apiGetWithParams("social.schedule.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-schedule-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function validateSocialScheduleTargets() {
     if (!socialScheduleTargetValidation) return null;
     const connectorIds = document.getElementById("socialScheduleConnectorIds");
@@ -4184,6 +4196,12 @@
   if (refreshSocialScheduleSummaryBtn) {
     refreshSocialScheduleSummaryBtn.addEventListener("click", async function () {
       await loadSocialScheduleSummary();
+    });
+  }
+
+  if (downloadSocialScheduleExportBtn) {
+    downloadSocialScheduleExportBtn.addEventListener("click", async function () {
+      await downloadSocialScheduleExport();
     });
   }
 
