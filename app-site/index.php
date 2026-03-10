@@ -1733,6 +1733,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="refreshSeoProjectSnapshotBtn" type="button">Refresh Project Snapshot</button>
                     <button id="refreshSeoActionPlanBtn" type="button">Refresh Action Plan</button>
+                    <button id="downloadSeoActionPlanExportBtn" type="button">Download Action Plan</button>
                     <button id="refreshSeoOpportunitiesBtn" type="button">Refresh Opportunities</button>
                     <button id="refreshSeoRegressionsBtn" type="button">Refresh Regressions</button>
                     <button id="runSeoRegressionsBtn" type="button">Run Regression Watch</button>

@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.13-seo-regressions-export',
+        'phase' => '4.14-seo-action-plan-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.13-seo-regressions-export',
+        'phase' => '4.14-seo-action-plan-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16731,6 +16731,66 @@ if ($action === 'seo.actions.plan') {
         'summary' => $plan['summary'],
         'actions' => $plan['actions'],
         'message' => is_array($latest) ? '' : 'No SEO audit available yet for action planning.',
+    ]);
+}
+
+if ($action === 'seo.actions.plan.export') {
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $snapshot = null;
+    ob_start();
+    $projects = app_read_json_file(seo_projects_path(), []);
+    $project = null;
+    if ($projectId !== '') {
+        foreach ($projects as $row) {
+            if (is_array($row) && (string) ($row['project_id'] ?? '') === $projectId) {
+                $project = $row;
+                break;
+            }
+        }
+    }
+    if (!is_array($project)) {
+        $project = isset($projects[0]) && is_array($projects[0]) ? $projects[0] : null;
+    }
+    if (!is_array($project)) {
+        $snapshot = [
+            'ok' => true,
+            'project' => null,
+            'message' => 'No SEO project configured.',
+            'summary' => ['new' => 0, 'persistent' => 0, 'monitor' => 0],
+            'actions' => [],
+        ];
+    } else {
+        $selectedProjectId = (string) ($project['project_id'] ?? '');
+        $audits = array_values(array_filter(app_read_json_file(seo_audits_path(), []), static function ($row) use ($selectedProjectId) {
+            return (string) ($row['project_id'] ?? '') === $selectedProjectId;
+        }));
+        $latest = isset($audits[0]) && is_array($audits[0]) ? $audits[0] : null;
+        $previous = isset($audits[1]) && is_array($audits[1]) ? $audits[1] : null;
+        $plan = seo_action_plan_from_audits($project, $latest, $previous);
+        $snapshot = [
+            'ok' => true,
+            'project' => $project,
+            'generated_at' => gmdate('c'),
+            'latest_audit_id' => is_array($latest) ? (string) ($latest['audit_id'] ?? '') : '',
+            'previous_audit_id' => is_array($previous) ? (string) ($previous['audit_id'] ?? '') : '',
+            'score_delta' => (is_array($latest) && is_array($previous)) ? ((int) ($latest['score'] ?? 0) - (int) ($previous['score'] ?? 0)) : null,
+            'summary' => $plan['summary'],
+            'actions' => $plan['actions'],
+            'message' => is_array($latest) ? '' : 'No SEO audit available yet for action planning.',
+        ];
+    }
+    ob_end_clean();
+    audit_event('seo', 'actions.plan.export', [
+        'project_id' => $projectId,
+        'action_count' => count(isset($snapshot['actions']) && is_array($snapshot['actions']) ? $snapshot['actions'] : []),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_action_plan_export_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'snapshot' => $snapshot,
+        ],
     ]);
 }
 
