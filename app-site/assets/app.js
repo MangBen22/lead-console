@@ -357,6 +357,7 @@
   const socialOpsHistoryView = document.getElementById("socialOpsHistoryView");
   const socialOpsHistorySummaryView = document.getElementById("socialOpsHistorySummaryView");
   const socialOpsLatestCompareView = document.getElementById("socialOpsLatestCompareView");
+  const socialOpsIssuesSummaryView = document.getElementById("socialOpsIssuesSummaryView");
   const downloadSocialOpsSnapshotBtn = document.getElementById("downloadSocialOpsSnapshotBtn");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
@@ -3975,6 +3976,21 @@
     }
   }
 
+  async function loadSocialOperationsIssuesSummary() {
+    if (!socialOpsIssuesSummaryView) return null;
+    const limit = document.getElementById("socialOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("social.operations.issues_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      socialOpsIssuesSummaryView.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      socialOpsIssuesSummaryView.textContent = "Failed to load social operations issues summary.";
+      return null;
+    }
+  }
+
   async function downloadSocialOperationsSnapshot() {
     const limit = document.getElementById("socialOperationsSnapshotLimit");
     const data = await apiGetWithParams("social.operations.export", {
@@ -4848,6 +4864,7 @@
     await loadSocialOperationsHistory();
     await loadSocialOperationsHistorySummary();
     await loadSocialOperationsLatestCompare();
+    await loadSocialOperationsIssuesSummary();
     await loadSocialDraftsPreview();
     await loadSocialDraftList();
     await loadSocialDraftRecommendations();
@@ -5795,6 +5812,7 @@
       await loadSocialOperationsHistory();
       await loadSocialOperationsHistorySummary();
       await loadSocialOperationsLatestCompare();
+      await loadSocialOperationsIssuesSummary();
     });
   }
 

@@ -3266,6 +3266,92 @@ function social_operations_latest_compare()
     ];
 }
 
+function social_operations_issues_summary($limit = 10)
+{
+    $snapshot = social_operations_snapshot($limit);
+    $summary = isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [];
+    $issues = [];
+
+    if ((int) ($summary['watch_expired_connectors'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'critical',
+            'category' => 'connectors',
+            'message' => 'One or more Social connectors are expired.',
+            'count' => (int) ($summary['watch_expired_connectors'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['watch_blocked_connectors'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'connectors',
+            'message' => 'Social connectors are blocked or not ready.',
+            'count' => (int) ($summary['watch_blocked_connectors'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['schedule_failed_items'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'schedule',
+            'message' => 'Social schedule queue contains failed items.',
+            'count' => (int) ($summary['schedule_failed_items'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['retry_backlog'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'retry_queue',
+            'message' => 'Social retry queue still has backlog.',
+            'count' => (int) ($summary['retry_backlog'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['draft_blocked_pairs'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'info',
+            'category' => 'drafts',
+            'message' => 'Some Social draft-target pairs are blocked.',
+            'count' => (int) ($summary['draft_blocked_pairs'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['high_priority_inbox_backlog'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'inbox',
+            'message' => 'High-priority Social inbox threads need attention.',
+            'count' => (int) ($summary['high_priority_inbox_backlog'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['unassigned_inbox_backlog'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'info',
+            'category' => 'inbox',
+            'message' => 'Some Social inbox backlog threads are unassigned.',
+            'count' => (int) ($summary['unassigned_inbox_backlog'] ?? 0),
+        ];
+    }
+
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($issues as $issue) {
+        $severity = (string) ($issue['severity'] ?? 'info');
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+        ],
+        'issues' => $issues,
+    ];
+}
+
 function social_inbox_workload_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -7855,7 +7941,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.29-social-operations-latest-compare',
+        'phase' => '5.30-social-operations-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13706,7 +13792,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.29-social-operations-latest-compare',
+        'phase' => '5.30-social-operations-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16841,6 +16927,20 @@ if ($action === 'social.operations.latest_compare') {
         'latest' => $compare['latest'],
         'previous' => $compare['previous'],
         'changes' => $compare['changes'],
+    ]);
+}
+
+if ($action === 'social.operations.issues_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $issues = social_operations_issues_summary($limit);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
     ]);
 }
 
