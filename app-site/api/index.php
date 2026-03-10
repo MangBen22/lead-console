@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.88-social-drafts-list',
+        'phase' => '2.89-social-draft-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9343,6 +9343,71 @@ function social_drafts_list_snapshot($query = [])
     ];
 }
 
+function social_draft_detail_snapshot($query = [])
+{
+    $draftIndexProvided = array_key_exists('draft_index', $query) && trim((string) ($query['draft_index'] ?? '')) !== '';
+    $leadIdProvided = array_key_exists('lead_id', $query) && trim((string) ($query['lead_id'] ?? '')) !== '';
+    if (!$draftIndexProvided && !$leadIdProvided) {
+        return ['ok' => false, 'error' => 'draft_index or lead_id is required.'];
+    }
+
+    $draftIndex = $draftIndexProvided ? max(0, (int) $query['draft_index']) : null;
+    $leadId = $leadIdProvided ? max(0, (int) $query['lead_id']) : null;
+    $drafts = collect_social_drafts();
+    $item = null;
+
+    foreach ($drafts as $index => $draft) {
+        if (!is_array($draft)) {
+            continue;
+        }
+        $matchesIndex = $draftIndexProvided ? ($index === $draftIndex) : true;
+        $matchesLead = $leadIdProvided ? ((int) ($draft['lead_id'] ?? 0) === $leadId) : true;
+        if (!$matchesIndex || !$matchesLead) {
+            continue;
+        }
+        $item = $draft;
+        $item['draft_index'] = $index;
+        break;
+    }
+
+    if (!is_array($item)) {
+        return ['ok' => false, 'error' => 'Draft not found.'];
+    }
+
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $readyConnectorIds = [];
+    $blockedConnectorIds = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $connectorId = (string) ($connector['connector_id'] ?? '');
+        if ($connectorId === '') {
+            continue;
+        }
+        $validation = social_validate_draft_for_connector($connector, $item);
+        if (!empty($validation['ready'])) {
+            $readyConnectorIds[] = $connectorId;
+        } else {
+            $blockedConnectorIds[] = $connectorId;
+        }
+    }
+
+    return [
+        'ok' => true,
+        'item' => $item,
+        'meta' => [
+            'has_url' => trim((string) ($item['url'] ?? '')) !== '' ? 1 : 0,
+            'message_length' => strlen((string) ($item['message'] ?? '')),
+            'connector_count' => count($connectors),
+            'ready_connector_count' => count($readyConnectorIds),
+            'blocked_connector_count' => count($blockedConnectorIds),
+            'ready_connector_ids' => $readyConnectorIds,
+            'blocked_connector_ids' => $blockedConnectorIds,
+        ],
+    ];
+}
+
 function execute_social_connector_sync($connector, $drafts)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -10036,7 +10101,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.88-social-drafts-list',
+        'phase' => '2.89-social-draft-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13086,6 +13151,11 @@ if ($action === 'social.drafts.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.drafts.detail') {
+    $snapshot = social_draft_detail_snapshot($_GET);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.drafts.export') {

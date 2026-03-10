@@ -278,6 +278,7 @@
   const refreshSocialOpsSnapshotBtn = document.getElementById("refreshSocialOpsSnapshotBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialDraftListBtn = document.getElementById("refreshSocialDraftListBtn");
+  const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -293,6 +294,7 @@
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialDraftList = document.getElementById("socialDraftList");
+  const socialDraftDetail = document.getElementById("socialDraftDetail");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -3098,6 +3100,37 @@
     }
   }
 
+  async function loadSocialDraftDetail() {
+    if (!socialDraftDetail) return;
+    const draftIndex = document.getElementById("socialDraftDetailIndex");
+    const leadId = document.getElementById("socialDraftDetailLeadId");
+    const params = {};
+    if (draftIndex && draftIndex.value !== "") {
+      params.draft_index = Number(draftIndex.value);
+    }
+    if (leadId && leadId.value !== "") {
+      params.lead_id = Number(leadId.value);
+    }
+    if (!Object.keys(params).length) {
+      socialDraftDetail.textContent = "Enter a draft index or lead ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.drafts.detail", params);
+      socialDraftDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const title = document.getElementById("socialScheduleTitle");
+        const message = document.getElementById("socialScheduleMessage");
+        const url = document.getElementById("socialScheduleUrl");
+        if (title) title.value = data.item.title || "";
+        if (message) message.value = data.item.message || "";
+        if (url) url.value = data.item.url || "";
+      }
+    } catch (err) {
+      socialDraftDetail.textContent = "Failed to load social draft detail.";
+    }
+  }
+
   async function downloadSocialDraftsExport() {
     const data = await apiGetWithParams("social.drafts.export", { limit: 20 });
     const filename = data && data.filename ? String(data.filename) : ("social-drafts-export-" + Date.now() + ".json");
@@ -4245,6 +4278,12 @@
   if (refreshSocialDraftListBtn) {
     refreshSocialDraftListBtn.addEventListener("click", async function () {
       await loadSocialDraftList();
+    });
+  }
+
+  if (refreshSocialDraftDetailBtn) {
+    refreshSocialDraftDetailBtn.addEventListener("click", async function () {
+      await loadSocialDraftDetail();
     });
   }
 
