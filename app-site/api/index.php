@@ -5917,7 +5917,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.71-crm-delivery-watch',
+        'phase' => '2.72-crm-delivery-watch-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9067,7 +9067,7 @@ function execute_automation_run($settings, $source = 'manual')
         'created_at' => gmdate('c'),
         'source' => (string) $source,
         'settings_snapshot' => $settings,
-        'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
+        'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => '', 'delivery_degraded_connectors' => 0, 'delivery_watch_id' => ''],
         'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => '', 'inbox_watch_run_id' => '', 'inbox_stale_backlog' => 0, 'inbox_unassigned_backlog' => 0, 'inbox_attention_required' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
@@ -9103,6 +9103,9 @@ function execute_automation_run($settings, $source = 'manual')
         $smtpWatch = crm_smtp_watch_snapshot('automation_' . (string) $source, true);
         $summary['crm']['smtp_disconnected_sites'] = (int) (($smtpWatch['run']['summary']['disconnected_sites'] ?? 0));
         $summary['crm']['smtp_watch_run_id'] = (string) ($smtpWatch['run']['run_id'] ?? '');
+        $deliveryWatch = crm_delivery_watch_evaluate('automation_' . (string) $source, true);
+        $summary['crm']['delivery_degraded_connectors'] = (int) (($deliveryWatch['summary']['degraded_count'] ?? 0));
+        $summary['crm']['delivery_watch_id'] = (string) ($deliveryWatch['watch_id'] ?? '');
     }
 
     if (!empty($settings['modules']['social'])) {
@@ -9308,7 +9311,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.71-crm-delivery-watch',
+        'phase' => '2.72-crm-delivery-watch-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
