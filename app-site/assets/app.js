@@ -400,6 +400,7 @@
   const seoProjectFilterPage = document.getElementById("seoProjectFilterPage");
   const seoProjectFilterLimit = document.getElementById("seoProjectFilterLimit");
   const loadSeoProjectDetailBtn = document.getElementById("loadSeoProjectDetailBtn");
+  const downloadSeoProjectsExportBtn = document.getElementById("downloadSeoProjectsExportBtn");
   let currentLeadsReviewDrafts = [];
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
@@ -3984,6 +3985,23 @@
     }
   }
 
+  async function downloadSeoProjectsExport() {
+    const detailId = document.getElementById("seoProjectDetailId");
+    const projectId = detailId && detailId.value ? detailId.value.trim() : "";
+    const data = await apiGetWithParams("seo.projects.export", {
+      status: seoProjectFilterStatus && seoProjectFilterStatus.value ? seoProjectFilterStatus.value : "",
+      search: seoProjectFilterSearch && seoProjectFilterSearch.value ? seoProjectFilterSearch.value.trim() : "",
+      page: seoProjectFilterPage && seoProjectFilterPage.value ? seoProjectFilterPage.value : 1,
+      limit: seoProjectFilterLimit && seoProjectFilterLimit.value ? seoProjectFilterLimit.value : 10,
+      project_id: projectId,
+      include_detail: projectId ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "seo-projects-export.json", data.export || data);
+    if (seoResult) {
+      seoResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadSeoAudits() {
     if (!seoAudits) return;
     try {
@@ -6749,6 +6767,12 @@
   if (loadSeoProjectDetailBtn) {
     loadSeoProjectDetailBtn.addEventListener("click", async function () {
       await loadSeoProjectDetail();
+    });
+  }
+
+  if (downloadSeoProjectsExportBtn) {
+    downloadSeoProjectsExportBtn.addEventListener("click", async function () {
+      await downloadSeoProjectsExport();
     });
   }
 

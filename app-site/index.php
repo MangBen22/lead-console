@@ -1533,6 +1533,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="seoProjectFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSeoProjectsBtn" type="button">Refresh SEO Projects</button>
+                    <button id="downloadSeoProjectsExportBtn" type="button">Download SEO Projects</button>
                 </div>
                 <pre id="seoProjects">Loading...</pre>
                 <div class="inline-form">

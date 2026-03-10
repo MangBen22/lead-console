@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.02-seo-project-detail',
+        'phase' => '4.03-seo-project-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11939,7 +11939,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.02-seo-project-detail',
+        'phase' => '4.03-seo-project-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15684,6 +15684,32 @@ if ($action === 'seo.projects.list') {
 if ($action === 'seo.projects.detail') {
     $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
     out_json(seo_project_detail_snapshot($projectId));
+}
+
+if ($action === 'seo.projects.export') {
+    $snapshot = seo_projects_list_snapshot($_GET);
+    $projectId = isset($_GET['project_id']) ? (string) $_GET['project_id'] : '';
+    $includeDetail = !empty($_GET['include_detail']);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'project_id' => $projectId,
+        'include_detail' => $includeDetail ? 1 : 0,
+    ];
+    if ($includeDetail) {
+        $payload['detail'] = seo_project_detail_snapshot($projectId);
+    }
+    audit_event('seo', 'projects.export', [
+        'project_id' => $projectId,
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'include_detail' => $includeDetail ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_projects_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'seo.projects.save') {
