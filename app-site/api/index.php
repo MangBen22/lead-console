@@ -6,6 +6,13 @@ require_once __DIR__ . '/lib.php';
 $config = app_config();
 $action = isset($_GET['action']) ? (string) $_GET['action'] : 'status';
 
+if (!defined('HOUR_IN_SECONDS')) {
+    define('HOUR_IN_SECONDS', 3600);
+}
+if (!defined('DAY_IN_SECONDS')) {
+    define('DAY_IN_SECONDS', 86400);
+}
+
 function out_json($data, $code = 200)
 {
     http_response_code($code);
@@ -475,6 +482,16 @@ function social_inbox_threads_path()
     return app_storage_path('social_inbox_threads.json');
 }
 
+function social_inbox_watch_state_path()
+{
+    return app_storage_path('social_inbox_watch_state.json');
+}
+
+function social_inbox_watch_runs_path()
+{
+    return app_storage_path('social_inbox_watch_runs.json');
+}
+
 function social_watch_state_path()
 {
     return app_storage_path('social_watch_state.json');
@@ -858,6 +875,138 @@ function social_inbox_workload_snapshot($limit = 10)
         'priority_counts' => $priorityCounts,
         'owners' => array_slice($owners, 0, $limit),
         'unassigned_threads' => array_slice($unassigned, 0, $limit),
+    ];
+}
+
+function social_inbox_watch_snapshot($source = 'manual', $emitNotifications = true, $staleAfterHours = 24)
+{
+    $rows = social_inbox_threads_rows(true);
+    $state = app_read_json_file(social_inbox_watch_state_path(), []);
+    $previousSummary = isset($state['summary']) && is_array($state['summary']) ? $state['summary'] : [];
+    $workload = social_inbox_workload_snapshot(10);
+    $summary = [
+        'backlog_total' => (int) ($workload['summary']['backlog_total'] ?? 0),
+        'high_priority_backlog' => (int) ($workload['summary']['high_priority_backlog'] ?? 0),
+        'unassigned_backlog' => (int) ($workload['summary']['unassigned_backlog'] ?? 0),
+        'stale_backlog' => 0,
+        'attention_required' => 0,
+    ];
+    $staleThreads = [];
+    $thresholdSeconds = max(1, (int) $staleAfterHours) * HOUR_IN_SECONDS;
+    $nowTs = time();
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $row = social_normalize_inbox_thread($row);
+        $status = (string) ($row['status'] ?? 'open');
+        if (!in_array($status, ['open', 'pending'], true)) {
+            continue;
+        }
+        $referenceAt = (string) ($row['updated_at'] ?? ($row['created_at'] ?? ''));
+        $referenceTs = $referenceAt !== '' ? strtotime($referenceAt) : false;
+        if ($referenceTs === false) {
+            continue;
+        }
+        $ageHours = (int) floor(max(0, $nowTs - $referenceTs) / HOUR_IN_SECONDS);
+        if (($nowTs - $referenceTs) < $thresholdSeconds) {
+            continue;
+        }
+        $summary['stale_backlog']++;
+        $staleThreads[] = [
+            'thread_id' => (string) ($row['thread_id'] ?? ''),
+            'provider' => (string) ($row['provider'] ?? ''),
+            'account_label' => (string) ($row['account_label'] ?? ''),
+            'subject' => (string) ($row['subject'] ?? ''),
+            'status' => $status,
+            'priority' => (string) ($row['priority'] ?? 'normal'),
+            'owner' => (string) ($row['owner'] ?? ''),
+            'age_hours' => $ageHours,
+            'updated_at' => $referenceAt,
+        ];
+    }
+
+    usort($staleThreads, static function ($a, $b) {
+        $left = (int) ($a['age_hours'] ?? 0);
+        $right = (int) ($b['age_hours'] ?? 0);
+        if ($left === $right) {
+            return strcmp((string) ($a['thread_id'] ?? ''), (string) ($b['thread_id'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+    $summary['attention_required'] = ($summary['high_priority_backlog'] > 0 || $summary['unassigned_backlog'] > 0 || $summary['stale_backlog'] > 0) ? 1 : 0;
+
+    if ($emitNotifications) {
+        $previousAttention = (int) ($previousSummary['attention_required'] ?? 0);
+        $previousStale = (int) ($previousSummary['stale_backlog'] ?? 0);
+        $previousUnassigned = (int) ($previousSummary['unassigned_backlog'] ?? 0);
+        $previousHighPriority = (int) ($previousSummary['high_priority_backlog'] ?? 0);
+
+        if ($previousAttention === 0 && $summary['attention_required'] === 1) {
+            push_notification('warning', 'Social inbox requires attention.', [
+                'source' => (string) $source,
+                'summary' => $summary,
+            ]);
+        } elseif ($previousAttention === 1 && $summary['attention_required'] === 0) {
+            push_notification('success', 'Social inbox attention queue cleared.', [
+                'source' => (string) $source,
+                'summary' => $summary,
+            ]);
+        }
+        if ($previousStale === 0 && $summary['stale_backlog'] > 0) {
+            push_notification('warning', 'Social inbox has stale backlog threads.', [
+                'source' => (string) $source,
+                'stale_backlog' => $summary['stale_backlog'],
+                'threads' => array_slice($staleThreads, 0, 5),
+            ]);
+        }
+        if ($previousUnassigned === 0 && $summary['unassigned_backlog'] > 0) {
+            push_notification('info', 'Social inbox has unassigned backlog threads.', [
+                'source' => (string) $source,
+                'unassigned_backlog' => $summary['unassigned_backlog'],
+            ]);
+        }
+        if ($previousHighPriority === 0 && $summary['high_priority_backlog'] > 0) {
+            push_notification('warning', 'Social inbox has high priority backlog threads.', [
+                'source' => (string) $source,
+                'high_priority_backlog' => $summary['high_priority_backlog'],
+            ]);
+        }
+    }
+
+    $run = [
+        'run_id' => 'social_inbox_watch_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'created_at' => gmdate('c'),
+        'stale_after_hours' => max(1, (int) $staleAfterHours),
+        'summary' => $summary,
+        'stale_threads' => array_slice($staleThreads, 0, 25),
+        'owners' => $workload['owners'],
+        'priority_counts' => $workload['priority_counts'],
+    ];
+    $runs = app_read_json_file(social_inbox_watch_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 200);
+    app_write_json_file(social_inbox_watch_runs_path(), $runs);
+
+    $nextState = [
+        'last_checked_at' => gmdate('c'),
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => (string) $source,
+        'summary' => $summary,
+        'stale_after_hours' => max(1, (int) $staleAfterHours),
+    ];
+    app_write_json_file(social_inbox_watch_state_path(), $nextState);
+    audit_event('social', 'inbox.watch', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'source' => (string) $source,
+        'summary' => $summary,
+    ]);
+
+    return [
+        'run' => $run,
+        'state' => $nextState,
     ];
 }
 
@@ -1527,6 +1676,8 @@ function module_storage_map()
         'social_schedule_queue' => social_schedule_queue_path(),
         'social_activity_feed' => social_activity_feed_path(),
         'social_inbox_threads' => social_inbox_threads_path(),
+        'social_inbox_watch_state' => social_inbox_watch_state_path(),
+        'social_inbox_watch_runs' => social_inbox_watch_runs_path(),
         'social_watch_state' => social_watch_state_path(),
         'social_watch_runs' => social_watch_runs_path(),
         'webops_monitors' => webops_monitors_path(),
@@ -4765,7 +4916,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.51-social-inbox-workload-summary',
+        'phase' => '2.52-social-inbox-watch-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7820,7 +7971,7 @@ function execute_automation_run($settings, $source = 'manual')
         'source' => (string) $source,
         'settings_snapshot' => $settings,
         'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
-        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => ''],
+        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => '', 'inbox_watch_run_id' => '', 'inbox_stale_backlog' => 0, 'inbox_unassigned_backlog' => 0, 'inbox_attention_required' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
@@ -7888,6 +8039,11 @@ function execute_automation_run($settings, $source = 'manual')
         $summary['social']['blocked_connectors'] = (int) (($socialWatch['run']['summary']['blocked_connectors'] ?? 0));
         $summary['social']['expired_connectors'] = (int) (($socialWatch['run']['summary']['expired_connectors'] ?? 0));
         $summary['social']['watch_run_id'] = (string) ($socialWatch['run']['run_id'] ?? '');
+        $inboxWatch = social_inbox_watch_snapshot('automation_' . (string) $source, true);
+        $summary['social']['inbox_watch_run_id'] = (string) (($inboxWatch['run']['run_id'] ?? ''));
+        $summary['social']['inbox_stale_backlog'] = (int) (($inboxWatch['run']['summary']['stale_backlog'] ?? 0));
+        $summary['social']['inbox_unassigned_backlog'] = (int) (($inboxWatch['run']['summary']['unassigned_backlog'] ?? 0));
+        $summary['social']['inbox_attention_required'] = (int) (($inboxWatch['run']['summary']['attention_required'] ?? 0));
     }
 
     if (!empty($settings['modules']['webops'])) {
@@ -7945,6 +8101,7 @@ function execute_automation_run($settings, $source = 'manual')
     $failTotal = $summary['crm']['failed']
         + (int) ($summary['crm']['smtp_disconnected_sites'] ?? 0)
         + $summary['social']['failed']
+        + (int) ($summary['social']['inbox_attention_required'] ?? 0)
         + $summary['webops']['failed']
         + $summary['seo']['failed'];
     if ($failTotal > 0) {
@@ -8054,7 +8211,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.51-social-inbox-workload-summary',
+        'phase' => '2.52-social-inbox-watch-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10876,6 +11033,33 @@ if ($action === 'social.inbox.workload') {
         'priority_counts' => $snapshot['priority_counts'],
         'owners' => $snapshot['owners'],
         'unassigned_threads' => $snapshot['unassigned_threads'],
+    ]);
+}
+
+if ($action === 'social.inbox.watch.summary') {
+    $state = app_read_json_file(social_inbox_watch_state_path(), []);
+    $runs = app_read_json_file(social_inbox_watch_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'state' => $state,
+        'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+        'runs_count' => count($runs),
+    ]);
+}
+
+if ($action === 'social.inbox.watch.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    $staleAfterHours = isset($data['stale_after_hours']) ? (int) $data['stale_after_hours'] : 24;
+    $watch = social_inbox_watch_snapshot('manual_run', true, $staleAfterHours);
+    out_json([
+        'ok' => true,
+        'run' => $watch['run'],
+        'state' => $watch['state'],
     ]);
 }
 
