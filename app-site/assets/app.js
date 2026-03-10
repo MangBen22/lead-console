@@ -280,6 +280,7 @@
   const refreshSocialDraftListBtn = document.getElementById("refreshSocialDraftListBtn");
   const refreshSocialDraftDetailBtn = document.getElementById("refreshSocialDraftDetailBtn");
   const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
+  const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -297,6 +298,7 @@
   const socialDraftList = document.getElementById("socialDraftList");
   const socialDraftDetail = document.getElementById("socialDraftDetail");
   const socialDraftRecommendations = document.getElementById("socialDraftRecommendations");
+  const socialDraftScheduleResult = document.getElementById("socialDraftScheduleResult");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
@@ -3124,9 +3126,13 @@
         const title = document.getElementById("socialScheduleTitle");
         const message = document.getElementById("socialScheduleMessage");
         const url = document.getElementById("socialScheduleUrl");
+        const scheduleIndex = document.getElementById("socialDraftScheduleIndex");
+        const scheduleLeadId = document.getElementById("socialDraftScheduleLeadId");
         if (title) title.value = data.item.title || "";
         if (message) message.value = data.item.message || "";
         if (url) url.value = data.item.url || "";
+        if (scheduleIndex) scheduleIndex.value = data.item.draft_index != null ? String(data.item.draft_index) : "";
+        if (scheduleLeadId) scheduleLeadId.value = data.item.lead_id != null ? String(data.item.lead_id) : "";
       }
     } catch (err) {
       socialDraftDetail.textContent = "Failed to load social draft detail.";
@@ -3153,15 +3159,47 @@
       socialDraftRecommendations.textContent = JSON.stringify(data, null, 2);
       if (data && data.summary && Number(data.summary.detail_mode) === 1 && Array.isArray(data.items) && data.items.length) {
         const connectorIds = document.getElementById("socialScheduleConnectorIds");
+        const draftConnectorIds = document.getElementById("socialDraftScheduleConnectorIds");
+        const recommendedValue = Array.isArray(data.items[0].recommended_connector_ids)
+          ? data.items[0].recommended_connector_ids.join(",")
+          : "";
         if (connectorIds) {
-          connectorIds.value = Array.isArray(data.items[0].recommended_connector_ids)
-            ? data.items[0].recommended_connector_ids.join(",")
-            : "";
+          connectorIds.value = recommendedValue;
+        }
+        if (draftConnectorIds) {
+          draftConnectorIds.value = recommendedValue;
         }
       }
     } catch (err) {
       socialDraftRecommendations.textContent = "Failed to load social draft recommendations.";
     }
+  }
+
+  async function runSocialDraftSchedule() {
+    if (!socialDraftScheduleResult) return;
+    const draftIndex = document.getElementById("socialDraftScheduleIndex");
+    const leadId = document.getElementById("socialDraftScheduleLeadId");
+    const connectorIds = document.getElementById("socialDraftScheduleConnectorIds");
+    const scheduledFor = document.getElementById("socialDraftScheduleFor");
+    const payload = {
+      draft_index: draftIndex && draftIndex.value !== "" ? Number(draftIndex.value) : undefined,
+      lead_id: leadId && leadId.value !== "" ? Number(leadId.value) : undefined,
+      connector_ids: connectorIds && connectorIds.value
+        ? connectorIds.value.split(",").map(function (value) { return value.trim(); }).filter(Boolean)
+        : [],
+      scheduled_for: scheduledFor && scheduledFor.value ? scheduledFor.value : "",
+    };
+    if (payload.draft_index === undefined && payload.lead_id === undefined) {
+      socialDraftScheduleResult.textContent = "Enter a draft index or lead ID before scheduling.";
+      return;
+    }
+    const data = await apiPost("social.drafts.schedule", payload);
+    socialDraftScheduleResult.textContent = JSON.stringify(data, null, 2);
+    await loadSocialScheduleSummary();
+    await loadSocialScheduleQueue();
+    await loadSocialActivityFeed();
+    await loadSocialOperationsSnapshot();
+    await refreshSocialModuleSummary();
   }
 
   async function downloadSocialDraftsExport() {
@@ -4325,6 +4363,12 @@
   if (refreshSocialDraftRecommendationsBtn) {
     refreshSocialDraftRecommendationsBtn.addEventListener("click", async function () {
       await loadSocialDraftRecommendations();
+    });
+  }
+
+  if (runSocialDraftScheduleBtn) {
+    runSocialDraftScheduleBtn.addEventListener("click", async function () {
+      await runSocialDraftSchedule();
     });
   }
 

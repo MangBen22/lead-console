@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.90-social-draft-recommendations',
+        'phase' => '2.91-social-draft-schedule',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9512,6 +9512,118 @@ function social_draft_recommendations_snapshot($query = [])
     ];
 }
 
+function social_schedule_connector_ids_from_input($value)
+{
+    $items = [];
+    if (is_array($value)) {
+        $items = $value;
+    } elseif (is_string($value) && trim($value) !== '') {
+        $items = explode(',', $value);
+    }
+    $connectorIds = [];
+    foreach ($items as $item) {
+        $id = preg_replace('/[^a-z0-9_\-]/i', '', (string) $item);
+        if ($id !== '' && !in_array($id, $connectorIds, true)) {
+            $connectorIds[] = $id;
+        }
+    }
+    return $connectorIds;
+}
+
+function social_store_schedule_item($item)
+{
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) use ($item) {
+        return (string) ($row['schedule_id'] ?? '') !== (string) ($item['schedule_id'] ?? '');
+    }));
+    $rows[] = $item;
+    usort($rows, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+    app_write_json_file(social_schedule_queue_path(), array_slice($rows, 0, 500));
+}
+
+function social_schedule_create_from_draft($payload)
+{
+    $detail = social_draft_detail_snapshot(is_array($payload) ? $payload : []);
+    if (empty($detail['ok']) || !is_array($detail['item'] ?? null)) {
+        return $detail;
+    }
+
+    $draft = $detail['item'];
+    $recommendations = social_draft_recommendation_entry($draft);
+    $connectorIds = social_schedule_connector_ids_from_input(isset($payload['connector_ids']) ? $payload['connector_ids'] : []);
+    if (empty($connectorIds)) {
+        $connectorIds = isset($recommendations['recommended_connector_ids']) && is_array($recommendations['recommended_connector_ids'])
+            ? $recommendations['recommended_connector_ids']
+            : [];
+    }
+    if (empty($connectorIds)) {
+        return [
+            'ok' => false,
+            'error' => 'No ready connector targets available for this draft.',
+            'recommendations' => $recommendations,
+        ];
+    }
+
+    $scheduledFor = trim((string) ($payload['scheduled_for'] ?? ''));
+    if ($scheduledFor === '') {
+        $scheduledFor = gmdate('Y-m-d\TH:i', time() + 900);
+    }
+
+    $item = [
+        'schedule_id' => uniqid('social_schedule_', false),
+        'title' => trim((string) ($payload['title'] ?? ($draft['title'] ?? ''))),
+        'message' => trim((string) ($payload['message'] ?? ($draft['message'] ?? ''))),
+        'url' => trim((string) ($payload['url'] ?? ($draft['url'] ?? ''))),
+        'connector_ids' => $connectorIds,
+        'scheduled_for' => $scheduledFor,
+        'status' => 'queued',
+        'attempts' => 0,
+        'last_run_at' => '',
+        'created_at' => gmdate('c'),
+        'updated_at' => gmdate('c'),
+        'source' => 'draft_seed',
+        'source_draft_index' => (int) ($draft['draft_index'] ?? 0),
+        'source_lead_id' => (int) ($draft['lead_id'] ?? 0),
+        'source_site_id' => (string) ($draft['source_site_id'] ?? ''),
+    ];
+    if ($item['message'] === '') {
+        return ['ok' => false, 'error' => 'Draft message is required before scheduling.'];
+    }
+
+    $targetValidation = social_schedule_target_validation_snapshot($item['connector_ids']);
+    if (empty($targetValidation['ok'])) {
+        return [
+            'ok' => false,
+            'error' => 'Schedule target validation failed.',
+            'validation' => $targetValidation,
+            'recommendations' => $recommendations,
+        ];
+    }
+
+    social_store_schedule_item($item);
+    audit_event('social', 'draft.schedule', [
+        'schedule_id' => (string) $item['schedule_id'],
+        'draft_index' => (int) ($draft['draft_index'] ?? 0),
+        'lead_id' => (int) ($draft['lead_id'] ?? 0),
+        'connector_count' => count($item['connector_ids']),
+    ]);
+    record_social_activity('draft_scheduled', 'Social draft added to the schedule queue.', [
+        'schedule_id' => (string) $item['schedule_id'],
+        'draft_index' => (int) ($draft['draft_index'] ?? 0),
+        'lead_id' => (int) ($draft['lead_id'] ?? 0),
+        'connector_count' => count($item['connector_ids']),
+    ]);
+
+    return [
+        'ok' => true,
+        'item' => $item,
+        'validation' => $targetValidation,
+        'recommendations' => $recommendations,
+    ];
+}
+
 function execute_social_connector_sync($connector, $drafts)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -10205,7 +10317,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.90-social-draft-recommendations',
+        'phase' => '2.91-social-draft-schedule',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13265,6 +13377,20 @@ if ($action === 'social.drafts.detail') {
 if ($action === 'social.drafts.recommendations') {
     $snapshot = social_draft_recommendations_snapshot($_GET);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.drafts.schedule') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $snapshot = social_schedule_create_from_draft($data);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.drafts.export') {

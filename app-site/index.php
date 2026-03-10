@@ -644,6 +644,32 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Schedule Draft</h2>
+                <form id="socialDraftScheduleForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialDraftScheduleIndex">Draft Index</label>
+                        <input id="socialDraftScheduleIndex" type="number" min="0" placeholder="0">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftScheduleLeadId">Lead ID</label>
+                        <input id="socialDraftScheduleLeadId" type="number" min="1" placeholder="1001">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftScheduleConnectorIds">Connector IDs (optional)</label>
+                        <input id="socialDraftScheduleConnectorIds" type="text" placeholder="social_abc123,social_xyz789">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialDraftScheduleFor">Schedule For (optional)</label>
+                        <input id="socialDraftScheduleFor" type="datetime-local">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="runSocialDraftScheduleBtn" type="button">Create Schedule From Draft</button>
+                </div>
+                <pre id="socialDraftScheduleResult">No draft schedule action yet.</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Draft Validation</h2>
                 <div class="actions">
                     <button id="refreshSocialDraftValidationBtn" type="button">Refresh Draft Validation</button>
