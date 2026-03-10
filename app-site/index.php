@@ -258,6 +258,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshLeadsPushPlanBtn" type="button">Refresh Push Plan</button>
                     <button id="runLeadsCrmSyncBtn" type="button">Run Leads Push</button>
                     <button id="runLeadsRetryQueueBtn" type="button">Run Leads Retry Queue</button>
+                    <button id="downloadLeadsExportBtn" type="button">Download Leads Export</button>
                 </div>
                 <div class="inline-form">
                     <div class="form-row">

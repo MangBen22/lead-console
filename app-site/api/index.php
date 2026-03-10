@@ -5226,7 +5226,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.57-leads-quality-summary',
+        'phase' => '2.58-leads-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8617,7 +8617,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.57-leads-quality-summary',
+        'phase' => '2.58-leads-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10479,6 +10479,32 @@ if ($action === 'leads.quality') {
         'ok' => true,
         'summary' => $snapshot['summary'],
         'duplicate_groups' => $snapshot['duplicate_groups'],
+    ]);
+}
+
+if ($action === 'leads.export') {
+    $snapshot = leads_list_snapshot($_GET);
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'filters' => [
+            'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+            'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+            'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+            'limit' => isset($snapshot['summary']['limit']) ? (int) $snapshot['summary']['limit'] : 20,
+            'page' => isset($snapshot['summary']['page']) ? (int) $snapshot['summary']['page'] : 1,
+        ],
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+    ];
+    audit_event('leads', 'export', [
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'leads_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
     ]);
 }
 

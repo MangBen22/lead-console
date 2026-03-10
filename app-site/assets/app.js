@@ -217,6 +217,7 @@
   const refreshLeadsQualityBtn = document.getElementById("refreshLeadsQualityBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
+  const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
   const leadsInventoryView = document.getElementById("leadsInventoryView");
   const leadsListView = document.getElementById("leadsListView");
   const leadsPushPlanView = document.getElementById("leadsPushPlanView");
@@ -2242,20 +2243,24 @@
     }
   }
 
+  function leadsListFilters() {
+    const search = document.getElementById("leadsListSearch");
+    const site = document.getElementById("leadsListSiteFilter");
+    const status = document.getElementById("leadsListStatusFilter");
+    const limit = document.getElementById("leadsListLimit");
+    return {
+      search: search && search.value ? search.value.trim() : "",
+      site_id: site && site.value ? site.value.trim() : "",
+      status: status && status.value ? status.value.trim() : "",
+      limit: limit && limit.value ? limit.value.trim() : "20",
+      page: 1,
+    };
+  }
+
   async function loadLeadsList() {
     if (!leadsListView) return;
     try {
-      const search = document.getElementById("leadsListSearch");
-      const site = document.getElementById("leadsListSiteFilter");
-      const status = document.getElementById("leadsListStatusFilter");
-      const limit = document.getElementById("leadsListLimit");
-      const data = await apiGetWithParams("leads.list", {
-        search: search && search.value ? search.value.trim() : "",
-        site_id: site && site.value ? site.value.trim() : "",
-        status: status && status.value ? status.value.trim() : "",
-        limit: limit && limit.value ? limit.value.trim() : "20",
-        page: 1,
-      });
+      const data = await apiGetWithParams("leads.list", leadsListFilters());
       leadsListView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       leadsListView.textContent = "Failed to load leads list.";
@@ -4125,6 +4130,15 @@
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();
+    });
+  }
+
+  if (downloadLeadsExportBtn) {
+    downloadLeadsExportBtn.addEventListener("click", async function () {
+      const data = await apiGetWithParams("leads.export", leadsListFilters());
+      if (data && data.ok && data.export) {
+        downloadJsonFile(data.filename || "leads-export.json", data.export);
+      }
     });
   }
 
