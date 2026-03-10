@@ -137,6 +137,150 @@ function crm_email_templates_fetch($site)
     ];
 }
 
+function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
+{
+    $snapshot = crm_smtp_sites_snapshot();
+    $rows = isset($snapshot['sites']) && is_array($snapshot['sites']) ? $snapshot['sites'] : [];
+    $state = app_read_json_file(crm_smtp_watch_state_path(), []);
+    $previousSites = isset($state['sites']) && is_array($state['sites']) ? $state['sites'] : [];
+    $items = [];
+    $summary = [
+        'site_count' => count($rows),
+        'disconnected_sites' => 0,
+        'pending_confirmation_sites' => 0,
+        'confirmed_sites' => 0,
+        'bridge_error_sites' => 0,
+        'changed_sites' => 0,
+    ];
+    $nextSites = [];
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $siteId = (string) ($row['site_id'] ?? '');
+        $label = (string) ($row['label'] ?? $siteId);
+        $smtpHealth = isset($row['smtp_health']) && is_array($row['smtp_health']) ? $row['smtp_health'] : [];
+        $testConfirmation = isset($row['test_confirmation']) && is_array($row['test_confirmation']) ? $row['test_confirmation'] : [];
+        $bridgeOk = !empty($row['bridge_ok']);
+        $connected = !empty($smtpHealth['connected']) && $bridgeOk;
+        $pending = !empty($testConfirmation['pending']);
+        $confirmed = !empty($testConfirmation['confirmed']);
+        $status = 'connected_unverified';
+        if (!$bridgeOk || !$connected) {
+            $status = 'disconnected';
+        } elseif ($pending) {
+            $status = 'pending_confirmation';
+        } elseif ($confirmed) {
+            $status = 'verified';
+        }
+        if ($status === 'disconnected') {
+            $summary['disconnected_sites']++;
+        }
+        if ($pending) {
+            $summary['pending_confirmation_sites']++;
+        }
+        if ($confirmed) {
+            $summary['confirmed_sites']++;
+        }
+        if (!$bridgeOk) {
+            $summary['bridge_error_sites']++;
+        }
+
+        $previous = isset($previousSites[$siteId]) && is_array($previousSites[$siteId]) ? $previousSites[$siteId] : [];
+        $currentMessage = (string) ($smtpHealth['message'] ?? $row['bridge_error'] ?? '');
+        $changed = false;
+        if (!empty($previous)) {
+            $previousStatus = (string) ($previous['status'] ?? '');
+            $previousMessage = (string) ($previous['message'] ?? '');
+            if ($previousStatus !== $status || $previousMessage !== $currentMessage) {
+                $changed = true;
+            }
+            if ($emitNotifications) {
+                if ($previousStatus !== 'disconnected' && $status === 'disconnected') {
+                    push_notification('critical', 'CRM SMTP disconnected for ' . $label . '.', [
+                        'site_id' => $siteId,
+                        'source' => $source,
+                        'message' => $currentMessage,
+                    ]);
+                } elseif ($previousStatus === 'disconnected' && $status !== 'disconnected') {
+                    push_notification('success', 'CRM SMTP recovered for ' . $label . '.', [
+                        'site_id' => $siteId,
+                        'source' => $source,
+                        'status' => $status,
+                    ]);
+                }
+                if (empty($previous['pending']) && $pending) {
+                    push_notification('info', 'CRM SMTP test email pending confirmation for ' . $label . '.', [
+                        'site_id' => $siteId,
+                        'source' => $source,
+                    ]);
+                }
+                if (empty($previous['confirmed']) && $confirmed) {
+                    push_notification('success', 'CRM SMTP confirmed for ' . $label . '.', [
+                        'site_id' => $siteId,
+                        'source' => $source,
+                        'to_email' => (string) ($testConfirmation['to_email'] ?? ''),
+                    ]);
+                }
+            }
+        }
+        if ($changed) {
+            $summary['changed_sites']++;
+        }
+
+        $items[] = [
+            'site_id' => $siteId,
+            'label' => $label,
+            'status' => $status,
+            'bridge_ok' => $bridgeOk ? 1 : 0,
+            'smtp_connected' => $connected ? 1 : 0,
+            'pending_confirmation' => $pending ? 1 : 0,
+            'confirmed' => $confirmed ? 1 : 0,
+            'message' => $currentMessage,
+            'checked_at' => (string) ($smtpHealth['checked_at'] ?? ''),
+            'changed' => $changed ? 1 : 0,
+        ];
+        $nextSites[$siteId] = [
+            'status' => $status,
+            'connected' => $connected ? 1 : 0,
+            'pending' => $pending ? 1 : 0,
+            'confirmed' => $confirmed ? 1 : 0,
+            'message' => $currentMessage,
+            'checked_at' => (string) ($smtpHealth['checked_at'] ?? ''),
+        ];
+    }
+
+    $run = [
+        'run_id' => 'crm_smtp_watch_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'created_at' => gmdate('c'),
+        'summary' => $summary,
+        'items' => $items,
+    ];
+    $runs = app_read_json_file(crm_smtp_watch_runs_path(), []);
+    array_unshift($runs, $run);
+    $runs = array_slice($runs, 0, 200);
+    app_write_json_file(crm_smtp_watch_runs_path(), $runs);
+    $nextState = [
+        'last_checked_at' => gmdate('c'),
+        'last_run_id' => (string) ($run['run_id'] ?? ''),
+        'last_source' => (string) $source,
+        'summary' => $summary,
+        'sites' => $nextSites,
+    ];
+    app_write_json_file(crm_smtp_watch_state_path(), $nextState);
+    audit_event('crm', 'smtp.watch', [
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'source' => $source,
+        'summary' => $summary,
+    ]);
+    return [
+        'run' => $run,
+        'state' => $nextState,
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -603,6 +747,16 @@ function seo_regression_runs_path()
     return app_storage_path('seo_regression_runs.json');
 }
 
+function crm_smtp_watch_state_path()
+{
+    return app_storage_path('crm_smtp_watch_state.json');
+}
+
+function crm_smtp_watch_runs_path()
+{
+    return app_storage_path('crm_smtp_watch_runs.json');
+}
+
 function notifications_path()
 {
     return app_storage_path('notifications.json');
@@ -734,6 +888,8 @@ function module_storage_map()
         'crm_connectors' => app_storage_path('crm_connectors.json'),
         'crm_sync_log' => app_storage_path('crm_sync_log.json'),
         'crm_retry_queue' => app_storage_path('crm_retry_queue.json'),
+        'crm_smtp_watch_state' => crm_smtp_watch_state_path(),
+        'crm_smtp_watch_runs' => crm_smtp_watch_runs_path(),
         'social_connectors' => social_connectors_path(),
         'social_sync_log' => social_sync_log_path(),
         'social_retry_queue' => social_retry_queue_path(),
@@ -3976,7 +4132,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.32-crm-email-template-ops',
+        'phase' => '2.33-crm-smtp-watch',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6546,6 +6702,7 @@ $rateLimitedWriteActions = [
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.intake', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'crm.email_templates.save',
+    'crm.smtp.watch.run',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -6589,6 +6746,7 @@ $deploymentGuardedActions = [
     'seo.projects.save', 'seo.projects.delete', 'seo.audit.run', 'seo.extension.session.create', 'seo.extension.session.revoke', 'seo.regressions.run',
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'crm.email_templates.save',
+    'crm.smtp.watch.run',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -6621,7 +6779,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.32-crm-email-template-ops',
+        'phase' => '2.33-crm-smtp-watch',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -8767,6 +8925,31 @@ if ($action === 'crm.smtp.confirm') {
         'site_id' => (string) ($site['site_id'] ?? ''),
         'response' => $res,
     ], !empty($res['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.smtp.watch.summary') {
+    $state = app_read_json_file(crm_smtp_watch_state_path(), []);
+    $runs = app_read_json_file(crm_smtp_watch_runs_path(), []);
+    out_json([
+        'ok' => true,
+        'state' => is_array($state) ? $state : [],
+        'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+        'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+    ]);
+}
+
+if ($action === 'crm.smtp.watch.run') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $watch = crm_smtp_watch_snapshot('manual_run', true);
+    out_json([
+        'ok' => true,
+        'state' => $watch['state'],
+        'run' => $watch['run'],
+    ]);
 }
 
 if ($action === 'crm.email_templates.get') {

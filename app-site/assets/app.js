@@ -219,9 +219,12 @@
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
+  const refreshCrmSmtpWatchBtn = document.getElementById("refreshCrmSmtpWatchBtn");
+  const runCrmSmtpWatchBtn = document.getElementById("runCrmSmtpWatchBtn");
   const crmSmtpForm = document.getElementById("crmSmtpForm");
   const crmSmtpSummary = document.getElementById("crmSmtpSummary");
   const crmSmtpResult = document.getElementById("crmSmtpResult");
+  const crmSmtpWatchView = document.getElementById("crmSmtpWatchView");
   const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
   const loadCrmEmailTemplateBtn = document.getElementById("loadCrmEmailTemplateBtn");
   const saveCrmEmailTemplateBtn = document.getElementById("saveCrmEmailTemplateBtn");
@@ -2229,6 +2232,16 @@
     }
   }
 
+  async function loadCrmSmtpWatch() {
+    if (!crmSmtpWatchView) return;
+    try {
+      const data = await apiGet("crm.smtp.watch.summary");
+      crmSmtpWatchView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      crmSmtpWatchView.textContent = "Failed to load CRM SMTP watch.";
+    }
+  }
+
   async function loadCrmEmailTemplatesSummary() {
     if (!crmEmailTemplatesSummary) return;
     try {
@@ -2558,6 +2571,7 @@
     await loadCrmSyncLog();
     await loadRetryQueue();
     await loadCrmSmtpSummary();
+    await loadCrmSmtpWatch();
     await loadCrmEmailTemplatesSummary();
     await loadSocialConnectors();
     await loadSocialScheduleQueue();
@@ -2740,6 +2754,28 @@
   if (refreshCrmSmtpBtn) {
     refreshCrmSmtpBtn.addEventListener("click", async function () {
       await loadCrmSmtpSummary();
+    });
+  }
+
+  if (refreshCrmSmtpWatchBtn) {
+    refreshCrmSmtpWatchBtn.addEventListener("click", async function () {
+      await loadCrmSmtpWatch();
+    });
+  }
+
+  if (runCrmSmtpWatchBtn) {
+    runCrmSmtpWatchBtn.addEventListener("click", async function () {
+      const result = await apiPost("crm.smtp.watch.run", {});
+      if (crmSmtpResult) {
+        crmSmtpResult.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadCrmSmtpSummary();
+      await loadCrmSmtpWatch();
+      const crmData = await apiGet("crm.summary");
+      const crmPanel = document.getElementById("modCrm");
+      if (crmPanel) {
+        crmPanel.textContent = JSON.stringify(crmData, null, 2);
+      }
     });
   }
 
