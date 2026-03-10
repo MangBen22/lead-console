@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.93-social-connectors-filters',
+        'phase' => '2.94-social-connector-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8433,6 +8433,80 @@ function social_connectors_list_snapshot($query = [])
     ];
 }
 
+function social_connector_detail_snapshot($connectorId, $limit = 10)
+{
+    $id = trim((string) $connectorId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'connector_id is required.'];
+    }
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 50);
+    $connector = social_connector_by_id($id);
+    if (!is_array($connector)) {
+        return ['ok' => false, 'error' => 'Social connector not found.'];
+    }
+
+    $decorated = decorate_social_connector($connector);
+    $syncLog = array_values(array_filter(app_read_json_file(social_sync_log_path(), []), static function ($row) use ($id) {
+        return is_array($row) && (string) ($row['connector_id'] ?? '') === $id;
+    }));
+    usort($syncLog, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+
+    $retryQueue = array_values(array_filter(app_read_json_file(social_retry_queue_path(), []), static function ($row) use ($id) {
+        return is_array($row) && (string) ($row['connector_id'] ?? '') === $id;
+    }));
+    usort($retryQueue, static function ($a, $b) {
+        return strcmp((string) ($b['queued_at'] ?? ''), (string) ($a['queued_at'] ?? ''));
+    });
+
+    $scheduleQueue = array_values(array_filter(app_read_json_file(social_schedule_queue_path(), []), static function ($row) use ($id) {
+        if (!is_array($row)) {
+            return false;
+        }
+        $connectorIds = isset($row['connector_ids']) && is_array($row['connector_ids']) ? $row['connector_ids'] : [];
+        return in_array($id, $connectorIds, true);
+    }));
+    usort($scheduleQueue, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+
+    $inboxThreads = array_values(array_filter(social_inbox_threads_rows(true), static function ($row) use ($id) {
+        return is_array($row) && (string) ($row['connector_id'] ?? '') === $id;
+    }));
+    $openInboxCount = 0;
+    foreach ($inboxThreads as $thread) {
+        if (strtolower((string) ($thread['status'] ?? 'open')) === 'open') {
+            $openInboxCount++;
+        }
+    }
+
+    $expiresAt = trim((string) ($decorated['expires_at'] ?? ''));
+    $expiresTs = $expiresAt !== '' ? strtotime($expiresAt) : false;
+    $daysUntilExpiry = $expiresTs !== false ? (int) floor(($expiresTs - time()) / 86400) : null;
+
+    return [
+        'ok' => true,
+        'item' => $decorated,
+        'meta' => [
+            'sync_count' => count($syncLog),
+            'retry_count' => count($retryQueue),
+            'schedule_count' => count($scheduleQueue),
+            'inbox_count' => count($inboxThreads),
+            'open_inbox_count' => $openInboxCount,
+            'days_until_expiry' => $daysUntilExpiry,
+            'last_sync' => isset($syncLog[0]) ? $syncLog[0] : null,
+        ],
+        'sync_log' => array_slice($syncLog, 0, $limit),
+        'retry_queue' => array_slice($retryQueue, 0, $limit),
+        'schedule_queue' => array_slice($scheduleQueue, 0, $limit),
+        'inbox_threads' => array_slice($inboxThreads, 0, $limit),
+    ];
+}
+
 function enqueue_social_retry_item($item)
 {
     $queue = app_read_json_file(social_retry_queue_path(), []);
@@ -10466,7 +10540,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.93-social-connectors-filters',
+        'phase' => '2.94-social-connector-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14820,6 +14894,13 @@ if ($action === 'social.connectors.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.connectors.detail') {
+    $connectorId = isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '';
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $snapshot = social_connector_detail_snapshot($connectorId, $limit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.connectors.save') {

@@ -283,6 +283,7 @@
   const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
+  const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -305,6 +306,7 @@
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
+  const socialConnectorDetail = document.getElementById("socialConnectorDetail");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
   const socialScheduleSummary = document.getElementById("socialScheduleSummary");
@@ -2708,6 +2710,51 @@
     }
   }
 
+  async function loadSocialConnectorDetail() {
+    if (!socialConnectorDetail) return;
+    const connectorId = document.getElementById("socialConnectorDetailId");
+    const limit = document.getElementById("socialConnectorDetailLimit");
+    if (!connectorId || !connectorId.value) {
+      socialConnectorDetail.textContent = "Enter a connector ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.connectors.detail", {
+        connector_id: connectorId.value.trim(),
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      socialConnectorDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const formId = document.getElementById("socialConnectorId");
+        const provider = document.getElementById("socialProvider");
+        const accountLabel = document.getElementById("socialAccountLabel");
+        const type = document.getElementById("socialType");
+        const status = document.getElementById("socialStatus");
+        const auth = document.getElementById("socialAuth");
+        const caps = document.getElementById("socialCapabilities");
+        const siteId = document.getElementById("socialSiteId");
+        const runMode = document.getElementById("socialRunMode");
+        const webhook = document.getElementById("socialWebhook");
+        const expiresAt = document.getElementById("socialExpiresAt");
+        const deliveryConnectorId = document.getElementById("socialDeliveryConnectorId");
+        if (formId) formId.value = data.item.connector_id || "";
+        if (provider) provider.value = data.item.provider || "";
+        if (accountLabel) accountLabel.value = data.item.account_label || "";
+        if (type) type.value = data.item.type || "external_api";
+        if (status) status.value = data.item.status || "planned";
+        if (auth) auth.value = data.item.auth_mode || "api_key";
+        if (caps) caps.value = Array.isArray(data.item.capabilities) ? data.item.capabilities.join(",") : "";
+        if (siteId) siteId.value = data.item.site_id || "";
+        if (runMode) runMode.value = data.item.config && data.item.config.run_mode ? data.item.config.run_mode : "dry_run";
+        if (webhook) webhook.value = data.item.config && data.item.config.webhook_url ? data.item.config.webhook_url : "";
+        if (expiresAt) expiresAt.value = data.item.expires_at || "";
+        if (deliveryConnectorId) deliveryConnectorId.value = data.item.connector_id || "";
+      }
+    } catch (err) {
+      socialConnectorDetail.textContent = "Failed to load social connector detail.";
+    }
+  }
+
   function socialConnectorFilters() {
     const provider = document.getElementById("socialConnectorFilterProvider");
     const status = document.getElementById("socialConnectorFilterStatus");
@@ -4430,6 +4477,12 @@
   if (refreshSocialConnectorsBtn) {
     refreshSocialConnectorsBtn.addEventListener("click", async function () {
       await loadSocialConnectors();
+    });
+  }
+
+  if (refreshSocialConnectorDetailBtn) {
+    refreshSocialConnectorDetailBtn.addEventListener("click", async function () {
+      await loadSocialConnectorDetail();
     });
   }
 

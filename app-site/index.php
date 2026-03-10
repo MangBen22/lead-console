@@ -752,6 +752,20 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialConnectorsBtn" type="button">Refresh Social Connectors</button>
                 </div>
                 <pre id="socialConnectors">Loading...</pre>
+                <form id="socialConnectorDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialConnectorDetailId">Connector ID</label>
+                        <input id="socialConnectorDetailId" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorDetailLimit">Detail Limit</label>
+                        <input id="socialConnectorDetailLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshSocialConnectorDetailBtn" type="button">Load Connector Detail</button>
+                </div>
+                <pre id="socialConnectorDetail">No social connector detail loaded.</pre>
                 <form id="socialConnectorForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialConnectorId">Connector ID (optional for update)</label>
