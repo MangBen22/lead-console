@@ -219,6 +219,7 @@
   const refreshLeadsReviewQueueBtn = document.getElementById("refreshLeadsReviewQueueBtn");
   const downloadLeadsReviewQueueBtn = document.getElementById("downloadLeadsReviewQueueBtn");
   const loadLeadsReviewDetailBtn = document.getElementById("loadLeadsReviewDetailBtn");
+  const checkLeadsReviewDuplicatesBtn = document.getElementById("checkLeadsReviewDuplicatesBtn");
   const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
   const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
   const saveLeadsReviewQueueBtn = document.getElementById("saveLeadsReviewQueueBtn");
@@ -236,6 +237,7 @@
   const leadsDeliveryHistoryView = document.getElementById("leadsDeliveryHistoryView");
   const leadsReviewQueueView = document.getElementById("leadsReviewQueueView");
   const leadsReviewDetailView = document.getElementById("leadsReviewDetailView");
+  const leadsReviewDuplicatesView = document.getElementById("leadsReviewDuplicatesView");
   const leadsReviewActionView = document.getElementById("leadsReviewActionView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
@@ -2349,10 +2351,34 @@
         ? data.review.draft_preview
         : [];
       populateLeadsReviewDraftSelect(currentLeadsReviewDrafts);
+      await loadLeadsReviewDuplicates();
     } catch (err) {
       currentLeadsReviewDrafts = [];
       populateLeadsReviewDraftSelect([]);
+      if (leadsReviewDuplicatesView) {
+        leadsReviewDuplicatesView.textContent = "No duplicate check yet.";
+      }
       leadsReviewDetailView.textContent = "Failed to load leads review detail.";
+    }
+  }
+
+  async function loadLeadsReviewDuplicates() {
+    if (!leadsReviewDuplicatesView) return;
+    const siteId = document.getElementById("leadsReviewSiteId");
+    const runId = document.getElementById("leadsReviewRunId");
+    if (!siteId || !siteId.value || !runId || !runId.value) {
+      leadsReviewDuplicatesView.textContent = "Site ID and Review Run ID are required for duplicate checks.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("leads.review.duplicates", {
+        site_id: siteId.value.trim(),
+        run_id: runId.value.trim(),
+        limit: 25,
+      });
+      leadsReviewDuplicatesView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsReviewDuplicatesView.textContent = "Failed to load review duplicate check.";
     }
   }
 
@@ -4321,6 +4347,12 @@
   if (loadLeadsReviewDetailBtn) {
     loadLeadsReviewDetailBtn.addEventListener("click", async function () {
       await loadLeadsReviewDetail();
+    });
+  }
+
+  if (checkLeadsReviewDuplicatesBtn) {
+    checkLeadsReviewDuplicatesBtn.addEventListener("click", async function () {
+      await loadLeadsReviewDuplicates();
     });
   }
 

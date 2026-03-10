@@ -960,6 +960,153 @@ function leads_review_draft_update($siteId, $runId, $draftId, $fields)
     ];
 }
 
+function leads_review_duplicates_snapshot($siteId, $runId, $limit = 25)
+{
+    $detail = leads_review_detail_fetch($siteId, $runId);
+    if (empty($detail['ok']) || empty($detail['review']) || !is_array($detail['review'])) {
+        return [
+            'ok' => false,
+            'error' => (string) ($detail['error'] ?? 'Review detail unavailable.'),
+        ];
+    }
+
+    $drafts = isset($detail['review']['draft_preview']) && is_array($detail['review']['draft_preview'])
+        ? $detail['review']['draft_preview']
+        : [];
+    $approvedPayload = collect_approved_leads();
+    $approvedLeads = isset($approvedPayload['leads']) && is_array($approvedPayload['leads']) ? $approvedPayload['leads'] : [];
+
+    $websiteMap = [];
+    $emailMap = [];
+    $businessCityMap = [];
+    foreach ($approvedLeads as $lead) {
+        if (!is_array($lead)) {
+            continue;
+        }
+        $websiteKey = strtolower(trim((string) ($lead['website'] ?? '')));
+        $emailKey = strtolower(trim((string) ($lead['email'] ?? '')));
+        $businessKey = strtolower(trim((string) ($lead['business_name'] ?? '')));
+        $cityKey = strtolower(trim((string) ($lead['city'] ?? '')));
+        if ($websiteKey !== '') {
+            $websiteMap[$websiteKey][] = $lead;
+        }
+        if ($emailKey !== '') {
+            $emailMap[$emailKey][] = $lead;
+        }
+        if ($businessKey !== '' && $cityKey !== '') {
+            $businessCityMap[$businessKey . '|' . $cityKey][] = $lead;
+        }
+    }
+
+    $items = [];
+    $summary = [
+        'draft_count' => count($drafts),
+        'matched_drafts' => 0,
+        'match_total' => 0,
+        'website_matches' => 0,
+        'email_matches' => 0,
+        'business_city_matches' => 0,
+    ];
+
+    foreach ($drafts as $draft) {
+        if (!is_array($draft)) {
+            continue;
+        }
+        $matches = [];
+        $seen = [];
+        $websiteKey = strtolower(trim((string) ($draft['website'] ?? '')));
+        $emailKey = strtolower(trim((string) ($draft['email'] ?? '')));
+        $businessKey = strtolower(trim((string) ($draft['business_name'] ?? '')));
+        $cityKey = strtolower(trim((string) ($draft['city'] ?? '')));
+        $businessCityKey = ($businessKey !== '' && $cityKey !== '') ? ($businessKey . '|' . $cityKey) : '';
+        $sources = [];
+        if ($websiteKey !== '' && isset($websiteMap[$websiteKey])) {
+            $sources[] = ['type' => 'website', 'rows' => $websiteMap[$websiteKey]];
+        }
+        if ($emailKey !== '' && isset($emailMap[$emailKey])) {
+            $sources[] = ['type' => 'email', 'rows' => $emailMap[$emailKey]];
+        }
+        if ($businessCityKey !== '' && isset($businessCityMap[$businessCityKey])) {
+            $sources[] = ['type' => 'business_city', 'rows' => $businessCityMap[$businessCityKey]];
+        }
+
+        foreach ($sources as $source) {
+            foreach ($source['rows'] as $lead) {
+                $matchKey = (string) ($lead['site_id'] ?? '') . ':' . (string) ($lead['lead_id'] ?? 0);
+                if (!isset($seen[$matchKey])) {
+                    $seen[$matchKey] = [
+                        'lead' => $lead,
+                        'match_types' => [],
+                    ];
+                }
+                if (!in_array($source['type'], $seen[$matchKey]['match_types'], true)) {
+                    $seen[$matchKey]['match_types'][] = $source['type'];
+                }
+            }
+        }
+
+        foreach ($seen as $match) {
+            $lead = $match['lead'];
+            $types = $match['match_types'];
+            if (in_array('website', $types, true)) {
+                $summary['website_matches']++;
+            }
+            if (in_array('email', $types, true)) {
+                $summary['email_matches']++;
+            }
+            if (in_array('business_city', $types, true)) {
+                $summary['business_city_matches']++;
+            }
+            $matches[] = [
+                'match_types' => $types,
+                'site_id' => (string) ($lead['site_id'] ?? ''),
+                'site_label' => (string) ($lead['site_label'] ?? ''),
+                'lead_id' => (int) ($lead['lead_id'] ?? 0),
+                'business_name' => (string) ($lead['business_name'] ?? ''),
+                'city' => (string) ($lead['city'] ?? ''),
+                'category' => (string) ($lead['category'] ?? ''),
+                'website' => (string) ($lead['website'] ?? ''),
+                'email' => (string) ($lead['email'] ?? ''),
+                'phone' => (string) ($lead['phone'] ?? ''),
+                'status' => (string) ($lead['status'] ?? ''),
+            ];
+        }
+
+        if (!empty($matches)) {
+            $summary['matched_drafts']++;
+        }
+        $summary['match_total'] += count($matches);
+        $items[] = [
+            'draft_id' => (int) ($draft['id'] ?? 0),
+            'business_name' => (string) ($draft['business_name'] ?? ''),
+            'city' => (string) ($draft['city'] ?? ''),
+            'category' => (string) ($draft['category'] ?? ''),
+            'website' => (string) ($draft['website'] ?? ''),
+            'email' => (string) ($draft['email'] ?? ''),
+            'phone' => (string) ($draft['phone'] ?? ''),
+            'match_count' => count($matches),
+            'matches' => array_slice($matches, 0, max(1, $limit)),
+        ];
+    }
+
+    usort($items, static function ($a, $b) {
+        $left = (int) ($a['match_count'] ?? 0);
+        $right = (int) ($b['match_count'] ?? 0);
+        if ($left === $right) {
+            return strcmp((string) ($a['business_name'] ?? ''), (string) ($b['business_name'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+
+    return [
+        'ok' => true,
+        'site_id' => (string) $siteId,
+        'run_id' => (int) $runId,
+        'summary' => $summary,
+        'items' => array_slice($items, 0, max(1, $limit)),
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5471,7 +5618,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.66-leads-review-queue-bulk-action',
+        'phase' => '2.67-leads-review-duplicate-check',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8862,7 +9009,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.66-leads-review-queue-bulk-action',
+        'phase' => '2.67-leads-review-duplicate-check',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10808,6 +10955,20 @@ if ($action === 'leads.review.detail') {
         out_json(['ok' => false, 'error' => 'site_id and run_id are required.'], 400);
     }
     $snapshot = leads_review_detail_fetch($siteId, $runId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'leads.review.duplicates') {
+    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
+    $runId = isset($_GET['run_id']) ? (int) $_GET['run_id'] : 0;
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
+    if ($siteId === '' || $runId <= 0) {
+        out_json(['ok' => false, 'error' => 'site_id and run_id are required.'], 400);
+    }
+    if ($limit <= 0) {
+        $limit = 25;
+    }
+    $snapshot = leads_review_duplicates_snapshot($siteId, $runId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 502);
 }
 
