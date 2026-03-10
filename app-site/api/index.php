@@ -7459,7 +7459,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.18-crm-email-template-test-log-export',
+        'phase' => '5.19-crm-smtp-watch-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13310,7 +13310,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.18-crm-email-template-test-log-export',
+        'phase' => '5.19-crm-smtp-watch-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15944,6 +15944,25 @@ if ($action === 'crm.smtp.watch.summary') {
         'state' => is_array($state) ? $state : [],
         'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
         'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+    ]);
+}
+
+if ($action === 'crm.smtp.watch.export') {
+    $state = app_read_json_file(crm_smtp_watch_state_path(), []);
+    $runs = app_read_json_file(crm_smtp_watch_runs_path(), []);
+    audit_event('crm', 'smtp.watch.export', [
+        'run_count' => count(is_array($runs) ? $runs : []),
+        'site_count' => (int) (($state['summary']['site_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_smtp_watch_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'state' => is_array($state) ? $state : [],
+            'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+            'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+        ],
     ]);
 }
 

@@ -652,6 +652,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="refreshCrmSmtpWatchBtn" type="button">Refresh SMTP Watch</button>
                     <button id="runCrmSmtpWatchBtn" type="button">Run SMTP Watch</button>
+                    <button id="downloadCrmSmtpWatchExportBtn" type="button">Download SMTP Watch Export</button>
                 </div>
                 <form id="crmSmtpFilterForm" class="inline-form">
                     <div class="form-row">

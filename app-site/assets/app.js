@@ -284,6 +284,7 @@
   const crmSmtpResult = document.getElementById("crmSmtpResult");
   const crmSmtpWatchView = document.getElementById("crmSmtpWatchView");
   const downloadCrmSmtpExportBtn = document.getElementById("downloadCrmSmtpExportBtn");
+  const downloadCrmSmtpWatchExportBtn = document.getElementById("downloadCrmSmtpWatchExportBtn");
   const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
   const loadCrmEmailTemplateBtn = document.getElementById("loadCrmEmailTemplateBtn");
   const saveCrmEmailTemplateBtn = document.getElementById("saveCrmEmailTemplateBtn");
@@ -3016,6 +3017,15 @@
     }
   }
 
+  async function downloadCrmSmtpWatchExport() {
+    const data = await apiGet("crm.smtp.watch.export");
+    const filename = data && data.filename ? String(data.filename) : ("crm-smtp-watch-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (crmSmtpResult) {
+      crmSmtpResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadCrmSmtpWatch() {
     if (!crmSmtpWatchView) return;
     try {
@@ -4967,6 +4977,12 @@
   if (downloadCrmSmtpExportBtn) {
     downloadCrmSmtpExportBtn.addEventListener("click", async function () {
       await downloadCrmSmtpExport();
+    });
+  }
+
+  if (downloadCrmSmtpWatchExportBtn) {
+    downloadCrmSmtpWatchExportBtn.addEventListener("click", async function () {
+      await downloadCrmSmtpWatchExport();
     });
   }
 
