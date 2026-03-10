@@ -1595,6 +1595,84 @@ function social_schedule_snapshot($limit = 10)
     ];
 }
 
+function social_schedule_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $connectorId = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $item['connector_ids'] = isset($row['connector_ids']) && is_array($row['connector_ids']) ? array_values($row['connector_ids']) : [];
+        if ($status !== '' && strtolower((string) ($item['status'] ?? 'queued')) !== $status) {
+            continue;
+        }
+        if ($connectorId !== '') {
+            $matchedConnector = false;
+            foreach ($item['connector_ids'] as $value) {
+                if (strpos(strtolower((string) $value), $connectorId) !== false) {
+                    $matchedConnector = true;
+                    break;
+                }
+            }
+            if (!$matchedConnector) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $haystacks = [
+                (string) ($item['schedule_id'] ?? ''),
+                (string) ($item['title'] ?? ''),
+                (string) ($item['message'] ?? ''),
+                (string) ($item['url'] ?? ''),
+            ];
+            $matched = false;
+            foreach ($haystacks as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'status' => $status,
+            'connector_id' => $connectorId,
+            'search' => $search,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function social_inbox_summary_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -6111,7 +6189,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.82-social-delivery-watch-export',
+        'phase' => '2.83-social-schedule-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9799,7 +9877,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.82-social-delivery-watch-export',
+        'phase' => '2.83-social-schedule-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12870,11 +12948,12 @@ if ($action === 'social.schedule.targets.validate') {
 }
 
 if ($action === 'social.schedule.list') {
-    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    $snapshot = social_schedule_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'summary' => $snapshot['summary'],
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'items' => $snapshot['items'],
     ]);
 }
 

@@ -672,6 +672,33 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <div class="actions">
                     <button id="refreshSocialScheduleSummaryBtn" type="button">Refresh Schedule Health</button>
                 </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialScheduleFilterStatus">Schedule Status</label>
+                        <select id="socialScheduleFilterStatus">
+                            <option value="">all</option>
+                            <option value="queued">queued</option>
+                            <option value="sent">sent</option>
+                            <option value="failed">failed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleFilterConnector">Connector ID</label>
+                        <input id="socialScheduleFilterConnector" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleFilterSearch">Schedule Search</label>
+                        <input id="socialScheduleFilterSearch" type="text" placeholder="title or message">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleFilterPage">Schedule Page</label>
+                        <input id="socialScheduleFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleFilterLimit">Schedule Limit</label>
+                        <input id="socialScheduleFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                </div>
                 <pre id="socialScheduleSummary">Loading...</pre>
                 <pre id="socialScheduleQueue">Loading...</pre>
                 <form id="socialScheduleForm" class="inline-form">

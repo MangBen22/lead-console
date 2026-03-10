@@ -2696,11 +2696,26 @@
   async function loadSocialScheduleQueue() {
     if (!socialScheduleQueue) return;
     try {
-      const data = await apiGet("social.schedule.list");
+      const data = await apiGetWithParams("social.schedule.list", socialScheduleFilters());
       socialScheduleQueue.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialScheduleQueue.textContent = "Failed to load social schedule queue.";
     }
+  }
+
+  function socialScheduleFilters() {
+    const status = document.getElementById("socialScheduleFilterStatus");
+    const connector = document.getElementById("socialScheduleFilterConnector");
+    const search = document.getElementById("socialScheduleFilterSearch");
+    const page = document.getElementById("socialScheduleFilterPage");
+    const limit = document.getElementById("socialScheduleFilterLimit");
+    return {
+      status: status && status.value ? status.value : "",
+      connector_id: connector && connector.value ? connector.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? page.value.trim() : "1",
+      limit: limit && limit.value ? limit.value.trim() : "10",
+    };
   }
 
   async function loadSocialScheduleSummary() {
