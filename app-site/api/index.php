@@ -4774,6 +4774,64 @@ function seo_regression_runs_path()
     return app_storage_path('seo_regression_runs.json');
 }
 
+function seo_operations_snapshot($limit = 10)
+{
+    $safeLimit = max(1, min(50, (int) $limit));
+    $projects = seo_projects_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $audits = seo_audits_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $events = seo_extension_events_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $sessions = seo_extension_sessions_list_snapshot([
+        'page' => 1,
+        'limit' => $safeLimit,
+    ]);
+    $regressionState = app_read_json_file(seo_regression_state_path(), []);
+    $regressionRuns = app_read_json_file(seo_regression_runs_path(), []);
+
+    $latestAudit = isset($audits['items'][0]) && is_array($audits['items'][0]) ? $audits['items'][0] : null;
+    $auditSummary = isset($audits['summary']) && is_array($audits['summary']) ? $audits['summary'] : [];
+    $sessionSummary = isset($sessions['summary']) && is_array($sessions['summary']) ? $sessions['summary'] : [];
+    $projectSummary = isset($projects['summary']) && is_array($projects['summary']) ? $projects['summary'] : [];
+    $eventSummary = isset($events['summary']) && is_array($events['summary']) ? $events['summary'] : [];
+    $latestPrioritySummary = is_array($latestAudit) && isset($latestAudit['priority_summary']) && is_array($latestAudit['priority_summary'])
+        ? $latestAudit['priority_summary']
+        : ['critical' => 0, 'fix_soon' => 0, 'nice_to_have' => 0];
+
+    return [
+        'generated_at' => gmdate('c'),
+        'limit' => $safeLimit,
+        'summary' => [
+            'project_count' => (int) ($projectSummary['total_count'] ?? 0),
+            'active_projects' => (int) (($projectSummary['status_counts']['active'] ?? 0) + ($projectSummary['status_counts']['enabled'] ?? 0)),
+            'audit_count' => (int) ($auditSummary['filtered_count'] ?? 0),
+            'average_audit_score' => (float) ($auditSummary['average_score'] ?? 0),
+            'latest_audit_score' => (int) ($latestAudit['score'] ?? 0),
+            'latest_critical_issues' => (int) ($latestPrioritySummary['critical'] ?? ($latestAudit['critical_issues'] ?? 0)),
+            'extension_event_count' => (int) ($eventSummary['filtered_count'] ?? 0),
+            'active_extension_sessions' => (int) (($sessionSummary['status_counts']['active'] ?? 0)),
+            'regression_projects' => (int) (($regressionState['summary']['regression'] ?? 0)),
+            'improved_projects' => (int) (($regressionState['summary']['improved'] ?? 0)),
+        ],
+        'latest_audit' => $latestAudit,
+        'projects' => $projects,
+        'audits' => $audits,
+        'extension_events' => $events,
+        'extension_sessions' => $sessions,
+        'regressions' => [
+            'state' => is_array($regressionState) ? $regressionState : [],
+            'latest_run' => isset($regressionRuns[0]) && is_array($regressionRuns[0]) ? $regressionRuns[0] : null,
+        ],
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8163,7 +8221,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.35-webops-operations-issues-summary',
+        'phase' => '5.36-seo-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14014,7 +14072,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.35-webops-operations-issues-summary',
+        'phase' => '5.36-seo-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17311,6 +17369,18 @@ if ($action === 'seo.summary') {
             'tracked_projects' => count($projects),
         ],
         'last_audit' => $lastAudit,
+    ]);
+}
+
+if ($action === 'seo.operations.snapshot') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = seo_operations_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'snapshot' => $snapshot,
     ]);
 }
 

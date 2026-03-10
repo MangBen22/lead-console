@@ -514,6 +514,7 @@
   const seoRegressionView = document.getElementById("seoRegressionView");
   const seoUrlHistoryView = document.getElementById("seoUrlHistoryView");
   const seoCompareView = document.getElementById("seoCompareView");
+  const seoOperationsSnapshotView = document.getElementById("seoOperationsSnapshotView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -4918,6 +4919,19 @@
     }
   }
 
+  async function loadSeoOperationsSnapshot() {
+    if (!seoOperationsSnapshotView) return;
+    const limit = document.getElementById("seoOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("seo.operations.snapshot", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      seoOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoOperationsSnapshotView.textContent = "Failed to load SEO operations snapshot.";
+    }
+  }
+
   (async function initCrm() {
     await loadLeadsInventory();
     await loadLeadsList();
@@ -4996,6 +5010,7 @@
     await loadSeoRegressions();
     await loadSeoUrlHistory();
     await loadSeoCompare();
+    await loadSeoOperationsSnapshot();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7837,6 +7852,13 @@
   if (refreshSeoProjectSnapshotBtn) {
     refreshSeoProjectSnapshotBtn.addEventListener("click", async function () {
       await loadSeoProjectSnapshot();
+    });
+  }
+
+  const refreshSeoOperationsSnapshotBtn = document.getElementById("refreshSeoOperationsSnapshotBtn");
+  if (refreshSeoOperationsSnapshotBtn) {
+    refreshSeoOperationsSnapshotBtn.addEventListener("click", async function () {
+      await loadSeoOperationsSnapshot();
     });
   }
 

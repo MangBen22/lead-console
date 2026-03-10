@@ -2093,6 +2093,18 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>SEO Operations Snapshot</h2>
+                <form id="seoOperationsSnapshotForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="seoOperationsSnapshotLimit">Snapshot Limit</label>
+                        <input id="seoOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="refreshSeoOperationsSnapshotBtn" type="button">Refresh SEO Snapshot</button>
+                </form>
+                <pre id="seoOperationsSnapshotView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Backup + Audit</h2>
                 <div class="actions">
                     <button id="exportBackupBtn" type="button">Export Backup</button>
