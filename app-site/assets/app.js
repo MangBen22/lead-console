@@ -415,6 +415,7 @@
   const downloadSeoExtensionSessionsExportBtn = document.getElementById("downloadSeoExtensionSessionsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
+  const downloadSeoProjectSnapshotExportBtn = document.getElementById("downloadSeoProjectSnapshotExportBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
   const downloadSeoActionPlanExportBtn = document.getElementById("downloadSeoActionPlanExportBtn");
   const refreshSeoOpportunitiesBtn = document.getElementById("refreshSeoOpportunitiesBtn");
@@ -7015,6 +7016,19 @@
   if (refreshSeoProjectSnapshotBtn) {
     refreshSeoProjectSnapshotBtn.addEventListener("click", async function () {
       await loadSeoProjectSnapshot();
+    });
+  }
+
+  if (downloadSeoProjectSnapshotExportBtn) {
+    downloadSeoProjectSnapshotExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.project.snapshot.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-project-snapshot-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 
