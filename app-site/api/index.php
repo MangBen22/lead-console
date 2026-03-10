@@ -1442,6 +1442,80 @@ function crm_operations_latest_compare()
     ];
 }
 
+function crm_operations_issues_summary($limit = 10)
+{
+    $snapshot = crm_operations_snapshot($limit);
+    $summary = isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [];
+    $issues = [];
+
+    if ((int) ($summary['smtp_failed_sites'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'critical',
+            'category' => 'smtp',
+            'message' => 'One or more SMTP sites are disconnected.',
+            'count' => (int) ($summary['smtp_failed_sites'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['delivery_connectors_with_rejections'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'delivery',
+            'message' => 'CRM delivery connectors reported rejected leads.',
+            'count' => (int) ($summary['delivery_connectors_with_rejections'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['delivery_connectors_with_retries'] ?? 0) > 0 || (int) ($summary['retry_filtered_count'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'retry_queue',
+            'message' => 'CRM retry queue still has pending backlog.',
+            'count' => max((int) ($summary['delivery_connectors_with_retries'] ?? 0), (int) ($summary['retry_filtered_count'] ?? 0)),
+        ];
+    }
+    if ((int) ($summary['active_connectors'] ?? 0) === 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'connectors',
+            'message' => 'No active CRM connectors are configured.',
+            'count' => 0,
+        ];
+    }
+    $templateLogSummary = isset($snapshot['email_templates']['test_log']['summary']) && is_array($snapshot['email_templates']['test_log']['summary'])
+        ? $snapshot['email_templates']['test_log']['summary']
+        : [];
+    if ((int) ($templateLogSummary['failed_count'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'info',
+            'category' => 'email_templates',
+            'message' => 'CRM email template test sends include recent failures.',
+            'count' => (int) ($templateLogSummary['failed_count'] ?? 0),
+        ];
+    }
+
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($issues as $issue) {
+        $severity = (string) ($issue['severity'] ?? 'info');
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+        ],
+        'issues' => $issues,
+        'snapshot' => $snapshot,
+    ];
+}
+
 function sanitize_connector_config($config)
 {
     if (!is_array($config)) {
@@ -7645,7 +7719,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.24-crm-operations-latest-compare',
+        'phase' => '5.25-crm-operations-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13496,7 +13570,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.24-crm-operations-latest-compare',
+        'phase' => '5.25-crm-operations-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16368,6 +16442,20 @@ if ($action === 'crm.operations.latest_compare') {
         'latest' => $compare['latest'],
         'previous' => $compare['previous'],
         'changes' => $compare['changes'],
+    ]);
+}
+
+if ($action === 'crm.operations.issues_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $issues = crm_operations_issues_summary($limit);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
     ]);
 }
 

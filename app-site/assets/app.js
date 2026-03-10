@@ -304,6 +304,7 @@
   const crmOperationsHistory = document.getElementById("crmOperationsHistory");
   const crmOperationsHistorySummary = document.getElementById("crmOperationsHistorySummary");
   const crmOperationsLatestCompare = document.getElementById("crmOperationsLatestCompare");
+  const crmOperationsIssuesSummary = document.getElementById("crmOperationsIssuesSummary");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
@@ -3229,6 +3230,21 @@
     }
   }
 
+  async function loadCrmOperationsIssuesSummary() {
+    if (!crmOperationsIssuesSummary) return null;
+    const limit = document.getElementById("crmOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("crm.operations.issues_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      crmOperationsIssuesSummary.textContent = JSON.stringify(data, null, 2);
+      return data;
+    } catch (err) {
+      crmOperationsIssuesSummary.textContent = "Failed to load CRM operations issues summary.";
+      return null;
+    }
+  }
+
   async function downloadCrmOperationsSnapshot() {
     const limit = document.getElementById("crmOperationsSnapshotLimit");
     const data = await apiGetWithParams("crm.operations.export", {
@@ -4789,6 +4805,7 @@
     await loadCrmOperationsHistory();
     await loadCrmOperationsHistorySummary();
     await loadCrmOperationsLatestCompare();
+    await loadCrmOperationsIssuesSummary();
     await loadSocialConnectors();
     await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
@@ -5287,6 +5304,7 @@
       await loadCrmOperationsHistory();
       await loadCrmOperationsHistorySummary();
       await loadCrmOperationsLatestCompare();
+      await loadCrmOperationsIssuesSummary();
     });
   }
 
