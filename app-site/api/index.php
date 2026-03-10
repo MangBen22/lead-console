@@ -6111,7 +6111,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.81-social-delivery-watch-automation',
+        'phase' => '2.82-social-delivery-watch-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9799,7 +9799,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.81-social-delivery-watch-automation',
+        'phase' => '2.82-social-delivery-watch-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14271,6 +14271,23 @@ if ($action === 'social.delivery.watch.run') {
     out_json([
         'ok' => true,
         'run' => $run,
+    ]);
+}
+
+if ($action === 'social.delivery.watch.export') {
+    $snapshot = social_delivery_watch_summary();
+    audit_event('social', 'delivery.watch.export', [
+        'degraded_count' => (int) (($snapshot['summary']['degraded_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_delivery_watch_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'summary' => $snapshot['summary'],
+            'latest' => $snapshot['latest'],
+            'runs' => $snapshot['runs'],
+        ],
     ]);
 }
 

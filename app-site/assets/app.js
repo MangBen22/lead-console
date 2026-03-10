@@ -322,6 +322,7 @@
   const downloadSocialDeliveryExportBtn = document.getElementById("downloadSocialDeliveryExportBtn");
   const refreshSocialDeliveryWatchBtn = document.getElementById("refreshSocialDeliveryWatchBtn");
   const runSocialDeliveryWatchBtn = document.getElementById("runSocialDeliveryWatchBtn");
+  const downloadSocialDeliveryWatchExportBtn = document.getElementById("downloadSocialDeliveryWatchExportBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
   const socialDeliverySummary = document.getElementById("socialDeliverySummary");
   const socialDeliveryConnectorDetail = document.getElementById("socialDeliveryConnectorDetail");
@@ -3073,6 +3074,12 @@
     }
   }
 
+  async function downloadSocialDeliveryWatchExport() {
+    const data = await apiGet("social.delivery.watch.export");
+    const filename = data && data.filename ? String(data.filename) : ("social-delivery-watch-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadWebopsMonitors() {
     if (!webopsMonitors) return;
     try {
@@ -4252,6 +4259,12 @@
         socialDeliveryWatchView.textContent = JSON.stringify(result, null, 2);
       }
       await loadNotifications();
+    });
+  }
+
+  if (downloadSocialDeliveryWatchExportBtn) {
+    downloadSocialDeliveryWatchExportBtn.addEventListener("click", async function () {
+      await downloadSocialDeliveryWatchExport();
     });
   }
 

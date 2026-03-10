@@ -864,6 +864,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadSocialDeliveryExportBtn" type="button">Download Delivery Export</button>
                     <button id="refreshSocialDeliveryWatchBtn" type="button">Refresh Delivery Watch</button>
                     <button id="runSocialDeliveryWatchBtn" type="button">Run Delivery Watch</button>
+                    <button id="downloadSocialDeliveryWatchExportBtn" type="button">Download Delivery Watch</button>
                 </div>
                 <pre id="socialSyncResult">No social sync yet.</pre>
                 <h3>Social Delivery Summary</h3>
