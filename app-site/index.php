@@ -825,6 +825,16 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialConnectorRuleAuditBtn" type="button">Refresh Connector Rule Audit</button>
                 </div>
                 <pre id="socialConnectorRuleAudit">No social connector rule audit loaded.</pre>
+                <form id="socialConnectorRuleAuditDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialConnectorRuleAuditDetailId">Connector ID</label>
+                        <input id="socialConnectorRuleAuditDetailId" type="text" placeholder="social_abc123">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="loadSocialConnectorRuleAuditDetailBtn" type="button">Load Audit Detail</button>
+                </div>
+                <pre id="socialConnectorRuleAuditDetail">No social connector rule audit detail loaded.</pre>
                 <form id="socialConnectorBulkUpdateForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialConnectorBulkStatus">Bulk Status</label>

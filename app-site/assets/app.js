@@ -287,6 +287,7 @@
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
   const refreshSocialConnectorRuleAuditBtn = document.getElementById("refreshSocialConnectorRuleAuditBtn");
+  const loadSocialConnectorRuleAuditDetailBtn = document.getElementById("loadSocialConnectorRuleAuditDetailBtn");
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
@@ -328,6 +329,7 @@
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorDetail = document.getElementById("socialConnectorDetail");
   const socialConnectorRuleAudit = document.getElementById("socialConnectorRuleAudit");
+  const socialConnectorRuleAuditDetail = document.getElementById("socialConnectorRuleAuditDetail");
   const socialConnectorBulkResult = document.getElementById("socialConnectorBulkResult");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
@@ -2803,6 +2805,29 @@
     }
   }
 
+  async function loadSocialConnectorRuleAuditDetail() {
+    if (!socialConnectorRuleAuditDetail) return;
+    const connectorId = document.getElementById("socialConnectorRuleAuditDetailId");
+    const draftLimit = document.getElementById("socialConnectorRuleAuditDraftLimit");
+    if (!connectorId || !connectorId.value) {
+      socialConnectorRuleAuditDetail.textContent = "Enter a connector ID to load connector audit detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.connectors.rule_audit_detail", {
+        connector_id: connectorId.value.trim(),
+        draft_limit: draftLimit && draftLimit.value ? Number(draftLimit.value) : 5,
+      });
+      socialConnectorRuleAuditDetail.textContent = JSON.stringify(data, null, 2);
+      const connectorDetailId = document.getElementById("socialConnectorDetailId");
+      if (connectorDetailId) {
+        connectorDetailId.value = connectorId.value.trim();
+      }
+    } catch (err) {
+      socialConnectorRuleAuditDetail.textContent = "Failed to load social connector rule audit detail.";
+    }
+  }
+
   async function downloadSocialConnectorsExport() {
     const connectorId = document.getElementById("socialConnectorDetailId");
     const limit = document.getElementById("socialConnectorDetailLimit");
@@ -4919,6 +4944,12 @@
   if (refreshSocialConnectorRuleAuditBtn) {
     refreshSocialConnectorRuleAuditBtn.addEventListener("click", async function () {
       await loadSocialConnectorRuleAudit();
+    });
+  }
+
+  if (loadSocialConnectorRuleAuditDetailBtn) {
+    loadSocialConnectorRuleAuditDetailBtn.addEventListener("click", async function () {
+      await loadSocialConnectorRuleAuditDetail();
     });
   }
 

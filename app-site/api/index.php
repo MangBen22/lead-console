@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.17-social-connector-rule-audit',
+        'phase' => '3.18-social-connector-rule-audit-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8791,6 +8791,45 @@ function social_connector_rule_audit_snapshot($query = [])
     return [
         'summary' => array_merge(isset($list['summary']) && is_array($list['summary']) ? $list['summary'] : [], $summary),
         'items' => $auditItems,
+    ];
+}
+
+function social_connector_rule_audit_detail_snapshot($connectorId, $draftLimit = 5)
+{
+    $id = trim((string) $connectorId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'connector_id is required.'];
+    }
+    $connector = social_connector_by_id($id);
+    if (!is_array($connector)) {
+        return ['ok' => false, 'error' => 'Social connector not found.'];
+    }
+    $draftLimit = max(1, min(20, (int) $draftLimit));
+    $drafts = array_slice(collect_social_drafts(), 0, $draftLimit);
+    $decorated = decorate_social_connector($connector);
+    $prepared = [];
+    $variantItems = [];
+    foreach ($drafts as $index => $draft) {
+        $variant = social_build_variant_for_connector($connector, $draft);
+        $prepared[] = isset($variant['variant']) && is_array($variant['variant']) ? $variant['variant'] : [];
+        $variantItems[] = [
+            'draft_index' => $index,
+            'bundle' => $variant,
+        ];
+    }
+    $validation = social_validate_drafts_for_connector($connector, $prepared);
+    $readiness = social_connector_readiness($connector, $prepared);
+    $rules = social_provider_rule_profile((string) ($decorated['provider'] ?? ''));
+    $detail = social_connector_detail_snapshot($id, 10);
+
+    return [
+        'ok' => true,
+        'item' => $decorated,
+        'rules' => $rules,
+        'readiness' => $readiness,
+        'validation' => $validation,
+        'variant_items' => $variantItems,
+        'connector_detail' => !empty($detail['ok']) ? $detail : null,
     ];
 }
 
@@ -11663,7 +11702,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.17-social-connector-rule-audit',
+        'phase' => '3.18-social-connector-rule-audit-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16158,6 +16197,13 @@ if ($action === 'social.connectors.rule_audit') {
         'count' => count(isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : []),
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.connectors.rule_audit_detail') {
+    $connectorId = isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '';
+    $draftLimit = isset($_GET['draft_limit']) ? (int) $_GET['draft_limit'] : 5;
+    $snapshot = social_connector_rule_audit_detail_snapshot($connectorId, $draftLimit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.connectors.export') {
