@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.99-social-retry-export',
+        'phase' => '3.00-social-retry-bulk-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8817,6 +8817,83 @@ function social_retry_detail_snapshot($retryId)
     return ['ok' => false, 'error' => 'Retry item not found.'];
 }
 
+function social_retry_bulk_update($payload)
+{
+    $data = is_array($payload) ? $payload : [];
+    $snapshot = social_retry_list_snapshot([
+        'status' => isset($data['filter_status']) ? (string) $data['filter_status'] : '',
+        'connector_id' => isset($data['filter_connector_id']) ? (string) $data['filter_connector_id'] : '',
+        'source' => isset($data['filter_source']) ? (string) $data['filter_source'] : '',
+        'error_code' => isset($data['filter_error_code']) ? (string) $data['filter_error_code'] : '',
+        'search' => isset($data['filter_search']) ? (string) $data['filter_search'] : '',
+        'page' => isset($data['filter_page']) ? (int) $data['filter_page'] : 1,
+        'limit' => isset($data['filter_limit']) ? (int) $data['filter_limit'] : 10,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    if (empty($items)) {
+        return ['ok' => false, 'error' => 'No retry items matched the current filters.'];
+    }
+    $action = strtolower(trim((string) ($data['action'] ?? '')));
+    if (!in_array($action, ['reset', 'delete'], true)) {
+        return ['ok' => false, 'error' => 'Invalid retry bulk action.'];
+    }
+
+    $retryIds = array_flip(array_map(static function ($item) {
+        return (string) ($item['retry_id'] ?? '');
+    }, $items));
+    $rows = app_read_json_file(social_retry_queue_path(), []);
+    $updated = 0;
+    $deleted = 0;
+    $nextRows = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $retryId = (string) ($row['retry_id'] ?? '');
+        if ($retryId === '' || !isset($retryIds[$retryId])) {
+            $nextRows[] = $row;
+            continue;
+        }
+        if ($action === 'delete') {
+            $deleted++;
+            continue;
+        }
+        $row['status'] = 'queued';
+        $row['attempts'] = 0;
+        $row['errors'] = [];
+        $row['error_codes'] = [];
+        $row['last_attempt_at'] = '';
+        $row['last_result'] = [];
+        $updated++;
+        $nextRows[] = $row;
+    }
+    app_write_json_file(social_retry_queue_path(), array_slice($nextRows, 0, 500));
+    audit_event('social', 'retry.bulk_update', [
+        'action' => $action,
+        'processed' => count($items),
+        'updated' => $updated,
+        'deleted' => $deleted,
+    ]);
+    record_social_activity('retry_bulk_update', 'Social retry queue bulk update applied.', [
+        'action' => $action,
+        'processed' => count($items),
+        'updated' => $updated,
+        'deleted' => $deleted,
+    ]);
+
+    return [
+        'ok' => true,
+        'action' => $action,
+        'processed' => count($items),
+        'updated' => $updated,
+        'deleted' => $deleted,
+        'filters' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        'items' => array_values(array_map(static function ($item) {
+            return (string) ($item['retry_id'] ?? '');
+        }, $items)),
+    ];
+}
+
 function social_inbox_threads_rows($seedIfEmpty = false)
 {
     $rows = app_read_json_file(social_inbox_threads_path(), []);
@@ -10776,7 +10853,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.99-social-retry-export',
+        'phase' => '3.00-social-retry-bulk-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15489,6 +15566,20 @@ if ($action === 'social.retry.export') {
         'filename' => 'social_retry_export_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
     ]);
+}
+
+if ($action === 'social.retry.bulk_update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data)) {
+        out_json(['ok' => false, 'error' => 'Invalid JSON body.'], 400);
+    }
+    $snapshot = social_retry_bulk_update($data);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.retry.run') {

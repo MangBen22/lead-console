@@ -1169,8 +1169,16 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="socialRetryFilterLimit">Retry Limit</label>
                         <input id="socialRetryFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
+                    <div class="form-row">
+                        <label for="socialRetryBulkAction">Bulk Action</label>
+                        <select id="socialRetryBulkAction">
+                            <option value="reset">reset queued state</option>
+                            <option value="delete">delete items</option>
+                        </select>
+                    </div>
                     <button id="refreshSocialRetryQueueBtn" type="button">Refresh Retry Queue</button>
                     <button id="downloadSocialRetryExportBtn" type="button">Download Retry Export</button>
+                    <button id="runSocialRetryBulkUpdateBtn" type="button">Apply Retry Bulk Action</button>
                 </div>
                 <pre id="socialRetryQueue">Loading...</pre>
                 <div class="inline-form">
@@ -1181,6 +1189,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="loadSocialRetryDetailBtn" type="button">Load Retry Detail</button>
                 </div>
                 <pre id="socialRetryDetail">No social retry detail loaded.</pre>
+                <pre id="socialRetryBulkResult">No social retry bulk action yet.</pre>
             </section>
 
             <section class="api-status">

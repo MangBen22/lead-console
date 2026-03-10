@@ -289,6 +289,7 @@
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
   const loadSocialRetryDetailBtn = document.getElementById("loadSocialRetryDetailBtn");
   const downloadSocialRetryExportBtn = document.getElementById("downloadSocialRetryExportBtn");
+  const runSocialRetryBulkUpdateBtn = document.getElementById("runSocialRetryBulkUpdateBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -353,6 +354,7 @@
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const socialRetryDetail = document.getElementById("socialRetryDetail");
+  const socialRetryBulkResult = document.getElementById("socialRetryBulkResult");
   const webopsMonitors = document.getElementById("webopsMonitors");
   const webopsTypes = document.getElementById("webopsTypes");
   const webopsMonitorForm = document.getElementById("webopsMonitorForm");
@@ -3426,6 +3428,28 @@
     downloadJsonFile(filename, data);
   }
 
+  async function runSocialRetryBulkUpdate() {
+    if (!socialRetryBulkResult) return;
+    const filters = socialRetryFilters();
+    const action = document.getElementById("socialRetryBulkAction");
+    const payload = {
+      filter_status: filters.status,
+      filter_connector_id: filters.connector_id,
+      filter_source: filters.source,
+      filter_error_code: filters.error_code,
+      filter_search: filters.search,
+      filter_page: filters.page,
+      filter_limit: filters.limit,
+      action: action && action.value ? action.value : "reset",
+    };
+    const data = await apiPost("social.retry.bulk_update", payload);
+    socialRetryBulkResult.textContent = JSON.stringify(data, null, 2);
+    await loadSocialRetryQueue();
+    await loadSocialActivityFeed();
+    await loadSocialDeliverySummary();
+    await refreshSocialModuleSummary();
+  }
+
   function socialRetryFilters() {
     const status = document.getElementById("socialRetryFilterStatus");
     const connector = document.getElementById("socialRetryFilterConnector");
@@ -4614,6 +4638,12 @@
   if (downloadSocialRetryExportBtn) {
     downloadSocialRetryExportBtn.addEventListener("click", async function () {
       await downloadSocialRetryExport();
+    });
+  }
+
+  if (runSocialRetryBulkUpdateBtn) {
+    runSocialRetryBulkUpdateBtn.addEventListener("click", async function () {
+      await runSocialRetryBulkUpdate();
     });
   }
 
