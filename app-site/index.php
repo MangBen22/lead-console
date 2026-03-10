@@ -725,13 +725,44 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             <section class="api-status">
                 <h2>CRM Email Templates</h2>
                 <div class="actions">
-                    <button id="refreshCrmEmailTemplatesBtn" type="button">Refresh Templates</button>
                     <button id="loadCrmEmailTemplateBtn" type="button">Load Selected Template</button>
                     <button id="saveCrmEmailTemplateBtn" type="button">Save Selected Template</button>
                     <button id="previewCrmEmailTemplateBtn" type="button">Preview Template</button>
                     <button id="sendCrmEmailTemplateTestBtn" type="button">Send Template Test</button>
                     <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
                 </div>
+                <form id="crmEmailTemplateSitesForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterSiteId">Site ID</label>
+                        <input id="crmEmailTemplateFilterSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterBridge">Bridge</label>
+                        <select id="crmEmailTemplateFilterBridge">
+                            <option value="">all</option>
+                            <option value="ok">ok</option>
+                            <option value="error">error</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterKey">Template Key</label>
+                        <input id="crmEmailTemplateFilterKey" type="text" placeholder="registration_approved">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterSearch">Template Search</label>
+                        <input id="crmEmailTemplateFilterSearch" type="text" placeholder="site, url, or template key">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterPage">Template Page</label>
+                        <input id="crmEmailTemplateFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateFilterLimit">Template Limit</label>
+                        <input id="crmEmailTemplateFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshCrmEmailTemplatesBtn" type="button">Refresh Templates</button>
+                </form>
+                <pre id="crmEmailTemplateSites">Loading...</pre>
                 <label>Template site ID<input id="crmEmailTemplateSiteId" type="text" placeholder="hq-main"></label>
                 <label>Template key
                     <select id="crmEmailTemplateKey">
