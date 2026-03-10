@@ -723,6 +723,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialInboxWatchBtn" type="button">Refresh Inbox Watch</button>
                     <button id="runSocialInboxWatchBtn" type="button">Run Inbox Watch</button>
                     <button id="refreshSocialInboxBtn" type="button">Refresh Social Inbox</button>
+                    <button id="downloadSocialInboxExportBtn" type="button">Download Inbox Export</button>
                 </div>
                 <div class="inline-form">
                     <div class="form-row">

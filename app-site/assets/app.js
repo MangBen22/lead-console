@@ -306,6 +306,7 @@
   const socialInboxWatchView = document.getElementById("socialInboxWatchView");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxThreadDetail = document.getElementById("socialInboxThreadDetail");
+  const downloadSocialInboxExportBtn = document.getElementById("downloadSocialInboxExportBtn");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const socialInboxUpdateForm = document.getElementById("socialInboxUpdateForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
@@ -2786,6 +2787,17 @@
     }
   }
 
+  async function downloadSocialInboxExport() {
+    const detailThread = document.getElementById("socialInboxDetailThreadId");
+    const params = socialInboxFilters();
+    if (detailThread && detailThread.value) {
+      params.thread_id = detailThread.value.trim();
+    }
+    const data = await apiGetWithParams("social.inbox.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-inbox-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadSocialInboxSummary() {
     if (!socialInboxSummary) return;
     try {
@@ -4025,6 +4037,12 @@
   if (refreshSocialInboxBtn) {
     refreshSocialInboxBtn.addEventListener("click", async function () {
       await loadSocialInboxThreads();
+    });
+  }
+
+  if (downloadSocialInboxExportBtn) {
+    downloadSocialInboxExportBtn.addEventListener("click", async function () {
+      await downloadSocialInboxExport();
     });
   }
 

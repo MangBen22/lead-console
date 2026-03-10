@@ -6027,7 +6027,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.74-social-inbox-detail',
+        'phase' => '2.75-social-inbox-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9421,7 +9421,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.74-social-inbox-detail',
+        'phase' => '2.75-social-inbox-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12523,6 +12523,28 @@ if ($action === 'social.inbox.detail') {
     $threadId = isset($_GET['thread_id']) ? (string) $_GET['thread_id'] : '';
     $snapshot = social_inbox_thread_detail_snapshot($threadId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.inbox.export') {
+    $snapshot = social_inbox_list_snapshot($_GET);
+    $threadId = isset($_GET['thread_id']) ? trim((string) $_GET['thread_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'filters' => $snapshot['summary'],
+        'threads' => $snapshot['items'],
+    ];
+    if ($threadId !== '') {
+        $payload['thread_detail'] = social_inbox_thread_detail_snapshot($threadId);
+    }
+    audit_event('social', 'inbox.export', [
+        'filtered_count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'thread_id' => $threadId,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_inbox_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.inbox.summary') {
