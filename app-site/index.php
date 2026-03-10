@@ -688,6 +688,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="crmSmtpFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshCrmSmtpBtn" type="button">Refresh SMTP Status</button>
+                    <button id="downloadCrmSmtpExportBtn" type="button">Download SMTP Export</button>
                 </form>
                 <pre id="crmSmtpSummary">Loading...</pre>
                 <form id="crmSmtpDetailForm" class="inline-form">

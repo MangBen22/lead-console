@@ -7194,7 +7194,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.12-crm-smtp-detail',
+        'phase' => '5.13-crm-smtp-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13045,7 +13045,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.12-crm-smtp-detail',
+        'phase' => '5.13-crm-smtp-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15539,6 +15539,48 @@ if ($action === 'crm.smtp.detail') {
     }
     $snapshot = crm_smtp_detail_snapshot($siteId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'crm.smtp.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+        'connection' => isset($_GET['connection']) ? (string) $_GET['connection'] : '',
+        'confirmation' => isset($_GET['confirmation']) ? (string) $_GET['confirmation'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $detailSiteId = isset($_GET['detail_site_id']) ? trim((string) $_GET['detail_site_id']) : '';
+    $detailLimit = isset($_GET['detail_limit']) ? (int) $_GET['detail_limit'] : $limit;
+    if ($detailLimit <= 0) {
+        $detailLimit = $limit;
+    }
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'smtp_summary' => crm_smtp_summary_snapshot($filters),
+        'smtp_watch' => [
+            'state' => app_read_json_file(crm_smtp_watch_state_path(), []),
+            'runs' => array_slice(app_read_json_file(crm_smtp_watch_runs_path(), []), 0, 25),
+        ],
+    ];
+    if ($detailSiteId !== '') {
+        $payload['smtp_detail'] = crm_smtp_detail_snapshot($detailSiteId, $detailLimit);
+    }
+    audit_event('crm', 'smtp.export', [
+        'detail_site_id' => $detailSiteId,
+        'limit' => $limit,
+        'detail_limit' => $detailLimit,
+        'filtered_count' => (int) (($payload['smtp_summary']['summary']['filtered_count'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_smtp_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'crm.smtp.probe') {

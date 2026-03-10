@@ -283,6 +283,7 @@
   const crmSmtpDetail = document.getElementById("crmSmtpDetail");
   const crmSmtpResult = document.getElementById("crmSmtpResult");
   const crmSmtpWatchView = document.getElementById("crmSmtpWatchView");
+  const downloadCrmSmtpExportBtn = document.getElementById("downloadCrmSmtpExportBtn");
   const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
   const loadCrmEmailTemplateBtn = document.getElementById("loadCrmEmailTemplateBtn");
   const saveCrmEmailTemplateBtn = document.getElementById("saveCrmEmailTemplateBtn");
@@ -2991,6 +2992,26 @@
     }
   }
 
+  async function downloadCrmSmtpExport() {
+    const detailSiteId = document.getElementById("crmSmtpDetailSiteId");
+    const detailLimit = document.getElementById("crmSmtpDetailLimit");
+    const data = await apiGetWithParams("crm.smtp.export", {
+      site_id: document.getElementById("crmSmtpFilterSiteId") && document.getElementById("crmSmtpFilterSiteId").value ? document.getElementById("crmSmtpFilterSiteId").value.trim() : "",
+      connection: document.getElementById("crmSmtpFilterConnection") && document.getElementById("crmSmtpFilterConnection").value ? document.getElementById("crmSmtpFilterConnection").value : "",
+      confirmation: document.getElementById("crmSmtpFilterConfirmation") && document.getElementById("crmSmtpFilterConfirmation").value ? document.getElementById("crmSmtpFilterConfirmation").value : "",
+      search: document.getElementById("crmSmtpFilterSearch") && document.getElementById("crmSmtpFilterSearch").value ? document.getElementById("crmSmtpFilterSearch").value.trim() : "",
+      page: document.getElementById("crmSmtpFilterPage") && document.getElementById("crmSmtpFilterPage").value ? Number(document.getElementById("crmSmtpFilterPage").value) : 1,
+      limit: document.getElementById("crmSmtpFilterLimit") && document.getElementById("crmSmtpFilterLimit").value ? Number(document.getElementById("crmSmtpFilterLimit").value) : 10,
+      detail_site_id: detailSiteId && detailSiteId.value ? detailSiteId.value.trim() : "",
+      detail_limit: detailLimit && detailLimit.value ? Number(detailLimit.value) : 10,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("crm-smtp-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (crmSmtpResult) {
+      crmSmtpResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadCrmSmtpWatch() {
     if (!crmSmtpWatchView) return;
     try {
@@ -4835,6 +4856,12 @@
   if (loadCrmSmtpDetailBtn) {
     loadCrmSmtpDetailBtn.addEventListener("click", async function () {
       await loadCrmSmtpDetail();
+    });
+  }
+
+  if (downloadCrmSmtpExportBtn) {
+    downloadCrmSmtpExportBtn.addEventListener("click", async function () {
+      await downloadCrmSmtpExport();
     });
   }
 
