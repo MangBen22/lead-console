@@ -485,6 +485,102 @@ function social_watch_runs_path()
     return app_storage_path('social_watch_runs.json');
 }
 
+function social_schedule_snapshot($limit = 10)
+{
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $indexedConnectors = [];
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $indexedConnectors[(string) ($connector['connector_id'] ?? '')] = $connector;
+    }
+    $now = time();
+    $summary = [
+        'total' => count($rows),
+        'queued' => 0,
+        'due' => 0,
+        'overdue' => 0,
+        'upcoming' => 0,
+        'sent' => 0,
+        'failed' => 0,
+    ];
+    $dueItems = [];
+    $upcomingItems = [];
+    $failedItems = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower((string) ($row['status'] ?? 'queued'));
+        $scheduledFor = trim((string) ($row['scheduled_for'] ?? ''));
+        $scheduledTs = $scheduledFor !== '' ? strtotime($scheduledFor) : false;
+        $connectorIds = isset($row['connector_ids']) && is_array($row['connector_ids']) ? $row['connector_ids'] : [];
+        $resolvedConnectors = [];
+        foreach ($connectorIds as $connectorId) {
+            if (isset($indexedConnectors[(string) $connectorId])) {
+                $resolvedConnectors[] = (string) $connectorId;
+            }
+        }
+        if ($status === 'queued') {
+            $summary['queued']++;
+            if ($scheduledTs !== false && $scheduledTs <= $now) {
+                $summary['due']++;
+                if (($now - $scheduledTs) > 300) {
+                    $summary['overdue']++;
+                }
+                $dueItems[] = [
+                    'schedule_id' => (string) ($row['schedule_id'] ?? ''),
+                    'title' => (string) ($row['title'] ?? ''),
+                    'scheduled_for' => $scheduledFor,
+                    'connector_count' => count($connectorIds),
+                    'resolved_connector_count' => count($resolvedConnectors),
+                    'status' => $status,
+                ];
+            } else {
+                $summary['upcoming']++;
+                $upcomingItems[] = [
+                    'schedule_id' => (string) ($row['schedule_id'] ?? ''),
+                    'title' => (string) ($row['title'] ?? ''),
+                    'scheduled_for' => $scheduledFor,
+                    'connector_count' => count($connectorIds),
+                    'resolved_connector_count' => count($resolvedConnectors),
+                    'status' => $status,
+                ];
+            }
+        } elseif ($status === 'sent') {
+            $summary['sent']++;
+        } elseif ($status === 'failed') {
+            $summary['failed']++;
+            $failedItems[] = [
+                'schedule_id' => (string) ($row['schedule_id'] ?? ''),
+                'title' => (string) ($row['title'] ?? ''),
+                'scheduled_for' => $scheduledFor,
+                'attempts' => (int) ($row['attempts'] ?? 0),
+                'last_run_at' => (string) ($row['last_run_at'] ?? ''),
+                'status' => $status,
+            ];
+        }
+    }
+
+    usort($dueItems, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+    usort($upcomingItems, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+
+    return [
+        'summary' => $summary,
+        'next_due' => isset($dueItems[0]) ? $dueItems[0] : null,
+        'next_upcoming' => isset($upcomingItems[0]) ? $upcomingItems[0] : null,
+        'due_items' => array_slice($dueItems, 0, $limit),
+        'upcoming_items' => array_slice($upcomingItems, 0, $limit),
+        'failed_items' => array_slice($failedItems, 0, $limit),
+    ];
+}
+
 function social_platform_catalog()
 {
     return [
@@ -4291,7 +4387,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.40-social-retry-payload-replay',
+        'phase' => '2.41-social-schedule-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7141,7 +7237,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.40-social-retry-payload-replay',
+        'phase' => '2.41-social-schedule-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9845,6 +9941,23 @@ if ($action === 'social.drafts.preview') {
         ],
         'drafts' => $drafts,
         'connector_readiness' => $readiness,
+    ]);
+}
+
+if ($action === 'social.schedule.summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = social_schedule_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'next_due' => $snapshot['next_due'],
+        'next_upcoming' => $snapshot['next_upcoming'],
+        'due_items' => $snapshot['due_items'],
+        'upcoming_items' => $snapshot['upcoming_items'],
+        'failed_items' => $snapshot['failed_items'],
     ]);
 }
 

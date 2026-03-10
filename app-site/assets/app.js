@@ -249,6 +249,8 @@
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
+  const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
+  const socialScheduleSummary = document.getElementById("socialScheduleSummary");
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
@@ -2305,6 +2307,16 @@
     }
   }
 
+  async function loadSocialScheduleSummary() {
+    if (!socialScheduleSummary) return;
+    try {
+      const data = await apiGetWithParams("social.schedule.summary", { limit: 8 });
+      socialScheduleSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialScheduleSummary.textContent = "Failed to load social schedule health.";
+    }
+  }
+
   async function loadSocialActivityFeed() {
     if (!socialActivityFeed) return;
     try {
@@ -2671,6 +2683,7 @@
     await loadCrmEmailTemplatesSummary();
     await loadCrmEmailTemplateTestLog();
     await loadSocialConnectors();
+    await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
     await loadSocialInboxThreads();
@@ -3223,6 +3236,7 @@
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadSocialScheduleSummary();
         await loadSocialScheduleQueue();
         await loadSocialActivityFeed();
       });
@@ -3243,6 +3257,7 @@
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadSocialScheduleSummary();
         await loadSocialScheduleQueue();
         await loadSocialActivityFeed();
       });
@@ -3255,6 +3270,7 @@
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadSocialScheduleSummary();
         await loadSocialScheduleQueue();
         await loadSocialSyncLog();
         await loadSocialRetryQueue();
@@ -3334,6 +3350,12 @@
   if (refreshSocialDraftsBtn) {
     refreshSocialDraftsBtn.addEventListener("click", async function () {
       await loadSocialDraftsPreview();
+    });
+  }
+
+  if (refreshSocialScheduleSummaryBtn) {
+    refreshSocialScheduleSummaryBtn.addEventListener("click", async function () {
+      await loadSocialScheduleSummary();
     });
   }
 
