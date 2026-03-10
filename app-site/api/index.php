@@ -517,6 +517,73 @@ function crm_retry_list_snapshot($query = [])
     ];
 }
 
+function crm_retry_detail_snapshot($retryId, $limit = 10)
+{
+    $id = trim((string) $retryId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'retry_id is required.'];
+    }
+    $rows = app_read_json_file(retry_queue_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['retry_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $item['errors'] = isset($row['errors']) && is_array($row['errors']) ? array_values($row['errors']) : [];
+        $item['error_codes'] = isset($row['error_codes']) && is_array($row['error_codes']) ? array_values($row['error_codes']) : [];
+
+        $connectorId = (string) ($item['connector_id'] ?? '');
+        $connector = $connectorId !== '' ? connector_by_id($connectorId) : null;
+        $maskedConnector = is_array($connector) ? mask_connector($connector) : null;
+
+        $syncLog = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+        $recentSync = [];
+        foreach ($syncLog as $log) {
+            if (!is_array($log) || empty($log['connector_results']) || !is_array($log['connector_results'])) {
+                continue;
+            }
+            foreach ($log['connector_results'] as $result) {
+                if (!is_array($result) || (string) ($result['connector_id'] ?? '') !== $connectorId) {
+                    continue;
+                }
+                $recentSync[] = [
+                    'sync_id' => (string) ($log['sync_id'] ?? ''),
+                    'created_at' => (string) ($log['created_at'] ?? ''),
+                    'status' => (string) ($log['status'] ?? ''),
+                    'approved_total' => (int) ($log['approved_total'] ?? 0),
+                    'site_count' => (int) ($log['site_count'] ?? 0),
+                    'result' => [
+                        'accepted' => (int) ($result['accepted'] ?? 0),
+                        'rejected' => (int) ($result['rejected'] ?? 0),
+                        'errors' => isset($result['errors']) && is_array($result['errors']) ? array_values($result['errors']) : [],
+                        'error_codes' => isset($result['error_codes']) && is_array($result['error_codes']) ? array_values($result['error_codes']) : [],
+                        'run_mode' => (string) ($result['run_mode'] ?? ''),
+                    ],
+                ];
+            }
+        }
+
+        usort($recentSync, static function ($a, $b) {
+            return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+        });
+
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'error_count' => count($item['errors']),
+                'error_code_count' => count($item['error_codes']),
+                'connector_found' => is_array($maskedConnector) ? 1 : 0,
+                'recent_sync_count' => count($recentSync),
+            ],
+            'connector' => $maskedConnector,
+            'recent_sync' => array_slice($recentSync, 0, max(1, $limit)),
+        ];
+    }
+
+    return ['ok' => false, 'error' => 'Retry item not found.'];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6971,7 +7038,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.08-crm-retry-filters',
+        'phase' => '5.09-crm-retry-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12822,7 +12889,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.08-crm-retry-filters',
+        'phase' => '5.09-crm-retry-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15202,6 +15269,16 @@ if ($action === 'crm.retry.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'crm.retry.detail') {
+    $retryId = isset($_GET['retry_id']) ? (string) $_GET['retry_id'] : '';
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = crm_retry_detail_snapshot($retryId, $limit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'crm.retry.run') {

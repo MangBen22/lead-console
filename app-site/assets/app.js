@@ -269,9 +269,11 @@
   const loadCrmSyncDetailBtn = document.getElementById("loadCrmSyncDetailBtn");
   const downloadCrmSyncExportBtn = document.getElementById("downloadCrmSyncExportBtn");
   const refreshCrmRetryQueueBtn = document.getElementById("refreshCrmRetryQueueBtn");
+  const loadCrmRetryDetailBtn = document.getElementById("loadCrmRetryDetailBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmSyncDetail = document.getElementById("crmSyncDetail");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
+  const crmRetryDetail = document.getElementById("crmRetryDetail");
   const refreshCrmSmtpBtn = document.getElementById("refreshCrmSmtpBtn");
   const refreshCrmSmtpWatchBtn = document.getElementById("refreshCrmSmtpWatchBtn");
   const runCrmSmtpWatchBtn = document.getElementById("runCrmSmtpWatchBtn");
@@ -2901,6 +2903,34 @@
     }
   }
 
+  async function loadCrmRetryDetail() {
+    if (!crmRetryDetail) return;
+    const retryId = document.getElementById("crmRetryDetailId");
+    const limit = document.getElementById("crmRetryDetailLimit");
+    if (!retryId || !retryId.value) {
+      crmRetryDetail.textContent = "Enter a retry ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("crm.retry.detail", {
+        retry_id: retryId.value.trim(),
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      crmRetryDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.item) {
+        const connectorId = data.item.connector_id || "";
+        const connectorFilter = document.getElementById("crmRetryFilterConnector");
+        const connectorDetailId = document.getElementById("crmConnectorDetailId");
+        const deliveryConnectorId = document.getElementById("crmDeliveryConnectorId");
+        if (connectorFilter) connectorFilter.value = connectorId;
+        if (connectorDetailId) connectorDetailId.value = connectorId;
+        if (deliveryConnectorId) deliveryConnectorId.value = connectorId;
+      }
+    } catch (err) {
+      crmRetryDetail.textContent = "Failed to load CRM retry detail.";
+    }
+  }
+
   async function loadCrmSmtpSummary() {
     if (!crmSmtpSummary) return;
     try {
@@ -4742,6 +4772,12 @@
   if (refreshCrmRetryQueueBtn) {
     refreshCrmRetryQueueBtn.addEventListener("click", async function () {
       await loadRetryQueue();
+    });
+  }
+
+  if (loadCrmRetryDetailBtn) {
+    loadCrmRetryDetailBtn.addEventListener("click", async function () {
+      await loadCrmRetryDetail();
     });
   }
 

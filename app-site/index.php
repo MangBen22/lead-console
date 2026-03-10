@@ -632,6 +632,18 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshCrmRetryQueueBtn" type="button">Refresh Retry Queue</button>
                 </form>
                 <pre id="crmRetryQueue">Loading...</pre>
+                <form id="crmRetryDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmRetryDetailId">Retry ID</label>
+                        <input id="crmRetryDetailId" type="text" placeholder="retry_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryDetailLimit">Detail Limit</label>
+                        <input id="crmRetryDetailLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="loadCrmRetryDetailBtn" type="button">Load Retry Detail</button>
+                </form>
+                <pre id="crmRetryDetail">No CRM retry detail loaded.</pre>
             </section>
 
             <section class="api-status">
