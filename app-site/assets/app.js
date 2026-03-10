@@ -409,6 +409,7 @@
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const downloadSeoHistoryExportBtn = document.getElementById("downloadSeoHistoryExportBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
+  const downloadSeoExtensionSummaryExportBtn = document.getElementById("downloadSeoExtensionSummaryExportBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
   const refreshSeoExtensionEventsBtn = document.getElementById("refreshSeoExtensionEventsBtn");
   const refreshSeoExtensionSessionsBtn = document.getElementById("refreshSeoExtensionSessionsBtn");
@@ -6969,6 +6970,19 @@
   if (refreshSeoExtensionSummaryBtn) {
     refreshSeoExtensionSummaryBtn.addEventListener("click", async function () {
       await loadSeoExtensionSummary();
+    });
+  }
+
+  if (downloadSeoExtensionSummaryExportBtn) {
+    downloadSeoExtensionSummaryExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.extension.events.summary.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-extension-summary-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 

@@ -1579,6 +1579,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoHistoryBtn" type="button">Refresh SEO History</button>
                     <button id="downloadSeoHistoryExportBtn" type="button">Download SEO History</button>
                     <button id="refreshSeoExtensionSummaryBtn" type="button">Refresh Extension Summary</button>
+                    <button id="downloadSeoExtensionSummaryExportBtn" type="button">Download Extension Summary</button>
                     <button id="downloadSeoReportBtn" type="button">Download SEO Report</button>
                 </div>
                 <div class="inline-form">
