@@ -221,6 +221,7 @@
   const saveLeadsReviewBtn = document.getElementById("saveLeadsReviewBtn");
   const discardLeadsReviewBtn = document.getElementById("discardLeadsReviewBtn");
   const updateLeadsReviewDraftBtn = document.getElementById("updateLeadsReviewDraftBtn");
+  const leadsReviewDraftSelect = document.getElementById("leadsReviewDraftSelect");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
@@ -318,6 +319,7 @@
   const webopsLog = document.getElementById("webopsLog");
   const webopsRetryQueue = document.getElementById("webopsRetryQueue");
   const seoProjects = document.getElementById("seoProjects");
+  let currentLeadsReviewDrafts = [];
   const seoProjectForm = document.getElementById("seoProjectForm");
   const seoResult = document.getElementById("seoResult");
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
@@ -2336,9 +2338,74 @@
         run_id: runId && runId.value ? runId.value.trim() : "",
       });
       leadsReviewDetailView.textContent = JSON.stringify(data, null, 2);
+      currentLeadsReviewDrafts = data && data.review && Array.isArray(data.review.draft_preview)
+        ? data.review.draft_preview
+        : [];
+      populateLeadsReviewDraftSelect(currentLeadsReviewDrafts);
     } catch (err) {
+      currentLeadsReviewDrafts = [];
+      populateLeadsReviewDraftSelect([]);
       leadsReviewDetailView.textContent = "Failed to load leads review detail.";
     }
+  }
+
+  function setLeadsReviewDraftEditorValues(draft) {
+    const draftId = document.getElementById("leadsReviewDraftId");
+    const businessName = document.getElementById("leadsReviewDraftBusiness");
+    const city = document.getElementById("leadsReviewDraftCity");
+    const category = document.getElementById("leadsReviewDraftCategory");
+    const website = document.getElementById("leadsReviewDraftWebsite");
+    const phone = document.getElementById("leadsReviewDraftPhone");
+    const email = document.getElementById("leadsReviewDraftEmail");
+    const status = document.getElementById("leadsReviewDraftStatus");
+    const notes = document.getElementById("leadsReviewDraftNotes");
+    const item = draft && typeof draft === "object" ? draft : {};
+    if (draftId) draftId.value = item.id ? String(item.id) : "";
+    if (businessName) businessName.value = item.business_name || "";
+    if (city) city.value = item.city || "";
+    if (category) category.value = item.category || "";
+    if (website) website.value = item.website || "";
+    if (phone) phone.value = item.phone || "";
+    if (email) email.value = item.email || "";
+    if (status) status.value = item.status || "";
+    if (notes) notes.value = item.notes || "";
+  }
+
+  function populateLeadsReviewDraftSelect(drafts) {
+    if (!leadsReviewDraftSelect) return;
+    const items = Array.isArray(drafts) ? drafts : [];
+    leadsReviewDraftSelect.innerHTML = "";
+    if (!items.length) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "No review drafts loaded";
+      leadsReviewDraftSelect.appendChild(emptyOption);
+      setLeadsReviewDraftEditorValues(null);
+      return;
+    }
+    const draftIdInput = document.getElementById("leadsReviewDraftId");
+    const preferredId = draftIdInput && draftIdInput.value ? String(draftIdInput.value).trim() : "";
+    let selectedId = "";
+    items.forEach(function (draft, index) {
+      const option = document.createElement("option");
+      const draftId = draft && draft.id ? String(draft.id) : "";
+      option.value = draftId;
+      option.textContent = draftId
+        ? "#" + draftId + " " + (draft.business_name || "(no business)") + " | " + (draft.city || "No city")
+        : "Draft " + String(index + 1);
+      leadsReviewDraftSelect.appendChild(option);
+      if (preferredId !== "" && draftId === preferredId) {
+        selectedId = draftId;
+      }
+    });
+    if (selectedId === "" && items[0] && items[0].id) {
+      selectedId = String(items[0].id);
+    }
+    leadsReviewDraftSelect.value = selectedId;
+    const selectedDraft = items.find(function (draft) {
+      return String(draft.id || "") === selectedId;
+    }) || items[0];
+    setLeadsReviewDraftEditorValues(selectedDraft);
   }
 
   async function runLeadsReviewAction(action) {
@@ -4240,6 +4307,16 @@
   if (updateLeadsReviewDraftBtn) {
     updateLeadsReviewDraftBtn.addEventListener("click", async function () {
       await runLeadsReviewDraftUpdate();
+    });
+  }
+
+  if (leadsReviewDraftSelect) {
+    leadsReviewDraftSelect.addEventListener("change", function () {
+      const selectedId = leadsReviewDraftSelect.value ? String(leadsReviewDraftSelect.value) : "";
+      const draft = currentLeadsReviewDrafts.find(function (item) {
+        return String(item && item.id ? item.id : "") === selectedId;
+      });
+      setLeadsReviewDraftEditorValues(draft || null);
     });
   }
 

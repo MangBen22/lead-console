@@ -329,6 +329,12 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="leadsReviewDraftId" type="number" min="1" placeholder="456">
                     </div>
                     <div class="form-row">
+                        <label for="leadsReviewDraftSelect">Review Draft Selector</label>
+                        <select id="leadsReviewDraftSelect">
+                            <option value="">Load review detail first</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
                         <label for="leadsReviewDraftBusiness">Draft Business Name</label>
                         <input id="leadsReviewDraftBusiness" type="text" placeholder="Business name">
                     </div>
