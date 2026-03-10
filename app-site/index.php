@@ -1160,6 +1160,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="socialSyncFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSocialSyncLogBtn" type="button">Refresh Sync Log</button>
+                    <button id="downloadSocialSyncExportBtn" type="button">Download Sync Export</button>
                 </div>
                 <pre id="socialSyncLog">Loading...</pre>
                 <div class="inline-form">

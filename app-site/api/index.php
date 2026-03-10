@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.02-social-sync-detail',
+        'phase' => '3.03-social-sync-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11012,7 +11012,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.02-social-sync-detail',
+        'phase' => '3.03-social-sync-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15592,6 +15592,38 @@ if ($action === 'social.push.detail') {
     $syncId = isset($_GET['sync_id']) ? (string) $_GET['sync_id'] : '';
     $snapshot = social_sync_log_detail_snapshot($syncId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.push.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'source' => isset($_GET['source']) ? (string) $_GET['source'] : '',
+        'connector_id' => isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $syncId = isset($_GET['sync_id']) ? trim((string) $_GET['sync_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'sync_log' => social_sync_log_list_snapshot($filters),
+    ];
+    if ($syncId !== '') {
+        $payload['sync_detail'] = social_sync_log_detail_snapshot($syncId);
+    }
+    audit_event('social', 'push.export', [
+        'sync_id' => $syncId,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_sync_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.delivery.summary') {

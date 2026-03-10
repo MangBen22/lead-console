@@ -292,6 +292,7 @@
   const runSocialRetryBulkUpdateBtn = document.getElementById("runSocialRetryBulkUpdateBtn");
   const refreshSocialSyncLogBtn = document.getElementById("refreshSocialSyncLogBtn");
   const loadSocialSyncDetailBtn = document.getElementById("loadSocialSyncDetailBtn");
+  const downloadSocialSyncExportBtn = document.getElementById("downloadSocialSyncExportBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3408,6 +3409,17 @@
     }
   }
 
+  async function downloadSocialSyncExport() {
+    const params = socialSyncFilters();
+    const syncId = document.getElementById("socialSyncDetailId");
+    if (syncId && syncId.value) {
+      params.sync_id = syncId.value.trim();
+    }
+    const data = await apiGetWithParams("social.push.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-sync-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   function socialSyncFilters() {
     const status = document.getElementById("socialSyncFilterStatus");
     const source = document.getElementById("socialSyncFilterSource");
@@ -4695,6 +4707,12 @@
   if (loadSocialSyncDetailBtn) {
     loadSocialSyncDetailBtn.addEventListener("click", async function () {
       await loadSocialSyncDetail();
+    });
+  }
+
+  if (downloadSocialSyncExportBtn) {
+    downloadSocialSyncExportBtn.addEventListener("click", async function () {
+      await downloadSocialSyncExport();
     });
   }
 
