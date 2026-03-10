@@ -701,6 +701,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="socialScheduleSummary">Loading...</pre>
                 <pre id="socialScheduleQueue">Loading...</pre>
+                <form id="socialScheduleDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialScheduleDetailId">Detail Schedule ID</label>
+                        <input id="socialScheduleDetailId" type="text" placeholder="social_schedule_abc123">
+                    </div>
+                    <button id="loadSocialScheduleDetailBtn" type="button">Load Schedule Detail</button>
+                </form>
+                <pre id="socialScheduleDetail">No schedule detail loaded.</pre>
                 <form id="socialScheduleForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialScheduleId">Schedule ID (optional for update)</label>

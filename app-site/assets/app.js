@@ -297,6 +297,7 @@
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
   const socialScheduleSummary = document.getElementById("socialScheduleSummary");
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
+  const socialScheduleDetail = document.getElementById("socialScheduleDetail");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialScheduleTargetValidation = document.getElementById("socialScheduleTargetValidation");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
@@ -2728,6 +2729,42 @@
     }
   }
 
+  async function loadSocialScheduleDetail() {
+    if (!socialScheduleDetail) return;
+    const scheduleIdInput = document.getElementById("socialScheduleDetailId");
+    const scheduleId = scheduleIdInput && scheduleIdInput.value ? scheduleIdInput.value.trim() : "";
+    if (!scheduleId) {
+      socialScheduleDetail.textContent = "Enter a schedule ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.schedule.detail", { schedule_id: scheduleId });
+      socialScheduleDetail.textContent = JSON.stringify(data, null, 2);
+      const item = data && data.item ? data.item : null;
+      if (item) {
+        const id = document.getElementById("socialScheduleId");
+        const title = document.getElementById("socialScheduleTitle");
+        const message = document.getElementById("socialScheduleMessage");
+        const url = document.getElementById("socialScheduleUrl");
+        const connectorIds = document.getElementById("socialScheduleConnectorIds");
+        const scheduledFor = document.getElementById("socialScheduleFor");
+        if (id) id.value = item.schedule_id || "";
+        if (title) title.value = item.title || "";
+        if (message) message.value = item.message || "";
+        if (url) url.value = item.url || "";
+        if (connectorIds) {
+          connectorIds.value = Array.isArray(item.connector_ids) ? item.connector_ids.join(",") : "";
+        }
+        if (scheduledFor) {
+          const value = item.scheduled_for ? String(item.scheduled_for).replace("Z", "") : "";
+          scheduledFor.value = value.length >= 16 ? value.slice(0, 16) : value;
+        }
+      }
+    } catch (err) {
+      socialScheduleDetail.textContent = "Failed to load social schedule detail.";
+    }
+  }
+
   async function validateSocialScheduleTargets() {
     if (!socialScheduleTargetValidation) return null;
     const connectorIds = document.getElementById("socialScheduleConnectorIds");
@@ -4147,6 +4184,13 @@
   if (refreshSocialScheduleSummaryBtn) {
     refreshSocialScheduleSummaryBtn.addEventListener("click", async function () {
       await loadSocialScheduleSummary();
+    });
+  }
+
+  const loadSocialScheduleDetailBtn = document.getElementById("loadSocialScheduleDetailBtn");
+  if (loadSocialScheduleDetailBtn) {
+    loadSocialScheduleDetailBtn.addEventListener("click", async function () {
+      await loadSocialScheduleDetail();
     });
   }
 

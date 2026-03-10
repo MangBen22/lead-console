@@ -1673,6 +1673,31 @@ function social_schedule_list_snapshot($query = [])
     ];
 }
 
+function social_schedule_detail_snapshot($scheduleId)
+{
+    $id = trim((string) $scheduleId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'schedule_id is required.'];
+    }
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['schedule_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $item['connector_ids'] = isset($row['connector_ids']) && is_array($row['connector_ids']) ? array_values($row['connector_ids']) : [];
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'connector_count' => count($item['connector_ids']),
+                'is_due' => !empty($item['scheduled_for']) && strtotime((string) $item['scheduled_for']) <= time() ? 1 : 0,
+            ],
+        ];
+    }
+    return ['ok' => false, 'error' => 'Schedule item not found.'];
+}
+
 function social_inbox_summary_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -6189,7 +6214,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.83-social-schedule-filters',
+        'phase' => '2.84-social-schedule-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9877,7 +9902,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.83-social-schedule-filters',
+        'phase' => '2.84-social-schedule-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12955,6 +12980,12 @@ if ($action === 'social.schedule.list') {
         'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.schedule.detail') {
+    $scheduleId = isset($_GET['schedule_id']) ? (string) $_GET['schedule_id'] : '';
+    $snapshot = social_schedule_detail_snapshot($scheduleId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.activity.list') {
