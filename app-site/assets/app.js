@@ -299,6 +299,7 @@
   const downloadSocialActivityExportBtn = document.getElementById("downloadSocialActivityExportBtn");
   const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
   const downloadSocialPlatformsExportBtn = document.getElementById("downloadSocialPlatformsExportBtn");
+  const refreshSocialExecutionPreviewBtn = document.getElementById("refreshSocialExecutionPreviewBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -363,6 +364,7 @@
   const socialDeliverySummary = document.getElementById("socialDeliverySummary");
   const socialDeliveryConnectorDetail = document.getElementById("socialDeliveryConnectorDetail");
   const socialDeliveryWatchView = document.getElementById("socialDeliveryWatchView");
+  const socialExecutionPreview = document.getElementById("socialExecutionPreview");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const socialRetryDetail = document.getElementById("socialRetryDetail");
@@ -3550,6 +3552,23 @@
     }
   }
 
+  async function loadSocialExecutionPreview() {
+    if (!socialExecutionPreview) return;
+    const provider = document.getElementById("socialExecutionPreviewProvider");
+    const connector = document.getElementById("socialExecutionPreviewConnector");
+    const draftLimit = document.getElementById("socialExecutionPreviewDraftLimit");
+    try {
+      const data = await apiGetWithParams("social.execution.preview", {
+        provider: provider && provider.value ? provider.value.trim() : "",
+        connector_id: connector && connector.value ? connector.value.trim() : "",
+        draft_limit: draftLimit && draftLimit.value ? Number(draftLimit.value) : 5,
+      });
+      socialExecutionPreview.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialExecutionPreview.textContent = "Failed to load social execution preview.";
+    }
+  }
+
   async function loadSocialSyncDetail() {
     if (!socialSyncDetail) return;
     const syncId = document.getElementById("socialSyncDetailId");
@@ -4753,6 +4772,12 @@
   if (downloadSocialPlatformsExportBtn) {
     downloadSocialPlatformsExportBtn.addEventListener("click", async function () {
       await downloadSocialPlatformsExport();
+    });
+  }
+
+  if (refreshSocialExecutionPreviewBtn) {
+    refreshSocialExecutionPreviewBtn.addEventListener("click", async function () {
+      await loadSocialExecutionPreview();
     });
   }
 

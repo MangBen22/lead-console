@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.14-social-draft-variant-export',
+        'phase' => '3.15-social-execution-preview',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9955,6 +9955,92 @@ function social_draft_variant_snapshot($query = [])
     ];
 }
 
+function social_execution_preview_snapshot($query = [])
+{
+    $connectorFilter = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $providerFilter = strtolower(trim((string) ($query['provider'] ?? '')));
+    $draftLimit = isset($query['draft_limit']) ? (int) $query['draft_limit'] : 5;
+    if ($draftLimit <= 0) {
+        $draftLimit = 5;
+    }
+    $draftLimit = min($draftLimit, 20);
+
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $drafts = array_slice(collect_social_drafts(), 0, $draftLimit);
+    $items = [];
+    $summary = [
+        'connector_count' => 0,
+        'ready_connectors' => 0,
+        'blocked_connectors' => 0,
+        'live_connectors' => 0,
+        'dry_run_connectors' => 0,
+        'draft_limit' => $draftLimit,
+    ];
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $connectorId = strtolower((string) ($decorated['connector_id'] ?? ''));
+        $provider = strtolower((string) ($decorated['provider'] ?? ''));
+        $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+        if (!in_array($status, ['active', 'enabled'], true)) {
+            continue;
+        }
+        if ($connectorFilter !== '' && strpos($connectorId, $connectorFilter) === false) {
+            continue;
+        }
+        if ($providerFilter !== '' && $provider !== $providerFilter) {
+            continue;
+        }
+
+        $preparedDrafts = [];
+        $variantNotes = [];
+        foreach ($drafts as $index => $draft) {
+            $variant = social_build_variant_for_connector($connector, $draft);
+            $preparedDrafts[] = isset($variant['variant']) && is_array($variant['variant']) ? $variant['variant'] : [];
+            $variantNotes[] = [
+                'draft_index' => $index,
+                'notes' => isset($variant['notes']) && is_array($variant['notes']) ? $variant['notes'] : [],
+            ];
+        }
+        $validation = social_validate_drafts_for_connector($connector, $preparedDrafts);
+        $runMode = strtolower((string) (($decorated['config']['run_mode'] ?? 'dry_run')));
+        $transport = social_provider_rule_profile($provider);
+        $summary['connector_count']++;
+        if (!empty($validation['ready'])) {
+            $summary['ready_connectors']++;
+        } else {
+            $summary['blocked_connectors']++;
+        }
+        if ($runMode === 'live') {
+            $summary['live_connectors']++;
+        } else {
+            $summary['dry_run_connectors']++;
+        }
+
+        $items[] = [
+            'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'account_label' => (string) ($decorated['account_label'] ?? ''),
+            'run_mode' => $runMode,
+            'transport_hint' => (string) ($transport['transport_hint'] ?? 'generic'),
+            'ready' => !empty($validation['ready']) ? 1 : 0,
+            'issues' => isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [],
+            'warnings' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
+            'variant_notes' => $variantNotes,
+            'payload_preview' => array_slice($preparedDrafts, 0, 3),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'summary' => $summary,
+        'items' => $items,
+    ];
+}
+
 function social_draft_validation_snapshot($drafts = null)
 {
     $draftRows = is_array($drafts) ? $drafts : collect_social_drafts();
@@ -11477,7 +11563,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.14-social-draft-variant-export',
+        'phase' => '3.15-social-execution-preview',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14601,6 +14687,11 @@ if ($action === 'social.drafts.variants.export') {
             'variants' => $snapshot,
         ],
     ]);
+}
+
+if ($action === 'social.execution.preview') {
+    $snapshot = social_execution_preview_snapshot($_GET);
+    out_json($snapshot);
 }
 
 if ($action === 'social.drafts.schedule') {

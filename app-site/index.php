@@ -1192,7 +1192,24 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runSocialDeliveryWatchBtn" type="button">Run Delivery Watch</button>
                     <button id="downloadSocialDeliveryWatchExportBtn" type="button">Download Delivery Watch</button>
                 </div>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialExecutionPreviewProvider">Preview Provider</label>
+                        <input id="socialExecutionPreviewProvider" type="text" placeholder="facebook">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialExecutionPreviewConnector">Preview Connector ID</label>
+                        <input id="socialExecutionPreviewConnector" type="text" placeholder="social_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialExecutionPreviewDraftLimit">Preview Draft Limit</label>
+                        <input id="socialExecutionPreviewDraftLimit" type="number" min="1" max="20" value="5">
+                    </div>
+                    <button id="refreshSocialExecutionPreviewBtn" type="button">Refresh Execution Preview</button>
+                </div>
                 <pre id="socialSyncResult">No social sync yet.</pre>
+                <h3>Social Execution Preview</h3>
+                <pre id="socialExecutionPreview">No social execution preview loaded.</pre>
                 <h3>Social Delivery Summary</h3>
                 <pre id="socialDeliverySummary">Loading...</pre>
                 <div class="inline-form">
