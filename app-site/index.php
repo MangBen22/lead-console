@@ -1831,6 +1831,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="webopsOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
                     </div>
                     <button id="refreshWebopsOperationsSnapshotBtn" type="button">Refresh WebOps Snapshot</button>
+                    <button id="downloadWebopsOperationsSnapshotBtn" type="button">Download WebOps Snapshot</button>
                 </form>
                 <pre id="webopsOperationsSnapshotView">Loading...</pre>
             </section>

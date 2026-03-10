@@ -8005,7 +8005,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.31-webops-operations-snapshot',
+        'phase' => '5.32-webops-operations-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13856,7 +13856,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.31-webops-operations-snapshot',
+        'phase' => '5.32-webops-operations-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17062,6 +17062,23 @@ if ($action === 'webops.operations.snapshot') {
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+    ]);
+}
+
+if ($action === 'webops.operations.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = webops_operations_snapshot($limit);
+    audit_event('webops', 'operations.export', [
+        'limit' => $limit,
+        'open_incidents' => (int) (($snapshot['summary']['open_incidents'] ?? 0)),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'webops_operations_snapshot_' . gmdate('Ymd_His') . '.json',
+        'export' => $snapshot,
     ]);
 }
 

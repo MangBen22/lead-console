@@ -429,6 +429,7 @@
   const webopsPostureView = document.getElementById("webopsPostureView");
   const webopsOperationsSnapshotView = document.getElementById("webopsOperationsSnapshotView");
   const refreshWebopsOperationsSnapshotBtn = document.getElementById("refreshWebopsOperationsSnapshotBtn");
+  const downloadWebopsOperationsSnapshotBtn = document.getElementById("downloadWebopsOperationsSnapshotBtn");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -4546,6 +4547,18 @@
     }
   }
 
+  async function downloadWebopsOperationsSnapshot() {
+    const limit = document.getElementById("webopsOperationsSnapshotLimit");
+    const data = await apiGetWithParams("webops.operations.export", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("webops-operations-snapshot-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (webopsOperationsSnapshotView) {
+      webopsOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -6197,6 +6210,12 @@
   if (refreshWebopsOperationsSnapshotBtn) {
     refreshWebopsOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadWebopsOperationsSnapshot();
+    });
+  }
+
+  if (downloadWebopsOperationsSnapshotBtn) {
+    downloadWebopsOperationsSnapshotBtn.addEventListener("click", async function () {
+      await downloadWebopsOperationsSnapshot();
     });
   }
 
