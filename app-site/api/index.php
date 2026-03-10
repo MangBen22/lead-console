@@ -1698,6 +1698,69 @@ function social_schedule_detail_snapshot($scheduleId)
     return ['ok' => false, 'error' => 'Schedule item not found.'];
 }
 
+function social_schedule_bulk_update($payload)
+{
+    $data = is_array($payload) ? $payload : [];
+    $snapshot = social_schedule_list_snapshot([
+        'status' => isset($data['filter_status']) ? (string) $data['filter_status'] : '',
+        'connector_id' => isset($data['filter_connector_id']) ? (string) $data['filter_connector_id'] : '',
+        'search' => isset($data['filter_search']) ? (string) $data['filter_search'] : '',
+        'page' => isset($data['filter_page']) ? (int) $data['filter_page'] : 1,
+        'limit' => isset($data['filter_limit']) ? (int) $data['filter_limit'] : 10,
+    ]);
+    $items = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+    $statusProvided = array_key_exists('status', $data);
+    $timeProvided = array_key_exists('scheduled_for', $data);
+    $nextStatus = strtolower(trim((string) ($data['status'] ?? '')));
+    $nextScheduleFor = trim((string) ($data['scheduled_for'] ?? ''));
+    if ($statusProvided && $nextStatus !== '' && !in_array($nextStatus, ['queued', 'sent', 'failed'], true)) {
+        return ['ok' => false, 'error' => 'Invalid schedule status.'];
+    }
+    if (!$statusProvided && !$timeProvided) {
+        return ['ok' => false, 'error' => 'At least one bulk update field is required.'];
+    }
+
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    $scheduleIds = array_flip(array_map(static function ($item) {
+        return (string) ($item['schedule_id'] ?? '');
+    }, $items));
+    $updated = 0;
+    foreach ($rows as $index => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $scheduleId = (string) ($row['schedule_id'] ?? '');
+        if ($scheduleId === '' || !isset($scheduleIds[$scheduleId])) {
+            continue;
+        }
+        $changed = false;
+        if ($statusProvided && $nextStatus !== '' && $nextStatus !== (string) ($row['status'] ?? 'queued')) {
+            $row['status'] = $nextStatus;
+            $changed = true;
+        }
+        if ($timeProvided && $nextScheduleFor !== '' && $nextScheduleFor !== (string) ($row['scheduled_for'] ?? '')) {
+            $row['scheduled_for'] = $nextScheduleFor;
+            $changed = true;
+        }
+        if ($changed) {
+            $row['updated_at'] = gmdate('c');
+            $rows[$index] = $row;
+            $updated++;
+        }
+    }
+    usort($rows, static function ($a, $b) {
+        return strcmp((string) ($a['scheduled_for'] ?? ''), (string) ($b['scheduled_for'] ?? ''));
+    });
+    app_write_json_file(social_schedule_queue_path(), array_slice($rows, 0, 500));
+    return [
+        'ok' => true,
+        'processed' => count($items),
+        'updated' => $updated,
+        'filters' => isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [],
+        'items' => $items,
+    ];
+}
+
 function social_inbox_summary_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -6214,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.85-social-schedule-export',
+        'phase' => '2.86-social-schedule-bulk-update',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9902,7 +9965,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.85-social-schedule-export',
+        'phase' => '2.86-social-schedule-bulk-update',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13369,6 +13432,25 @@ if ($action === 'social.schedule.delete') {
         'deleted' => $before - count($rows),
         'schedule_id' => $scheduleId,
     ]);
+}
+
+if ($action === 'social.schedule.bulk_update') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    $snapshot = social_schedule_bulk_update($data);
+    audit_event('social', 'schedule.bulk_update', [
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'updated' => (int) ($snapshot['updated'] ?? 0),
+    ]);
+    record_social_activity('schedule_bulk_update', 'Social schedule bulk update applied.', [
+        'processed' => (int) ($snapshot['processed'] ?? 0),
+        'updated' => (int) ($snapshot['updated'] ?? 0),
+    ]);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
 }
 
 if ($action === 'social.schedule.run') {

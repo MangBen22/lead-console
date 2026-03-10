@@ -710,6 +710,22 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="loadSocialScheduleDetailBtn" type="button">Load Schedule Detail</button>
                 </form>
                 <pre id="socialScheduleDetail">No schedule detail loaded.</pre>
+                <form id="socialScheduleBulkForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialScheduleBulkStatus">Bulk Status</label>
+                        <select id="socialScheduleBulkStatus">
+                            <option value="">Keep current</option>
+                            <option value="queued">queued</option>
+                            <option value="sent">sent</option>
+                            <option value="failed">failed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialScheduleBulkFor">Bulk Schedule For</label>
+                        <input id="socialScheduleBulkFor" type="datetime-local">
+                    </div>
+                    <button id="updateSocialScheduleBulkBtn" type="button">Update Schedule Page</button>
+                </form>
                 <form id="socialScheduleForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialScheduleId">Schedule ID (optional for update)</label>

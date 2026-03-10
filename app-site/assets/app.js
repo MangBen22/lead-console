@@ -299,6 +299,7 @@
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleDetail = document.getElementById("socialScheduleDetail");
   const downloadSocialScheduleExportBtn = document.getElementById("downloadSocialScheduleExportBtn");
+  const updateSocialScheduleBulkBtn = document.getElementById("updateSocialScheduleBulkBtn");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialScheduleTargetValidation = document.getElementById("socialScheduleTargetValidation");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
@@ -2777,6 +2778,31 @@
     downloadJsonFile(filename, data);
   }
 
+  async function runSocialScheduleBulkUpdate() {
+    const filters = socialScheduleFilters();
+    const payload = {
+      filter_status: filters.status || "",
+      filter_connector_id: filters.connector_id || "",
+      filter_search: filters.search || "",
+      filter_page: filters.page || "1",
+      filter_limit: filters.limit || "10",
+      status: document.getElementById("socialScheduleBulkStatus") && document.getElementById("socialScheduleBulkStatus").value
+        ? document.getElementById("socialScheduleBulkStatus").value
+        : "",
+      scheduled_for: document.getElementById("socialScheduleBulkFor") && document.getElementById("socialScheduleBulkFor").value
+        ? document.getElementById("socialScheduleBulkFor").value
+        : "",
+    };
+    const result = await apiPost("social.schedule.bulk_update", payload);
+    if (socialScheduleDetail) {
+      socialScheduleDetail.textContent = JSON.stringify(result, null, 2);
+    }
+    await loadSocialScheduleQueue();
+    await loadSocialScheduleSummary();
+    await loadSocialActivityFeed();
+    await refreshSocialModuleSummary();
+  }
+
   async function validateSocialScheduleTargets() {
     if (!socialScheduleTargetValidation) return null;
     const connectorIds = document.getElementById("socialScheduleConnectorIds");
@@ -4209,6 +4235,12 @@
   if (loadSocialScheduleDetailBtn) {
     loadSocialScheduleDetailBtn.addEventListener("click", async function () {
       await loadSocialScheduleDetail();
+    });
+  }
+
+  if (updateSocialScheduleBulkBtn) {
+    updateSocialScheduleBulkBtn.addEventListener("click", async function () {
+      await runSocialScheduleBulkUpdate();
     });
   }
 
