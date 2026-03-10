@@ -4387,7 +4387,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.42-social-schedule-automation',
+        'phase' => '2.43-social-retry-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7010,6 +7010,100 @@ function execute_social_schedule_queue($source = 'manual')
     ];
 }
 
+function execute_social_retry_queue($source = 'manual')
+{
+    $queue = app_read_json_file(social_retry_queue_path(), []);
+    if (empty($queue)) {
+        return [
+            'run_id' => 'social_retry_run_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+            'source' => (string) $source,
+            'processed' => 0,
+            'succeeded' => 0,
+            'remaining' => 0,
+            'items' => [],
+        ];
+    }
+    $fallbackDrafts = collect_social_drafts();
+    $processed = 0;
+    $succeeded = 0;
+    $remaining = [];
+    $items = [];
+    foreach ($queue as $item) {
+        $processed++;
+        $connector = social_connector_by_id((string) ($item['connector_id'] ?? ''));
+        if (!is_array($connector)) {
+            $item['status'] = 'failed_missing_connector';
+            $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+            $item['last_attempt_at'] = gmdate('c');
+            $remaining[] = $item;
+            $items[] = [
+                'retry_id' => (string) ($item['retry_id'] ?? ''),
+                'status' => (string) ($item['status'] ?? ''),
+                'connector_id' => (string) ($item['connector_id'] ?? ''),
+            ];
+            continue;
+        }
+        $retryDrafts = isset($item['drafts']) && is_array($item['drafts']) && !empty($item['drafts'])
+            ? sanitize_social_retry_drafts($item['drafts'])
+            : $fallbackDrafts;
+        $res = execute_social_connector_sync($connector, $retryDrafts);
+        if ((int) ($res['rejected'] ?? 0) === 0 && empty($res['errors'])) {
+            $succeeded++;
+            append_social_sync_log([
+                'sync_id' => 'social_retry_sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+                'created_at' => gmdate('c'),
+                'connector_count' => 1,
+                'draft_total' => count($retryDrafts),
+                'connector_results' => [$res],
+                'connectors' => [[
+                    'connector_id' => (string) ($res['connector_id'] ?? ''),
+                    'provider' => (string) ($res['provider'] ?? ''),
+                    'type' => (string) ($res['type'] ?? ''),
+                ]],
+                'status' => 'retry_sent',
+                'source' => (string) $source,
+                'retry_id' => (string) ($item['retry_id'] ?? ''),
+                'schedule_id' => (string) ($item['schedule_id'] ?? ''),
+            ]);
+            $items[] = [
+                'retry_id' => (string) ($item['retry_id'] ?? ''),
+                'status' => 'sent',
+                'connector_id' => (string) ($res['connector_id'] ?? ''),
+            ];
+            continue;
+        }
+        $item['status'] = 'queued';
+        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+        $item['errors'] = isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [];
+        $item['error_codes'] = isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [];
+        $item['draft_count'] = count($retryDrafts);
+        $item['drafts'] = sanitize_social_retry_drafts($retryDrafts);
+        $item['last_result'] = $res;
+        $item['last_attempt_at'] = gmdate('c');
+        $remaining[] = $item;
+        $items[] = [
+            'retry_id' => (string) ($item['retry_id'] ?? ''),
+            'status' => (string) ($item['status'] ?? ''),
+            'connector_id' => (string) ($item['connector_id'] ?? ''),
+        ];
+    }
+    app_write_json_file(social_retry_queue_path(), $remaining);
+    record_social_activity('retry_run', 'Social retry queue processed.', [
+        'source' => (string) $source,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'remaining' => count($remaining),
+    ]);
+    return [
+        'run_id' => 'social_retry_run_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'processed' => $processed,
+        'succeeded' => $succeeded,
+        'remaining' => count($remaining),
+        'items' => $items,
+    ];
+}
+
 function execute_connector_sync($connector, $leads)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -7141,7 +7235,7 @@ function execute_automation_run($settings, $source = 'manual')
         'source' => (string) $source,
         'settings_snapshot' => $settings,
         'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
-        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => ''],
+        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => ''],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
@@ -7200,6 +7294,11 @@ function execute_automation_run($settings, $source = 'manual')
         $summary['social']['scheduled_sent'] = (int) ($scheduleRun['sent'] ?? 0);
         $summary['social']['scheduled_failed'] = (int) ($scheduleRun['failed'] ?? 0);
         $summary['social']['schedule_run_id'] = (string) ($scheduleRun['run_id'] ?? '');
+        $retryRun = execute_social_retry_queue('automation_retry');
+        $summary['social']['retry_processed'] = (int) ($retryRun['processed'] ?? 0);
+        $summary['social']['retry_succeeded'] = (int) ($retryRun['succeeded'] ?? 0);
+        $summary['social']['retry_remaining'] = (int) ($retryRun['remaining'] ?? 0);
+        $summary['social']['retry_run_id'] = (string) ($retryRun['run_id'] ?? '');
         $socialWatch = social_watch_snapshot('automation_' . (string) $source, true);
         $summary['social']['blocked_connectors'] = (int) (($socialWatch['run']['summary']['blocked_connectors'] ?? 0));
         $summary['social']['expired_connectors'] = (int) (($socialWatch['run']['summary']['expired_connectors'] ?? 0));
@@ -7370,7 +7469,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.42-social-schedule-automation',
+        'phase' => '2.43-social-retry-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -11216,65 +11315,14 @@ if ($action === 'social.retry.run') {
         out_json(['ok' => false, 'error' => 'POST required.'], 405);
     }
     app_require_csrf();
-    $queue = app_read_json_file(social_retry_queue_path(), []);
-    if (empty($queue)) {
-        out_json(['ok' => true, 'message' => 'Social retry queue is empty.', 'processed' => 0]);
-    }
-    $fallbackDrafts = collect_social_drafts();
-    $processed = 0;
-    $succeeded = 0;
-    $remaining = [];
-    foreach ($queue as $item) {
-        $processed++;
-        $connector = social_connector_by_id((string) ($item['connector_id'] ?? ''));
-        if (!is_array($connector)) {
-            $item['status'] = 'failed_missing_connector';
-            $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
-            $item['last_attempt_at'] = gmdate('c');
-            $remaining[] = $item;
-            continue;
-        }
-        $retryDrafts = isset($item['drafts']) && is_array($item['drafts']) && !empty($item['drafts'])
-            ? sanitize_social_retry_drafts($item['drafts'])
-            : $fallbackDrafts;
-        $res = execute_social_connector_sync($connector, $retryDrafts);
-        if ((int) ($res['rejected'] ?? 0) === 0 && empty($res['errors'])) {
-            $succeeded++;
-            append_social_sync_log([
-                'sync_id' => 'social_retry_sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
-                'created_at' => gmdate('c'),
-                'connector_count' => 1,
-                'draft_total' => count($retryDrafts),
-                'connector_results' => [$res],
-                'connectors' => [[
-                    'connector_id' => (string) ($res['connector_id'] ?? ''),
-                    'provider' => (string) ($res['provider'] ?? ''),
-                    'type' => (string) ($res['type'] ?? ''),
-                ]],
-                'status' => 'retry_sent',
-                'source' => 'retry_queue',
-                'retry_id' => (string) ($item['retry_id'] ?? ''),
-                'schedule_id' => (string) ($item['schedule_id'] ?? ''),
-            ]);
-            continue;
-        }
-        $item['status'] = 'queued';
-        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
-        $item['errors'] = isset($res['errors']) && is_array($res['errors']) ? $res['errors'] : [];
-        $item['error_codes'] = isset($res['error_codes']) && is_array($res['error_codes']) ? array_values(array_unique($res['error_codes'])) : [];
-        $item['draft_count'] = count($retryDrafts);
-        $item['drafts'] = sanitize_social_retry_drafts($retryDrafts);
-        $item['last_result'] = $res;
-        $item['last_attempt_at'] = gmdate('c');
-        $remaining[] = $item;
-    }
-    app_write_json_file(social_retry_queue_path(), $remaining);
-    record_social_activity('retry_run', 'Social retry queue processed.', ['processed' => $processed, 'succeeded' => $succeeded, 'remaining' => count($remaining)]);
+    $run = execute_social_retry_queue('retry_queue');
     out_json([
         'ok' => true,
-        'processed' => $processed,
-        'succeeded' => $succeeded,
-        'remaining' => count($remaining),
+        'processed' => (int) ($run['processed'] ?? 0),
+        'succeeded' => (int) ($run['succeeded'] ?? 0),
+        'remaining' => (int) ($run['remaining'] ?? 0),
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'items' => isset($run['items']) && is_array($run['items']) ? $run['items'] : [],
     ]);
 }
 
