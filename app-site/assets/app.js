@@ -228,8 +228,11 @@
   const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
   const loadCrmEmailTemplateBtn = document.getElementById("loadCrmEmailTemplateBtn");
   const saveCrmEmailTemplateBtn = document.getElementById("saveCrmEmailTemplateBtn");
+  const previewCrmEmailTemplateBtn = document.getElementById("previewCrmEmailTemplateBtn");
+  const sendCrmEmailTemplateTestBtn = document.getElementById("sendCrmEmailTemplateTestBtn");
   const crmEmailTemplatesSummary = document.getElementById("crmEmailTemplatesSummary");
   const crmEmailTemplatesResult = document.getElementById("crmEmailTemplatesResult");
+  const crmEmailTemplatePreview = document.getElementById("crmEmailTemplatePreview");
   const refreshSocialPlatformsBtn = document.getElementById("refreshSocialPlatformsBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
@@ -2863,6 +2866,31 @@
     if (body) body.value = template.body || "";
   };
 
+  const renderCrmEmailTemplatePreview = function (preview) {
+    if (!crmEmailTemplatePreview) return;
+    if (!preview) {
+      crmEmailTemplatePreview.textContent = "No preview yet.";
+      return;
+    }
+    crmEmailTemplatePreview.textContent = JSON.stringify(preview, null, 2);
+  };
+
+  const crmEmailTemplatePayload = function () {
+    const siteId = document.getElementById("crmEmailTemplateSiteId");
+    const templateKey = document.getElementById("crmEmailTemplateKey");
+    const toEmail = document.getElementById("crmEmailTemplateToEmail");
+    const subject = document.getElementById("crmEmailTemplateSubject");
+    const body = document.getElementById("crmEmailTemplateBody");
+    return {
+      site_id: siteId && siteId.value ? siteId.value.trim() : "",
+      template_key: templateKey && templateKey.value ? templateKey.value : "",
+      to_email: toEmail && toEmail.value ? toEmail.value.trim() : "",
+      subject: subject ? subject.value : "",
+      body: body ? body.value : "",
+      vars: {},
+    };
+  };
+
   if (refreshCrmEmailTemplatesBtn) {
     refreshCrmEmailTemplatesBtn.addEventListener("click", async function () {
       const data = await loadCrmEmailTemplatesSummary();
@@ -2882,6 +2910,7 @@
     crmEmailTemplateKey.addEventListener("change", async function () {
       const data = await loadCrmEmailTemplatesSummary();
       fillCrmEmailTemplateFields(data);
+      renderCrmEmailTemplatePreview(null);
     });
   }
 
@@ -2913,6 +2942,52 @@
       if (crmPanel) {
         crmPanel.textContent = JSON.stringify(crmData, null, 2);
       }
+    });
+  }
+
+  if (previewCrmEmailTemplateBtn) {
+    previewCrmEmailTemplateBtn.addEventListener("click", async function () {
+      const payload = crmEmailTemplatePayload();
+      if (!payload.site_id || !payload.template_key) {
+        if (crmEmailTemplatesResult) crmEmailTemplatesResult.textContent = "Enter template site ID and choose a template key.";
+        return;
+      }
+      const result = await apiPost("crm.email_templates.preview", payload);
+      renderCrmEmailTemplatePreview(result && result.preview ? result.preview : null);
+      if (crmEmailTemplatesResult) {
+        crmEmailTemplatesResult.textContent = JSON.stringify(result, null, 2);
+      }
+    });
+  }
+
+  if (sendCrmEmailTemplateTestBtn) {
+    sendCrmEmailTemplateTestBtn.addEventListener("click", async function () {
+      const payload = crmEmailTemplatePayload();
+      if (!payload.site_id || !payload.template_key) {
+        if (crmEmailTemplatesResult) crmEmailTemplatesResult.textContent = "Enter template site ID and choose a template key.";
+        return;
+      }
+      if (!payload.to_email) {
+        if (crmEmailTemplatesResult) crmEmailTemplatesResult.textContent = "Enter a template test recipient email first.";
+        return;
+      }
+      const result = await apiPost("crm.email_templates.send_test", payload);
+      if (crmEmailTemplatesResult) {
+        crmEmailTemplatesResult.textContent = JSON.stringify(result, null, 2);
+      }
+      const preview =
+        result &&
+        result.response &&
+        result.response.data &&
+        result.response.data.result &&
+        result.response.data.result.preview
+          ? result.response.data.result.preview
+          : null;
+      if (preview) {
+        renderCrmEmailTemplatePreview(preview);
+      }
+      await loadCrmSmtpSummary();
+      await loadCrmSmtpWatch();
     });
   }
 

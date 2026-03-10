@@ -137,6 +137,30 @@ function crm_email_templates_fetch($site)
     ];
 }
 
+function crm_email_template_preview_fetch($site, $templateKey, $subject = null, $body = null, $vars = [])
+{
+    $payload = [
+        'template_key' => (string) $templateKey,
+        'vars' => is_array($vars) ? $vars : [],
+    ];
+    if ($subject !== null) {
+        $payload['subject'] = (string) $subject;
+    }
+    if ($body !== null) {
+        $payload['body'] = (string) $body;
+    }
+    $res = app_bridge_request($site, 'POST', 'bridge/email-templates/preview', $payload);
+    $data = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['preview']) && is_array($res['data']['preview']))
+        ? $res['data']['preview']
+        : [];
+    return [
+        'ok' => !empty($res['ok']),
+        'status' => (int) ($res['status'] ?? 0),
+        'error' => (string) ($res['error'] ?? ''),
+        'preview' => $data,
+    ];
+}
+
 function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $snapshot = crm_smtp_sites_snapshot();
@@ -4132,7 +4156,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.34-crm-smtp-watch-automation',
+        'phase' => '2.35-crm-email-template-preview-send',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6710,6 +6734,7 @@ $rateLimitedWriteActions = [
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'crm.email_templates.save',
     'crm.smtp.watch.run',
+    'crm.email_templates.preview', 'crm.email_templates.send_test',
     'notifications.read_all', 'notifications.settings.save',
     'automation.settings.save', 'automation.run_all', 'automation.scheduler.tick',
     'deployment.release.candidate',
@@ -6754,6 +6779,7 @@ $deploymentGuardedActions = [
     'crm.smtp.probe', 'crm.smtp.send_test', 'crm.smtp.confirm',
     'crm.email_templates.save',
     'crm.smtp.watch.run',
+    'crm.email_templates.preview', 'crm.email_templates.send_test',
     'automation.settings.save', 'automation.run_all',
     'backup.import',
 ];
@@ -6786,7 +6812,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.34-crm-smtp-watch-automation',
+        'phase' => '2.35-crm-email-template-preview-send',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9007,6 +9033,69 @@ if ($action === 'crm.email_templates.save') {
     audit_event('crm', 'email_templates.save', [
         'site_id' => (string) ($site['site_id'] ?? ''),
         'template_count' => count((array) ($data['templates'] ?? [])),
+        'ok' => !empty($res['ok']) ? 1 : 0,
+    ]);
+    out_json([
+        'ok' => !empty($res['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'response' => $res,
+    ], !empty($res['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.email_templates.preview') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || empty($data['template_key'])) {
+        out_json(['ok' => false, 'error' => 'site_id and template_key are required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $preview = crm_email_template_preview_fetch(
+        $site,
+        (string) $data['template_key'],
+        array_key_exists('subject', $data) ? (string) ($data['subject'] ?? '') : null,
+        array_key_exists('body', $data) ? (string) ($data['body'] ?? '') : null,
+        isset($data['vars']) && is_array($data['vars']) ? $data['vars'] : []
+    );
+    out_json([
+        'ok' => !empty($preview['ok']),
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'preview' => $preview['preview'],
+        'bridge_status' => $preview['status'],
+        'bridge_error' => $preview['error'],
+    ], !empty($preview['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.email_templates.send_test') {
+    app_require_owner();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        out_json(['ok' => false, 'error' => 'POST required.'], 405);
+    }
+    app_require_csrf();
+    $data = app_read_json_body();
+    if (!is_array($data) || empty($data['site_id']) || empty($data['template_key']) || empty($data['to_email'])) {
+        out_json(['ok' => false, 'error' => 'site_id, template_key, and to_email are required.'], 400);
+    }
+    $site = site_by_id((string) $data['site_id']);
+    if (!is_array($site)) {
+        out_json(['ok' => false, 'error' => 'Site not found.'], 404);
+    }
+    $payload = [
+        'template_key' => (string) $data['template_key'],
+        'to_email' => trim((string) $data['to_email']),
+        'vars' => isset($data['vars']) && is_array($data['vars']) ? $data['vars'] : [],
+    ];
+    $res = app_bridge_request($site, 'POST', 'bridge/email-templates/test-send', $payload);
+    audit_event('crm', 'email_templates.send_test', [
+        'site_id' => (string) ($site['site_id'] ?? ''),
+        'template_key' => (string) $payload['template_key'],
+        'to_email' => (string) $payload['to_email'],
         'ok' => !empty($res['ok']) ? 1 : 0,
     ]);
     out_json([
