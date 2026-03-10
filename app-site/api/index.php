@@ -6111,7 +6111,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.80-social-delivery-watch',
+        'phase' => '2.81-social-delivery-watch-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9553,7 +9553,7 @@ function execute_automation_run($settings, $source = 'manual')
         'source' => (string) $source,
         'settings_snapshot' => $settings,
         'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => '', 'delivery_degraded_connectors' => 0, 'delivery_watch_id' => ''],
-        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => '', 'inbox_watch_run_id' => '', 'inbox_stale_backlog' => 0, 'inbox_unassigned_backlog' => 0, 'inbox_attention_required' => 0],
+        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'delivery_degraded_connectors' => 0, 'delivery_watch_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => '', 'inbox_watch_run_id' => '', 'inbox_stale_backlog' => 0, 'inbox_unassigned_backlog' => 0, 'inbox_attention_required' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
@@ -9624,6 +9624,9 @@ function execute_automation_run($settings, $source = 'manual')
         $summary['social']['blocked_connectors'] = (int) (($socialWatch['run']['summary']['blocked_connectors'] ?? 0));
         $summary['social']['expired_connectors'] = (int) (($socialWatch['run']['summary']['expired_connectors'] ?? 0));
         $summary['social']['watch_run_id'] = (string) ($socialWatch['run']['run_id'] ?? '');
+        $deliveryWatch = social_delivery_watch_evaluate('automation_' . (string) $source, true);
+        $summary['social']['delivery_degraded_connectors'] = (int) (($deliveryWatch['summary']['degraded_count'] ?? 0));
+        $summary['social']['delivery_watch_id'] = (string) ($deliveryWatch['watch_id'] ?? '');
         $inboxWatch = social_inbox_watch_snapshot('automation_' . (string) $source, true);
         $summary['social']['inbox_watch_run_id'] = (string) (($inboxWatch['run']['run_id'] ?? ''));
         $summary['social']['inbox_stale_backlog'] = (int) (($inboxWatch['run']['summary']['stale_backlog'] ?? 0));
@@ -9796,7 +9799,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.80-social-delivery-watch',
+        'phase' => '2.81-social-delivery-watch-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
