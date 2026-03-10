@@ -4387,7 +4387,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.41-social-schedule-summary',
+        'phase' => '2.42-social-schedule-automation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6882,6 +6882,134 @@ function execute_social_connector_sync($connector, $drafts)
     return $result;
 }
 
+function execute_social_schedule_queue($source = 'manual')
+{
+    $rows = app_read_json_file(social_schedule_queue_path(), []);
+    if (empty($rows)) {
+        return [
+            'run_id' => 'social_schedule_run_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+            'source' => (string) $source,
+            'processed' => 0,
+            'sent' => 0,
+            'failed' => 0,
+            'items' => [],
+        ];
+    }
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $indexedConnectors = [];
+    foreach ($connectors as $connector) {
+        $indexedConnectors[(string) ($connector['connector_id'] ?? '')] = $connector;
+    }
+    $now = time();
+    $processed = 0;
+    $sent = 0;
+    $updatedRows = [];
+    $items = [];
+    foreach ($rows as $item) {
+        $scheduledTs = trim((string) ($item['scheduled_for'] ?? '')) !== '' ? strtotime((string) $item['scheduled_for']) : 0;
+        $status = strtolower((string) ($item['status'] ?? 'queued'));
+        if ($status !== 'queued' || ($scheduledTs > 0 && $scheduledTs > $now)) {
+            $updatedRows[] = $item;
+            continue;
+        }
+
+        $processed++;
+        $draft = [[
+            'source_site_id' => 'schedule_queue',
+            'lead_id' => 0,
+            'title' => (string) ($item['title'] ?? ''),
+            'message' => (string) ($item['message'] ?? ''),
+            'url' => (string) ($item['url'] ?? ''),
+        ]];
+
+        $targetConnectors = [];
+        $connectorIds = isset($item['connector_ids']) && is_array($item['connector_ids']) ? $item['connector_ids'] : [];
+        if (!empty($connectorIds)) {
+            foreach ($connectorIds as $connectorId) {
+                if (isset($indexedConnectors[(string) $connectorId]) && is_array($indexedConnectors[(string) $connectorId])) {
+                    $targetConnectors[] = $indexedConnectors[(string) $connectorId];
+                }
+            }
+        } else {
+            foreach ($connectors as $connector) {
+                $connectorStatus = strtolower((string) ($connector['status'] ?? 'planned'));
+                if (in_array($connectorStatus, ['active', 'enabled'], true)) {
+                    $targetConnectors[] = $connector;
+                }
+            }
+        }
+
+        $connectorResults = [];
+        $hasErrors = false;
+        if (empty($targetConnectors)) {
+            $hasErrors = true;
+            $connectorResults[] = ['error' => 'No target connectors resolved for scheduled item.'];
+        } else {
+            foreach ($targetConnectors as $connector) {
+                $res = execute_social_connector_sync($connector, $draft);
+                $connectorResults[] = $res;
+                if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
+                    $hasErrors = true;
+                    enqueue_social_retry_item(build_social_retry_item($res, $draft, [
+                        'source' => 'schedule_run',
+                        'schedule_id' => (string) ($item['schedule_id'] ?? ''),
+                    ]));
+                }
+            }
+        }
+
+        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
+        $item['last_run_at'] = gmdate('c');
+        $item['updated_at'] = gmdate('c');
+        $item['status'] = $hasErrors ? 'failed' : 'sent';
+        $item['connector_results'] = $connectorResults;
+        $updatedRows[] = $item;
+        $items[] = [
+            'schedule_id' => (string) ($item['schedule_id'] ?? ''),
+            'status' => (string) ($item['status'] ?? ''),
+            'connector_count' => count($targetConnectors),
+            'connector_results' => $connectorResults,
+        ];
+
+        append_social_sync_log([
+            'sync_id' => 'social_schedule_sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+            'created_at' => gmdate('c'),
+            'connector_count' => count($targetConnectors),
+            'draft_total' => 1,
+            'connector_results' => $connectorResults,
+            'connectors' => array_map(static function ($row) {
+                return [
+                    'connector_id' => (string) ($row['connector_id'] ?? ''),
+                    'provider' => (string) ($row['provider'] ?? ''),
+                    'type' => (string) ($row['type'] ?? ''),
+                ];
+            }, $targetConnectors),
+            'status' => $hasErrors ? 'schedule_failed' : 'schedule_sent',
+            'source' => (string) $source,
+            'schedule_id' => (string) ($item['schedule_id'] ?? ''),
+        ]);
+
+        if (!$hasErrors) {
+            $sent++;
+        }
+    }
+    app_write_json_file(social_schedule_queue_path(), array_slice($updatedRows, 0, 500));
+    record_social_activity('schedule_run', 'Scheduled social queue processed.', [
+        'source' => (string) $source,
+        'processed' => $processed,
+        'sent' => $sent,
+        'failed' => max(0, $processed - $sent),
+    ]);
+    return [
+        'run_id' => 'social_schedule_run_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'source' => (string) $source,
+        'processed' => $processed,
+        'sent' => $sent,
+        'failed' => max(0, $processed - $sent),
+        'items' => $items,
+    ];
+}
+
 function execute_connector_sync($connector, $leads)
 {
     $provider = strtolower((string) ($connector['provider'] ?? 'custom'));
@@ -7013,7 +7141,7 @@ function execute_automation_run($settings, $source = 'manual')
         'source' => (string) $source,
         'settings_snapshot' => $settings,
         'crm' => ['processed' => 0, 'failed' => 0, 'smtp_disconnected_sites' => 0, 'smtp_watch_run_id' => ''],
-        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => ''],
+        'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => ''],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
     ];
@@ -7067,6 +7195,11 @@ function execute_automation_run($settings, $source = 'manual')
                 ]));
             }
         }
+        $scheduleRun = execute_social_schedule_queue('automation_schedule');
+        $summary['social']['scheduled_processed'] = (int) ($scheduleRun['processed'] ?? 0);
+        $summary['social']['scheduled_sent'] = (int) ($scheduleRun['sent'] ?? 0);
+        $summary['social']['scheduled_failed'] = (int) ($scheduleRun['failed'] ?? 0);
+        $summary['social']['schedule_run_id'] = (string) ($scheduleRun['run_id'] ?? '');
         $socialWatch = social_watch_snapshot('automation_' . (string) $source, true);
         $summary['social']['blocked_connectors'] = (int) (($socialWatch['run']['summary']['blocked_connectors'] ?? 0));
         $summary['social']['expired_connectors'] = (int) (($socialWatch['run']['summary']['expired_connectors'] ?? 0));
@@ -7237,7 +7370,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.41-social-schedule-summary',
+        'phase' => '2.42-social-schedule-automation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10113,109 +10246,19 @@ if ($action === 'social.schedule.run') {
         out_json(['ok' => false, 'error' => 'POST required.'], 405);
     }
     app_require_csrf();
-    $rows = app_read_json_file(social_schedule_queue_path(), []);
-    if (empty($rows)) {
-        out_json(['ok' => true, 'message' => 'Social schedule queue is empty.', 'processed' => 0]);
-    }
-    $connectors = app_read_json_file(social_connectors_path(), []);
-    $indexedConnectors = [];
-    foreach ($connectors as $connector) {
-        $indexedConnectors[(string) ($connector['connector_id'] ?? '')] = $connector;
-    }
-    $now = time();
-    $processed = 0;
-    $sent = 0;
-    $updatedRows = [];
-    foreach ($rows as $item) {
-        $scheduledTs = trim((string) ($item['scheduled_for'] ?? '')) !== '' ? strtotime((string) $item['scheduled_for']) : 0;
-        $status = strtolower((string) ($item['status'] ?? 'queued'));
-        if ($status !== 'queued' || ($scheduledTs > 0 && $scheduledTs > $now)) {
-            $updatedRows[] = $item;
-            continue;
-        }
-
-        $processed++;
-        $draft = [[
-            'source_site_id' => 'schedule_queue',
-            'lead_id' => 0,
-            'title' => (string) ($item['title'] ?? ''),
-            'message' => (string) ($item['message'] ?? ''),
-            'url' => (string) ($item['url'] ?? ''),
-        ]];
-
-        $targetConnectors = [];
-        $connectorIds = isset($item['connector_ids']) && is_array($item['connector_ids']) ? $item['connector_ids'] : [];
-        if (!empty($connectorIds)) {
-            foreach ($connectorIds as $connectorId) {
-                if (isset($indexedConnectors[(string) $connectorId]) && is_array($indexedConnectors[(string) $connectorId])) {
-                    $targetConnectors[] = $indexedConnectors[(string) $connectorId];
-                }
-            }
-        } else {
-            foreach ($connectors as $connector) {
-                $connectorStatus = strtolower((string) ($connector['status'] ?? 'planned'));
-                if (in_array($connectorStatus, ['active', 'enabled'], true)) {
-                    $targetConnectors[] = $connector;
-                }
-            }
-        }
-
-        $connectorResults = [];
-        $hasErrors = false;
-        if (empty($targetConnectors)) {
-            $hasErrors = true;
-            $connectorResults[] = ['error' => 'No target connectors resolved for scheduled item.'];
-        } else {
-            foreach ($targetConnectors as $connector) {
-                $res = execute_social_connector_sync($connector, $draft);
-                $connectorResults[] = $res;
-                if ((int) ($res['rejected'] ?? 0) > 0 || !empty($res['errors'])) {
-                    $hasErrors = true;
-                    enqueue_social_retry_item(build_social_retry_item($res, $draft, [
-                        'source' => 'schedule_run',
-                        'schedule_id' => (string) ($item['schedule_id'] ?? ''),
-                    ]));
-                }
-            }
-        }
-
-        $item['attempts'] = (int) ($item['attempts'] ?? 0) + 1;
-        $item['last_run_at'] = gmdate('c');
-        $item['updated_at'] = gmdate('c');
-        $item['status'] = $hasErrors ? 'failed' : 'sent';
-        $item['connector_results'] = $connectorResults;
-        $updatedRows[] = $item;
-
-        append_social_sync_log([
-            'sync_id' => 'social_schedule_sync_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
-            'created_at' => gmdate('c'),
-            'connector_count' => count($targetConnectors),
-            'draft_total' => 1,
-            'connector_results' => $connectorResults,
-            'connectors' => array_map(static function ($row) {
-                return [
-                    'connector_id' => (string) ($row['connector_id'] ?? ''),
-                    'provider' => (string) ($row['provider'] ?? ''),
-                    'type' => (string) ($row['type'] ?? ''),
-                ];
-            }, $targetConnectors),
-            'status' => $hasErrors ? 'schedule_failed' : 'schedule_sent',
-            'source' => 'scheduled_queue',
-            'schedule_id' => (string) ($item['schedule_id'] ?? ''),
-        ]);
-
-        if (!$hasErrors) {
-            $sent++;
-        }
-    }
-    app_write_json_file(social_schedule_queue_path(), array_slice($updatedRows, 0, 500));
-    audit_event('social', 'schedule.run', ['processed' => $processed, 'sent' => $sent]);
-    record_social_activity('schedule_run', 'Scheduled social queue processed.', ['processed' => $processed, 'sent' => $sent, 'failed' => max(0, $processed - $sent)]);
+    $run = execute_social_schedule_queue('scheduled_queue');
+    audit_event('social', 'schedule.run', [
+        'processed' => (int) ($run['processed'] ?? 0),
+        'sent' => (int) ($run['sent'] ?? 0),
+        'run_id' => (string) ($run['run_id'] ?? ''),
+    ]);
     out_json([
         'ok' => true,
-        'processed' => $processed,
-        'sent' => $sent,
-        'failed' => max(0, $processed - $sent),
+        'processed' => (int) ($run['processed'] ?? 0),
+        'sent' => (int) ($run['sent'] ?? 0),
+        'failed' => (int) ($run['failed'] ?? 0),
+        'run_id' => (string) ($run['run_id'] ?? ''),
+        'items' => isset($run['items']) && is_array($run['items']) ? $run['items'] : [],
     ]);
 }
 
