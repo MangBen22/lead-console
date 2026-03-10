@@ -4439,7 +4439,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.44-social-inbox-summary',
+        'phase' => '2.45-social-draft-validation',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6670,6 +6670,129 @@ function social_connector_readiness($connector, $drafts)
     ];
 }
 
+function social_validate_draft_for_connector($connector, $draft)
+{
+    $decorated = decorate_social_connector($connector);
+    $profile = isset($decorated['profile']) && is_array($decorated['profile']) ? $decorated['profile'] : [];
+    $family = (string) ($profile['family'] ?? 'custom');
+    $capabilities = isset($decorated['capabilities_enabled']) && is_array($decorated['capabilities_enabled']) ? $decorated['capabilities_enabled'] : [];
+    $config = isset($decorated['config']) && is_array($decorated['config']) ? $decorated['config'] : [];
+    $draft = is_array($draft) ? $draft : [];
+    $issues = [];
+    $warnings = [];
+
+    $message = trim((string) ($draft['message'] ?? ''));
+    $title = trim((string) ($draft['title'] ?? ''));
+    $url = trim((string) ($draft['url'] ?? ''));
+    $status = strtolower((string) ($decorated['status'] ?? 'planned'));
+
+    if (!in_array($status, ['active', 'enabled'], true)) {
+        $issues[] = 'connector_inactive';
+    }
+    if (!in_array('can_publish_post', $capabilities, true) && !in_array('can_publish_video', $capabilities, true)) {
+        $issues[] = 'publish_capability_missing';
+    }
+    if ($message === '') {
+        $issues[] = 'message_missing';
+    }
+    if ($family === 'forum' && $title === '') {
+        $issues[] = 'title_missing_for_forum';
+    }
+    if ($family === 'video' && $url === '') {
+        $issues[] = 'url_missing_for_video';
+    }
+    if ((string) ($decorated['provider'] ?? '') === 'wordpress_social_bridge') {
+        $siteId = trim((string) ($config['bridge_site_id'] ?? ($decorated['site_id'] ?? '')));
+        if ($siteId === '' || site_by_id($siteId) === null) {
+            $issues[] = 'bridge_site_missing';
+        }
+    }
+    if ((string) ($decorated['provider'] ?? '') === 'social_webhook' && trim((string) ($config['webhook_url'] ?? '')) === '') {
+        $issues[] = 'webhook_missing';
+    }
+    if ($url === '' && in_array($family, ['professional', 'generic'], true)) {
+        $warnings[] = 'url_missing';
+    }
+    if ($title === '' && !in_array($family, ['forum'], true)) {
+        $warnings[] = 'title_missing';
+    }
+
+    return [
+        'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+        'provider' => (string) ($decorated['provider'] ?? ''),
+        'family' => $family,
+        'draft_title' => $title,
+        'draft_message_length' => strlen($message),
+        'draft_url' => $url,
+        'ready' => empty($issues) ? 1 : 0,
+        'issues' => array_values(array_unique($issues)),
+        'warnings' => array_values(array_unique($warnings)),
+    ];
+}
+
+function social_draft_validation_snapshot($drafts = null)
+{
+    $draftRows = is_array($drafts) ? $drafts : collect_social_drafts();
+    $connectors = app_read_json_file(social_connectors_path(), []);
+    $items = [];
+    $summary = [
+        'connector_count' => count($connectors),
+        'draft_count' => count($draftRows),
+        'ready_connectors' => 0,
+        'blocked_connectors' => 0,
+        'warning_connectors' => 0,
+        'issue_total' => 0,
+        'warning_total' => 0,
+    ];
+
+    foreach ($connectors as $connector) {
+        if (!is_array($connector)) {
+            continue;
+        }
+        $decorated = decorate_social_connector($connector);
+        $connectorIssues = [];
+        $connectorWarnings = [];
+        foreach ($draftRows as $draft) {
+            $validation = social_validate_draft_for_connector($connector, $draft);
+            foreach ((array) ($validation['issues'] ?? []) as $issue) {
+                if (!in_array($issue, $connectorIssues, true)) {
+                    $connectorIssues[] = $issue;
+                }
+            }
+            foreach ((array) ($validation['warnings'] ?? []) as $warning) {
+                if (!in_array($warning, $connectorWarnings, true)) {
+                    $connectorWarnings[] = $warning;
+                }
+            }
+        }
+        if (empty($connectorIssues)) {
+            $summary['ready_connectors']++;
+        } else {
+            $summary['blocked_connectors']++;
+        }
+        if (!empty($connectorWarnings)) {
+            $summary['warning_connectors']++;
+        }
+        $summary['issue_total'] += count($connectorIssues);
+        $summary['warning_total'] += count($connectorWarnings);
+        $items[] = [
+            'connector_id' => (string) ($decorated['connector_id'] ?? ''),
+            'account_label' => (string) ($decorated['account_label'] ?? ''),
+            'provider' => (string) ($decorated['provider'] ?? ''),
+            'family' => (string) (($decorated['profile']['family'] ?? 'custom')),
+            'ready' => empty($connectorIssues) ? 1 : 0,
+            'issues' => $connectorIssues,
+            'warnings' => $connectorWarnings,
+            'draft_count' => count($draftRows),
+        ];
+    }
+
+    return [
+        'summary' => $summary,
+        'items' => $items,
+    ];
+}
+
 function social_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $connectors = app_read_json_file(social_connectors_path(), []);
@@ -7521,7 +7644,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.44-social-inbox-summary',
+        'phase' => '2.45-social-draft-validation',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10225,6 +10348,17 @@ if ($action === 'social.drafts.preview') {
         ],
         'drafts' => $drafts,
         'connector_readiness' => $readiness,
+    ]);
+}
+
+if ($action === 'social.drafts.validation') {
+    $drafts = collect_social_drafts();
+    $snapshot = social_draft_validation_snapshot($drafts);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'draft_count' => count($drafts),
     ]);
 }
 

@@ -424,6 +424,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>Social Draft Validation</h2>
+                <div class="actions">
+                    <button id="refreshSocialDraftValidationBtn" type="button">Refresh Draft Validation</button>
+                </div>
+                <pre id="socialDraftValidationView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>Social Connectors</h2>
                 <pre id="socialConnectors">Loading...</pre>
                 <form id="socialConnectorForm" class="inline-form">
