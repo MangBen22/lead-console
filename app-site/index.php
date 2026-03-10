@@ -367,6 +367,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="saveCrmEmailTemplateBtn" type="button">Save Selected Template</button>
                     <button id="previewCrmEmailTemplateBtn" type="button">Preview Template</button>
                     <button id="sendCrmEmailTemplateTestBtn" type="button">Send Template Test</button>
+                    <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
                 </div>
                 <label>Template site ID<input id="crmEmailTemplateSiteId" type="text" placeholder="hq-main"></label>
                 <label>Template key
@@ -386,6 +387,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="crmEmailTemplatesSummary">Loading...</pre>
                 <pre id="crmEmailTemplatesResult">No email template action yet.</pre>
                 <pre id="crmEmailTemplatePreview">No preview yet.</pre>
+                <pre id="crmEmailTemplateTestLog">Loading test log...</pre>
             </section>
 
             <section class="api-status">

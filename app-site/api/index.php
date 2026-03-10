@@ -161,6 +161,25 @@ function crm_email_template_preview_fetch($site, $templateKey, $subject = null, 
     ];
 }
 
+function crm_email_template_test_log_fetch($site, $limit = 25)
+{
+    $limit = (int) $limit;
+    if ($limit <= 0) {
+        $limit = 25;
+    }
+    $res = app_bridge_request($site, 'GET', 'bridge/email-templates/test-log?limit=' . $limit);
+    $items = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['items']) && is_array($res['data']['items']))
+        ? $res['data']['items']
+        : [];
+    return [
+        'ok' => !empty($res['ok']),
+        'status' => (int) ($res['status'] ?? 0),
+        'error' => (string) ($res['error'] ?? ''),
+        'items' => $items,
+        'count' => (!empty($res['ok']) && is_array($res['data'])) ? (int) ($res['data']['count'] ?? count($items)) : count($items),
+    ];
+}
+
 function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $snapshot = crm_smtp_sites_snapshot();
@@ -4156,7 +4175,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.35-crm-email-template-preview-send',
+        'phase' => '2.36-crm-email-template-test-log',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6812,7 +6831,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.35-crm-email-template-preview-send',
+        'phase' => '2.36-crm-email-template-test-log',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -9010,6 +9029,32 @@ if ($action === 'crm.email_templates.get') {
             'base_url' => (string) ($site['base_url'] ?? ''),
         ],
         'templates' => $snapshot['email_templates'],
+        'bridge_status' => $snapshot['status'],
+        'bridge_error' => $snapshot['error'],
+    ], !empty($snapshot['ok']) ? 200 : 502);
+}
+
+if ($action === 'crm.email_templates.test_log') {
+    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
+    $site = $siteId !== '' ? site_by_id($siteId) : null;
+    if (!is_array($site)) {
+        $sites = all_sites();
+        $site = isset($sites[0]) ? $sites[0] : null;
+    }
+    if (!is_array($site)) {
+        out_json(['ok' => true, 'site' => null, 'items' => [], 'count' => 0, 'message' => 'No bridge site configured.']);
+    }
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
+    $snapshot = crm_email_template_test_log_fetch($site, $limit);
+    out_json([
+        'ok' => !empty($snapshot['ok']),
+        'site' => [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'base_url' => (string) ($site['base_url'] ?? ''),
+        ],
+        'items' => $snapshot['items'],
+        'count' => (int) ($snapshot['count'] ?? count($snapshot['items'])),
         'bridge_status' => $snapshot['status'],
         'bridge_error' => $snapshot['error'],
     ], !empty($snapshot['ok']) ? 200 : 502);
