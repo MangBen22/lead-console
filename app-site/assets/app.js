@@ -277,6 +277,7 @@
   const runSocialWatchBtn = document.getElementById("runSocialWatchBtn");
   const refreshSocialOpsSnapshotBtn = document.getElementById("refreshSocialOpsSnapshotBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
+  const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
@@ -3070,6 +3071,12 @@
     }
   }
 
+  async function downloadSocialDraftsExport() {
+    const data = await apiGetWithParams("social.drafts.export", { limit: 20 });
+    const filename = data && data.filename ? String(data.filename) : ("social-drafts-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadSocialDraftValidation() {
     if (!socialDraftValidationView) return;
     try {
@@ -4204,6 +4211,12 @@
   if (refreshSocialDraftsBtn) {
     refreshSocialDraftsBtn.addEventListener("click", async function () {
       await loadSocialDraftsPreview();
+    });
+  }
+
+  if (downloadSocialDraftsExportBtn) {
+    downloadSocialDraftsExportBtn.addEventListener("click", async function () {
+      await downloadSocialDraftsExport();
     });
   }
 

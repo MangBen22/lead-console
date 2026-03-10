@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.86-social-schedule-bulk-update',
+        'phase' => '2.87-social-drafts-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9965,7 +9965,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.86-social-schedule-bulk-update',
+        'phase' => '2.87-social-drafts-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -13005,6 +13005,31 @@ if ($action === 'social.drafts.plan') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
         'draft_count' => count($drafts),
+    ]);
+}
+
+if ($action === 'social.drafts.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $drafts = collect_social_drafts();
+    $validation = social_draft_validation_snapshot($drafts);
+    $plan = social_draft_delivery_plan($drafts, $limit);
+    audit_event('social', 'drafts.export', [
+        'draft_count' => count($drafts),
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_drafts_export_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'draft_count' => count($drafts),
+            'drafts' => $drafts,
+            'validation' => $validation,
+            'delivery_plan' => $plan,
+        ],
     ]);
 }
 
