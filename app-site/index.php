@@ -1736,6 +1736,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSeoOpportunitiesBtn" type="button">Refresh Opportunities</button>
                     <button id="refreshSeoRegressionsBtn" type="button">Refresh Regressions</button>
                     <button id="runSeoRegressionsBtn" type="button">Run Regression Watch</button>
+                    <button id="downloadSeoRegressionsExportBtn" type="button">Download Regressions</button>
                     <button id="refreshSeoUrlHistoryBtn" type="button">Refresh URL History</button>
                     <button id="refreshSeoCompareBtn" type="button">Refresh Audit Compare</button>
                 </div>

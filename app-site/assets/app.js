@@ -419,6 +419,7 @@
   const refreshSeoOpportunitiesBtn = document.getElementById("refreshSeoOpportunitiesBtn");
   const refreshSeoRegressionsBtn = document.getElementById("refreshSeoRegressionsBtn");
   const runSeoRegressionsBtn = document.getElementById("runSeoRegressionsBtn");
+  const downloadSeoRegressionsExportBtn = document.getElementById("downloadSeoRegressionsExportBtn");
   const refreshSeoUrlHistoryBtn = document.getElementById("refreshSeoUrlHistoryBtn");
   const refreshSeoCompareBtn = document.getElementById("refreshSeoCompareBtn");
   const seoIssuesSummary = document.getElementById("seoIssuesSummary");
@@ -7039,6 +7040,16 @@
         seoResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadSeoRegressions();
+    });
+  }
+
+  if (downloadSeoRegressionsExportBtn) {
+    downloadSeoRegressionsExportBtn.addEventListener("click", async function () {
+      const data = await apiGet("seo.regressions.export");
+      downloadJsonFile(data.filename || "seo-regressions-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 

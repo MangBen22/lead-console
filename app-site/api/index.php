@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.12-seo-extension-session-export',
+        'phase' => '4.13-seo-regressions-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12385,7 +12385,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.12-seo-extension-session-export',
+        'phase' => '4.13-seo-regressions-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16913,6 +16913,24 @@ if ($action === 'seo.regressions.summary') {
         'state' => is_array($state) ? $state : [],
         'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
         'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+    ]);
+}
+
+if ($action === 'seo.regressions.export') {
+    $state = app_read_json_file(seo_regression_state_path(), []);
+    $runs = app_read_json_file(seo_regression_runs_path(), []);
+    audit_event('seo', 'regressions.export', [
+        'run_count' => count(is_array($runs) ? $runs : []),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'seo_regressions_export_' . gmdate('Ymd_His') . '.json',
+        'export' => [
+            'exported_at' => gmdate('c'),
+            'state' => is_array($state) ? $state : [],
+            'latest_run' => isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null,
+            'runs' => array_slice(is_array($runs) ? $runs : [], 0, 25),
+        ],
     ]);
 }
 
