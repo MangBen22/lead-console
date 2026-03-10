@@ -6464,7 +6464,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.16-social-execution-preview-export',
+        'phase' => '3.17-social-connector-rule-audit',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8691,6 +8691,106 @@ function social_connector_detail_snapshot($connectorId, $limit = 10)
         'retry_queue' => array_slice($retryQueue, 0, $limit),
         'schedule_queue' => array_slice($scheduleQueue, 0, $limit),
         'inbox_threads' => array_slice($inboxThreads, 0, $limit),
+    ];
+}
+
+function social_connector_rule_audit_snapshot($query = [])
+{
+    $list = social_connectors_list_snapshot($query);
+    $items = isset($list['items']) && is_array($list['items']) ? $list['items'] : [];
+    $draftLimit = isset($query['draft_limit']) ? (int) $query['draft_limit'] : 5;
+    if ($draftLimit <= 0) {
+        $draftLimit = 5;
+    }
+    $draftLimit = min($draftLimit, 20);
+    $drafts = array_slice(collect_social_drafts(), 0, $draftLimit);
+    $auditItems = [];
+    $summary = [
+        'connector_count' => 0,
+        'ready_connectors' => 0,
+        'blocked_connectors' => 0,
+        'live_connectors' => 0,
+        'dry_run_connectors' => 0,
+        'rule_issue_total' => 0,
+        'rule_warning_total' => 0,
+        'draft_limit' => $draftLimit,
+    ];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $connector = social_connector_by_id((string) ($item['connector_id'] ?? ''));
+        if (!is_array($connector)) {
+            continue;
+        }
+        $provider = (string) ($item['provider'] ?? '');
+        $rules = social_provider_rule_profile($provider);
+        $preparedDrafts = [];
+        foreach ($drafts as $draft) {
+            $variant = social_build_variant_for_connector($connector, $draft);
+            $preparedDrafts[] = isset($variant['variant']) && is_array($variant['variant']) ? $variant['variant'] : [];
+        }
+        $validation = social_validate_drafts_for_connector($connector, $preparedDrafts);
+        $readiness = social_connector_readiness($connector, $preparedDrafts);
+        $runMode = strtolower((string) (($item['config']['run_mode'] ?? 'dry_run')));
+        $recommendations = [];
+        foreach ((array) ($validation['issues'] ?? []) as $issue) {
+            if ($issue === 'bridge_site_missing') {
+                $recommendations[] = 'Set a valid bridge site before live publishing.';
+            } elseif ($issue === 'webhook_missing') {
+                $recommendations[] = 'Configure the webhook URL before live publishing.';
+            } elseif ($issue === 'connector_inactive') {
+                $recommendations[] = 'Activate the connector to allow publishing.';
+            } elseif ($issue === 'publish_capability_missing') {
+                $recommendations[] = 'Enable at least one publish capability.';
+            } elseif ($issue === 'url_missing_for_video') {
+                $recommendations[] = 'Provide media or a source URL for video-style providers.';
+            } elseif ($issue === 'message_too_long_for_x') {
+                $recommendations[] = 'Shorten source copy for X posts.';
+            } elseif ($issue === 'message_too_long_for_instagram') {
+                $recommendations[] = 'Reduce caption length for Instagram.';
+            } elseif ($issue === 'title_missing_for_youtube') {
+                $recommendations[] = 'Provide or generate a stronger YouTube title.';
+            }
+        }
+        if ($runMode !== 'live') {
+            $recommendations[] = 'Switch run mode to live when ready to publish externally.';
+        }
+        $recommendations = array_values(array_unique($recommendations));
+        $summary['connector_count']++;
+        $summary['rule_issue_total'] += count((array) ($validation['issues'] ?? []));
+        $summary['rule_warning_total'] += count((array) ($validation['warnings'] ?? []));
+        if (!empty($validation['ready']) && ($readiness['state'] ?? '') === 'ready') {
+            $summary['ready_connectors']++;
+        } else {
+            $summary['blocked_connectors']++;
+        }
+        if ($runMode === 'live') {
+            $summary['live_connectors']++;
+        } else {
+            $summary['dry_run_connectors']++;
+        }
+
+        $auditItems[] = [
+            'connector_id' => (string) ($item['connector_id'] ?? ''),
+            'provider' => $provider,
+            'account_label' => (string) ($item['account_label'] ?? ''),
+            'run_mode' => $runMode,
+            'ready' => !empty($validation['ready']) && ($readiness['state'] ?? '') === 'ready' ? 1 : 0,
+            'readiness_state' => (string) ($readiness['state'] ?? ''),
+            'readiness_reason' => (string) ($readiness['reason'] ?? ''),
+            'rules' => $rules,
+            'issues' => isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [],
+            'warnings' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
+            'recommendations' => $recommendations,
+            'payload_preview' => array_slice($preparedDrafts, 0, 2),
+        ];
+    }
+
+    return [
+        'summary' => array_merge(isset($list['summary']) && is_array($list['summary']) ? $list['summary'] : [], $summary),
+        'items' => $auditItems,
     ];
 }
 
@@ -11563,7 +11663,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.16-social-execution-preview-export',
+        'phase' => '3.17-social-connector-rule-audit',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16048,6 +16148,16 @@ if ($action === 'social.connectors.detail') {
     $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
     $snapshot = social_connector_detail_snapshot($connectorId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.connectors.rule_audit') {
+    $snapshot = social_connector_rule_audit_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'count' => count(isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : []),
+        'items' => $snapshot['items'],
+    ]);
 }
 
 if ($action === 'social.connectors.export') {

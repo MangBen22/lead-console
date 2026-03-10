@@ -286,6 +286,7 @@
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
+  const refreshSocialConnectorRuleAuditBtn = document.getElementById("refreshSocialConnectorRuleAuditBtn");
   const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
@@ -326,6 +327,7 @@
   const socialDraftPlanView = document.getElementById("socialDraftPlanView");
   const socialConnectors = document.getElementById("socialConnectors");
   const socialConnectorDetail = document.getElementById("socialConnectorDetail");
+  const socialConnectorRuleAudit = document.getElementById("socialConnectorRuleAudit");
   const socialConnectorBulkResult = document.getElementById("socialConnectorBulkResult");
   const socialConnectorForm = document.getElementById("socialConnectorForm");
   const refreshSocialScheduleSummaryBtn = document.getElementById("refreshSocialScheduleSummaryBtn");
@@ -2780,6 +2782,27 @@
     }
   }
 
+  async function loadSocialConnectorRuleAudit() {
+    if (!socialConnectorRuleAudit) return;
+    const filters = socialConnectorFilters();
+    const draftLimit = document.getElementById("socialConnectorRuleAuditDraftLimit");
+    try {
+      const data = await apiGetWithParams("social.connectors.rule_audit", {
+        provider: filters.provider,
+        status: filters.status,
+        site_id: filters.site_id,
+        run_mode: filters.run_mode,
+        search: filters.search,
+        page: filters.page,
+        limit: filters.limit,
+        draft_limit: draftLimit && draftLimit.value ? Number(draftLimit.value) : 5,
+      });
+      socialConnectorRuleAudit.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialConnectorRuleAudit.textContent = "Failed to load social connector rule audit.";
+    }
+  }
+
   async function downloadSocialConnectorsExport() {
     const connectorId = document.getElementById("socialConnectorDetailId");
     const limit = document.getElementById("socialConnectorDetailLimit");
@@ -4019,6 +4042,7 @@
     await loadSocialDraftPlan();
     await loadSocialDeliverySummary();
     await loadSocialDeliveryWatch();
+    await loadSocialConnectorRuleAudit();
     await loadCrmDeliverySummary();
     await loadCrmDeliveryWatch();
     await loadCrmSyncLog();
@@ -4889,6 +4913,12 @@
   if (refreshSocialConnectorDetailBtn) {
     refreshSocialConnectorDetailBtn.addEventListener("click", async function () {
       await loadSocialConnectorDetail();
+    });
+  }
+
+  if (refreshSocialConnectorRuleAuditBtn) {
+    refreshSocialConnectorRuleAuditBtn.addEventListener("click", async function () {
+      await loadSocialConnectorRuleAudit();
     });
   }
 
