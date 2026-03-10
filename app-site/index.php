@@ -2123,6 +2123,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadLaunchOperationsSnapshotBtn" type="button">Download Launch Snapshot</button>
                 </form>
                 <pre id="launchOperationsSnapshotView">Loading...</pre>
+                <pre id="launchOperationsHistoryView">Loading...</pre>
             </section>
 
             <section class="api-status">
