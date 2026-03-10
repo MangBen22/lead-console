@@ -580,6 +580,20 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="loadSocialPlatformDetailBtn" type="button">Load Platform Detail</button>
                 </div>
                 <pre id="socialPlatformDetail">No social platform detail loaded.</pre>
+                <form id="socialPlatformCoverageForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialPlatformCoverageFamily">Coverage Family</label>
+                        <input id="socialPlatformCoverageFamily" type="text" placeholder="meta">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialPlatformCoverageSearch">Coverage Search</label>
+                        <input id="socialPlatformCoverageSearch" type="text" placeholder="facebook">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshSocialPlatformCoverageBtn" type="button">Refresh Platform Coverage</button>
+                </div>
+                <pre id="socialPlatformCoverage">No social platform coverage loaded.</pre>
             </section>
 
             <section class="api-status">

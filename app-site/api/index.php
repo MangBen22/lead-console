@@ -2773,6 +2773,76 @@ function social_platform_detail_snapshot($provider)
     ];
 }
 
+function social_provider_coverage_snapshot($query = [])
+{
+    $rows = social_platform_catalog();
+    $family = strtolower(trim((string) ($query['family'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    $items = [];
+    $summary = [
+        'provider_count' => 0,
+        'configured_providers' => 0,
+        'unconfigured_providers' => 0,
+        'active_providers' => 0,
+        'live_providers' => 0,
+    ];
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $provider = strtolower((string) ($row['provider'] ?? ''));
+        $detail = social_platform_detail_snapshot($provider);
+        $item = [
+            'provider' => (string) ($row['provider'] ?? ''),
+            'label' => (string) ($row['label'] ?? ''),
+            'family' => (string) ($row['family'] ?? ''),
+            'transport_hint' => (string) (($detail['rules']['transport_hint'] ?? 'generic')),
+            'connector_summary' => isset($detail['connector_summary']) && is_array($detail['connector_summary']) ? $detail['connector_summary'] : [],
+            'configured' => !empty($detail['connector_summary']['total']) ? 1 : 0,
+            'active' => !empty($detail['connector_summary']['active']) ? 1 : 0,
+            'live' => !empty($detail['connector_summary']['live']) ? 1 : 0,
+        ];
+        if ($family !== '' && strtolower((string) ($item['family'] ?? '')) !== $family) {
+            continue;
+        }
+        if ($search !== '') {
+            $haystack = strtolower((string) ($item['provider'] ?? '') . ' ' . (string) ($item['label'] ?? '') . ' ' . (string) ($item['family'] ?? ''));
+            if (strpos($haystack, $search) === false) {
+                continue;
+            }
+        }
+        $summary['provider_count']++;
+        if (!empty($item['configured'])) {
+            $summary['configured_providers']++;
+        } else {
+            $summary['unconfigured_providers']++;
+        }
+        if (!empty($item['active'])) {
+            $summary['active_providers']++;
+        }
+        if (!empty($item['live'])) {
+            $summary['live_providers']++;
+        }
+        $items[] = $item;
+    }
+
+    usort($items, static function ($a, $b) {
+        if ((int) ($a['configured'] ?? 0) === (int) ($b['configured'] ?? 0)) {
+            return strcmp((string) ($a['label'] ?? ''), (string) ($b['label'] ?? ''));
+        }
+        return ((int) ($a['configured'] ?? 0) < (int) ($b['configured'] ?? 0)) ? 1 : -1;
+    });
+
+    return [
+        'summary' => array_merge($summary, [
+            'family' => $family,
+            'search' => $search,
+        ]),
+        'items' => $items,
+    ];
+}
+
 function normalize_social_capabilities($provider, $capabilities)
 {
     $profile = social_platform_profile($provider);
@@ -6464,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.19-social-connector-rule-audit-export',
+        'phase' => '3.20-social-provider-coverage',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -11702,7 +11772,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.19-social-connector-rule-audit-export',
+        'phase' => '3.20-social-provider-coverage',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14660,6 +14730,16 @@ if ($action === 'social.platforms.detail') {
     $provider = isset($_GET['provider']) ? (string) $_GET['provider'] : '';
     $snapshot = social_platform_detail_snapshot($provider);
     out_json($snapshot);
+}
+
+if ($action === 'social.platforms.coverage') {
+    $snapshot = social_provider_coverage_snapshot($_GET);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'count' => count(isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : []),
+        'items' => $snapshot['items'],
+    ]);
 }
 
 if ($action === 'social.platforms.export') {

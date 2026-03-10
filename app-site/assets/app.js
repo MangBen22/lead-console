@@ -302,6 +302,7 @@
   const downloadSocialActivityExportBtn = document.getElementById("downloadSocialActivityExportBtn");
   const loadSocialPlatformDetailBtn = document.getElementById("loadSocialPlatformDetailBtn");
   const downloadSocialPlatformsExportBtn = document.getElementById("downloadSocialPlatformsExportBtn");
+  const refreshSocialPlatformCoverageBtn = document.getElementById("refreshSocialPlatformCoverageBtn");
   const refreshSocialExecutionPreviewBtn = document.getElementById("refreshSocialExecutionPreviewBtn");
   const downloadSocialExecutionPreviewBtn = document.getElementById("downloadSocialExecutionPreviewBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
@@ -314,6 +315,7 @@
   const runSocialInboxWatchBtn = document.getElementById("runSocialInboxWatchBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
   const socialPlatformDetail = document.getElementById("socialPlatformDetail");
+  const socialPlatformCoverage = document.getElementById("socialPlatformCoverage");
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
   const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
@@ -3291,6 +3293,21 @@
     }
   }
 
+  async function loadSocialPlatformCoverage() {
+    if (!socialPlatformCoverage) return;
+    const family = document.getElementById("socialPlatformCoverageFamily");
+    const search = document.getElementById("socialPlatformCoverageSearch");
+    try {
+      const data = await apiGetWithParams("social.platforms.coverage", {
+        family: family && family.value ? family.value.trim() : "",
+        search: search && search.value ? search.value.trim() : "",
+      });
+      socialPlatformCoverage.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialPlatformCoverage.textContent = "Failed to load social platform coverage.";
+    }
+  }
+
   async function downloadSocialPlatformsExport() {
     const params = socialPlatformFilters();
     const provider = document.getElementById("socialPlatformDetailProvider");
@@ -4077,6 +4094,7 @@
     await loadLeadsReviewQueue();
     await loadCrmConnectors();
     await loadSocialPlatforms();
+    await loadSocialPlatformCoverage();
     await loadSocialCapabilitiesSummary();
     await loadSocialWatch();
     await loadSocialOperationsSnapshot();
@@ -4849,6 +4867,12 @@
   if (loadSocialPlatformDetailBtn) {
     loadSocialPlatformDetailBtn.addEventListener("click", async function () {
       await loadSocialPlatformDetail();
+    });
+  }
+
+  if (refreshSocialPlatformCoverageBtn) {
+    refreshSocialPlatformCoverageBtn.addEventListener("click", async function () {
+      await loadSocialPlatformCoverage();
     });
   }
 
