@@ -427,6 +427,8 @@
   const webopsActionForm = document.getElementById("webopsActionForm");
   const webopsActionsLog = document.getElementById("webopsActionsLog");
   const webopsPostureView = document.getElementById("webopsPostureView");
+  const webopsOperationsSnapshotView = document.getElementById("webopsOperationsSnapshotView");
+  const refreshWebopsOperationsSnapshotBtn = document.getElementById("refreshWebopsOperationsSnapshotBtn");
   const runWebopsBtn = document.getElementById("runWebopsBtn");
   const runWebopsRetryQueueBtn = document.getElementById("runWebopsRetryQueueBtn");
   const webopsResult = document.getElementById("webopsResult");
@@ -4531,6 +4533,19 @@
     }
   }
 
+  async function loadWebopsOperationsSnapshot() {
+    if (!webopsOperationsSnapshotView) return;
+    const limit = document.getElementById("webopsOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("webops.operations.snapshot", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      webopsOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      webopsOperationsSnapshotView.textContent = "Failed to load WebOps operations snapshot.";
+    }
+  }
+
   async function loadWebopsLog() {
     if (!webopsLog) return;
     try {
@@ -4903,6 +4918,7 @@
     await loadWebopsActionsQueue();
     await loadWebopsActionsLog();
     await loadWebopsPosture();
+    await loadWebopsOperationsSnapshot();
     await loadWebopsLog();
     await loadWebopsRetryQueue();
     await loadSeoProjects();
@@ -6175,6 +6191,12 @@
   if (refreshWebopsPostureBtn) {
     refreshWebopsPostureBtn.addEventListener("click", async function () {
       await loadWebopsPosture();
+    });
+  }
+
+  if (refreshWebopsOperationsSnapshotBtn) {
+    refreshWebopsOperationsSnapshotBtn.addEventListener("click", async function () {
+      await loadWebopsOperationsSnapshot();
     });
   }
 

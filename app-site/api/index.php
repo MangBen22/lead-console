@@ -4423,6 +4423,70 @@ function webops_actions_log_path()
     return app_storage_path('webops_actions_log.json');
 }
 
+function webops_operations_snapshot($limit = 10)
+{
+    $safeLimit = max(1, min(50, (int) $limit));
+    $monitors = app_read_json_file(webops_monitors_path(), []);
+    $runs = app_read_json_file(webops_log_path(), []);
+    $retryQueue = app_read_json_file(webops_retry_queue_path(), []);
+    $incidents = app_read_json_file(webops_incidents_path(), []);
+    $actionsQueue = app_read_json_file(webops_actions_queue_path(), []);
+    $actionsLog = app_read_json_file(webops_actions_log_path(), []);
+
+    $summary = [
+        'monitor_count' => count($monitors),
+        'active_monitors' => 0,
+        'open_incidents' => 0,
+        'retry_backlog' => count($retryQueue),
+        'queued_actions' => 0,
+        'completed_actions' => 0,
+        'critical_results' => 0,
+    ];
+
+    foreach ($monitors as $row) {
+        if (is_array($row) && in_array(strtolower((string) ($row['status'] ?? 'planned')), ['active', 'enabled'], true)) {
+            $summary['active_monitors']++;
+        }
+    }
+    foreach ($incidents as $row) {
+        if (is_array($row) && strtolower((string) ($row['status'] ?? 'open')) === 'open') {
+            $summary['open_incidents']++;
+        }
+    }
+    foreach ($actionsQueue as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower((string) ($row['status'] ?? 'queued'));
+        if ($status === 'queued') {
+            $summary['queued_actions']++;
+        } elseif ($status === 'completed') {
+            $summary['completed_actions']++;
+        }
+    }
+
+    $lastRun = isset($runs[0]) && is_array($runs[0]) ? $runs[0] : null;
+    if (is_array($lastRun) && isset($lastRun['results']) && is_array($lastRun['results'])) {
+        foreach ($lastRun['results'] as $row) {
+            if (is_array($row) && strtolower((string) ($row['severity'] ?? '')) === 'critical') {
+                $summary['critical_results']++;
+            }
+        }
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'limit' => $safeLimit,
+        'summary' => $summary,
+        'latest_run' => $lastRun,
+        'monitors' => array_slice(array_values(array_filter($monitors, 'is_array')), 0, $safeLimit),
+        'incidents' => array_slice(array_values(array_filter($incidents, 'is_array')), 0, $safeLimit),
+        'retry_queue' => array_slice(array_values(array_filter($retryQueue, 'is_array')), 0, $safeLimit),
+        'actions_queue' => array_slice(array_values(array_filter($actionsQueue, 'is_array')), 0, $safeLimit),
+        'actions_log' => array_slice(array_values(array_filter($actionsLog, 'is_array')), 0, $safeLimit),
+    ];
+}
+
 function webops_monitor_catalog()
 {
     return [
@@ -7941,7 +8005,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.30-social-operations-issues-summary',
+        'phase' => '5.31-webops-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13792,7 +13856,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.30-social-operations-issues-summary',
+        'phase' => '5.31-webops-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16986,6 +17050,18 @@ if ($action === 'webops.summary') {
             'uptime_percent' => 100,
         ],
         'last_run' => $lastRun,
+    ]);
+}
+
+if ($action === 'webops.operations.snapshot') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = webops_operations_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'snapshot' => $snapshot,
     ]);
 }
 

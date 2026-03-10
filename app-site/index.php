@@ -1824,6 +1824,18 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
             </section>
 
             <section class="api-status">
+                <h2>WebOps Operations Snapshot</h2>
+                <form id="webopsOperationsSnapshotForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="webopsOperationsSnapshotLimit">Snapshot Limit</label>
+                        <input id="webopsOperationsSnapshotLimit" type="number" min="1" max="50" value="10">
+                    </div>
+                    <button id="refreshWebopsOperationsSnapshotBtn" type="button">Refresh WebOps Snapshot</button>
+                </form>
+                <pre id="webopsOperationsSnapshotView">Loading...</pre>
+            </section>
+
+            <section class="api-status">
                 <h2>SEO Projects</h2>
                 <div class="inline-form">
                     <div class="form-row">
