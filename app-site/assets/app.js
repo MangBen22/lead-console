@@ -407,6 +407,7 @@
   const refreshSeoIssuesBtn = document.getElementById("refreshSeoIssuesBtn");
   const downloadSeoIssuesExportBtn = document.getElementById("downloadSeoIssuesExportBtn");
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
+  const downloadSeoHistoryExportBtn = document.getElementById("downloadSeoHistoryExportBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
   const refreshSeoExtensionEventsBtn = document.getElementById("refreshSeoExtensionEventsBtn");
@@ -6949,6 +6950,19 @@
   if (refreshSeoHistoryBtn) {
     refreshSeoHistoryBtn.addEventListener("click", async function () {
       await loadSeoHistorySummary();
+    });
+  }
+
+  if (downloadSeoHistoryExportBtn) {
+    downloadSeoHistoryExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.history.summary.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-history-summary-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 
