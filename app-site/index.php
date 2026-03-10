@@ -2120,6 +2120,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="launchOperationsFreshnessMinutes" type="number" min="5" max="1440" value="30">
                     </div>
                     <button id="refreshLaunchOperationsSnapshotBtn" type="button">Refresh Launch Snapshot</button>
+                    <button id="downloadLaunchOperationsSnapshotBtn" type="button">Download Launch Snapshot</button>
                 </form>
                 <pre id="launchOperationsSnapshotView">Loading...</pre>
             </section>

@@ -8529,7 +8529,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.41-launch-operations-snapshot',
+        'phase' => '5.42-launch-operations-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14380,7 +14380,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.41-launch-operations-snapshot',
+        'phase' => '5.42-launch-operations-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17766,6 +17766,29 @@ if ($action === 'launch.operations.snapshot') {
     out_json([
         'ok' => true,
         'snapshot' => $snapshot,
+    ]);
+}
+
+if ($action === 'launch.operations.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $snapshot = launch_operations_snapshot($limit, $freshness);
+    audit_event('launch', 'operations.export', [
+        'limit' => $limit,
+        'freshness_minutes' => $freshness,
+        'launch_state' => (string) ($snapshot['summary']['launch_state'] ?? 'review_required'),
+        'release_gate_allowed' => (int) ($snapshot['summary']['release_gate_allowed'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'launch_operations_snapshot_' . gmdate('Ymd_His') . '.json',
+        'export' => $snapshot,
     ]);
 }
 
