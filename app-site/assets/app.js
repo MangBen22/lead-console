@@ -282,6 +282,7 @@
   const refreshSocialDraftRecommendationsBtn = document.getElementById("refreshSocialDraftRecommendationsBtn");
   const runSocialDraftScheduleBtn = document.getElementById("runSocialDraftScheduleBtn");
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
+  const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -2700,11 +2701,30 @@
   async function loadSocialConnectors() {
     if (!socialConnectors) return;
     try {
-      const data = await apiGet("social.connectors.list");
+      const data = await apiGetWithParams("social.connectors.list", socialConnectorFilters());
       socialConnectors.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       socialConnectors.textContent = "Failed to load social connectors.";
     }
+  }
+
+  function socialConnectorFilters() {
+    const provider = document.getElementById("socialConnectorFilterProvider");
+    const status = document.getElementById("socialConnectorFilterStatus");
+    const site = document.getElementById("socialConnectorFilterSite");
+    const runMode = document.getElementById("socialConnectorFilterRunMode");
+    const search = document.getElementById("socialConnectorFilterSearch");
+    const page = document.getElementById("socialConnectorFilterPage");
+    const limit = document.getElementById("socialConnectorFilterLimit");
+    return {
+      provider: provider && provider.value ? provider.value.trim() : "",
+      status: status && status.value ? status.value : "",
+      site_id: site && site.value ? site.value.trim() : "",
+      run_mode: runMode && runMode.value ? runMode.value : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
   }
 
   async function loadSocialScheduleQueue() {
@@ -4404,6 +4424,12 @@
   if (runSocialDraftBulkScheduleBtn) {
     runSocialDraftBulkScheduleBtn.addEventListener("click", async function () {
       await runSocialDraftBulkSchedule();
+    });
+  }
+
+  if (refreshSocialConnectorsBtn) {
+    refreshSocialConnectorsBtn.addEventListener("click", async function () {
+      await loadSocialConnectors();
     });
   }
 

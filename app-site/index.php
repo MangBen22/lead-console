@@ -709,6 +709,48 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
 
             <section class="api-status">
                 <h2>Social Connectors</h2>
+                <form id="socialConnectorFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialConnectorFilterProvider">Provider</label>
+                        <input id="socialConnectorFilterProvider" type="text" placeholder="facebook">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterStatus">Status</label>
+                        <select id="socialConnectorFilterStatus">
+                            <option value="">any</option>
+                            <option value="active">active</option>
+                            <option value="planned">planned</option>
+                            <option value="paused">paused</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterSite">Site ID</label>
+                        <input id="socialConnectorFilterSite" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterRunMode">Run Mode</label>
+                        <select id="socialConnectorFilterRunMode">
+                            <option value="">any</option>
+                            <option value="dry_run">dry_run</option>
+                            <option value="live">live</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterSearch">Search</label>
+                        <input id="socialConnectorFilterSearch" type="text" placeholder="connector id or label">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterPage">Page</label>
+                        <input id="socialConnectorFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="socialConnectorFilterLimit">Limit</label>
+                        <input id="socialConnectorFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                </form>
+                <div class="actions">
+                    <button id="refreshSocialConnectorsBtn" type="button">Refresh Social Connectors</button>
+                </div>
                 <pre id="socialConnectors">Loading...</pre>
                 <form id="socialConnectorForm" class="inline-form">
                     <div class="form-row">
