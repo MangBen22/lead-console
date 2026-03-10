@@ -4439,7 +4439,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.45-social-draft-validation',
+        'phase' => '2.46-social-publish-validation-enforcement',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -6793,6 +6793,58 @@ function social_draft_validation_snapshot($drafts = null)
     ];
 }
 
+function social_validation_label_map()
+{
+    return [
+        'connector_inactive' => 'Connector is not active.',
+        'publish_capability_missing' => 'Connector is missing publish capability.',
+        'message_missing' => 'Draft message is missing.',
+        'title_missing_for_forum' => 'Forum-style providers require a title.',
+        'url_missing_for_video' => 'Video-style providers require a URL or media source.',
+        'bridge_site_missing' => 'Bridge site is missing or invalid.',
+        'webhook_missing' => 'Webhook URL is missing.',
+        'url_missing' => 'URL is missing.',
+        'title_missing' => 'Title is missing.',
+    ];
+}
+
+function social_validate_drafts_for_connector($connector, $drafts)
+{
+    $issues = [];
+    $warnings = [];
+    foreach ((array) $drafts as $draft) {
+        $validation = social_validate_draft_for_connector($connector, is_array($draft) ? $draft : []);
+        foreach ((array) ($validation['issues'] ?? []) as $issue) {
+            if (!in_array($issue, $issues, true)) {
+                $issues[] = $issue;
+            }
+        }
+        foreach ((array) ($validation['warnings'] ?? []) as $warning) {
+            if (!in_array($warning, $warnings, true)) {
+                $warnings[] = $warning;
+            }
+        }
+    }
+
+    $labels = social_validation_label_map();
+    $issueMessages = [];
+    foreach ($issues as $issue) {
+        $issueMessages[] = (string) ($labels[$issue] ?? $issue);
+    }
+    $warningMessages = [];
+    foreach ($warnings as $warning) {
+        $warningMessages[] = (string) ($labels[$warning] ?? $warning);
+    }
+
+    return [
+        'ready' => empty($issues) ? 1 : 0,
+        'issues' => $issues,
+        'warnings' => $warnings,
+        'issue_messages' => $issueMessages,
+        'warning_messages' => $warningMessages,
+    ];
+}
+
 function social_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $connectors = app_read_json_file(social_connectors_path(), []);
@@ -6980,6 +7032,7 @@ function execute_social_connector_sync($connector, $drafts)
     $type = strtolower((string) ($connector['type'] ?? 'external_api'));
     $config = isset($connector['config']) && is_array($connector['config']) ? $connector['config'] : [];
     $runMode = strtolower((string) ($config['run_mode'] ?? 'dry_run'));
+    $validation = social_validate_drafts_for_connector($connector, $drafts);
     $result = [
         'connector_id' => (string) ($connector['connector_id'] ?? ''),
         'provider' => $provider,
@@ -6989,7 +7042,17 @@ function execute_social_connector_sync($connector, $drafts)
         'rejected' => 0,
         'errors' => [],
         'error_codes' => [],
+        'warnings' => isset($validation['warning_messages']) && is_array($validation['warning_messages']) ? $validation['warning_messages'] : [],
+        'warning_codes' => isset($validation['warnings']) && is_array($validation['warnings']) ? $validation['warnings'] : [],
+        'validation' => $validation,
     ];
+
+    if (empty($validation['ready'])) {
+        $result['errors'] = isset($validation['issue_messages']) && is_array($validation['issue_messages']) ? $validation['issue_messages'] : ['Draft validation failed.'];
+        $result['error_codes'] = isset($validation['issues']) && is_array($validation['issues']) ? $validation['issues'] : [normalize_error_code('Draft validation failed.')];
+        $result['rejected'] = count($drafts);
+        return $result;
+    }
 
     if ($provider === 'wordpress_social_bridge' && $type === 'wordpress_plugin') {
         $targetSiteId = (string) ($config['bridge_site_id'] ?? ($connector['site_id'] ?? ''));
@@ -7644,7 +7707,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.45-social-draft-validation',
+        'phase' => '2.46-social-publish-validation-enforcement',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
