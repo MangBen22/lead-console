@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.94-social-connector-detail',
+        'phase' => '2.95-social-connectors-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -10540,7 +10540,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.94-social-connector-detail',
+        'phase' => '2.95-social-connectors-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14901,6 +14901,39 @@ if ($action === 'social.connectors.detail') {
     $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
     $snapshot = social_connector_detail_snapshot($connectorId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.connectors.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'provider' => isset($_GET['provider']) ? (string) $_GET['provider'] : '',
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'site_id' => isset($_GET['site_id']) ? (string) $_GET['site_id'] : '',
+        'run_mode' => isset($_GET['run_mode']) ? (string) $_GET['run_mode'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $connectorId = isset($_GET['connector_id']) ? trim((string) $_GET['connector_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'connectors' => social_connectors_list_snapshot($filters),
+    ];
+    if ($connectorId !== '') {
+        $payload['connector_detail'] = social_connector_detail_snapshot($connectorId, $limit);
+    }
+    audit_event('social', 'connectors.export', [
+        'connector_id' => $connectorId,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_connectors_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.connectors.save') {

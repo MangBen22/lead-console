@@ -284,6 +284,7 @@
   const runSocialDraftBulkScheduleBtn = document.getElementById("runSocialDraftBulkScheduleBtn");
   const refreshSocialConnectorsBtn = document.getElementById("refreshSocialConnectorsBtn");
   const refreshSocialConnectorDetailBtn = document.getElementById("refreshSocialConnectorDetailBtn");
+  const downloadSocialConnectorsExportBtn = document.getElementById("downloadSocialConnectorsExportBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -2755,6 +2756,21 @@
     }
   }
 
+  async function downloadSocialConnectorsExport() {
+    const connectorId = document.getElementById("socialConnectorDetailId");
+    const limit = document.getElementById("socialConnectorDetailLimit");
+    const params = socialConnectorFilters();
+    if (connectorId && connectorId.value) {
+      params.connector_id = connectorId.value.trim();
+    }
+    if (limit && limit.value) {
+      params.limit = Number(limit.value);
+    }
+    const data = await apiGetWithParams("social.connectors.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-connectors-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   function socialConnectorFilters() {
     const provider = document.getElementById("socialConnectorFilterProvider");
     const status = document.getElementById("socialConnectorFilterStatus");
@@ -4483,6 +4499,12 @@
   if (refreshSocialConnectorDetailBtn) {
     refreshSocialConnectorDetailBtn.addEventListener("click", async function () {
       await loadSocialConnectorDetail();
+    });
+  }
+
+  if (downloadSocialConnectorsExportBtn) {
+    downloadSocialConnectorsExportBtn.addEventListener("click", async function () {
+      await downloadSocialConnectorsExport();
     });
   }
 

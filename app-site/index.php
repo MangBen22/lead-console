@@ -750,6 +750,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <div class="actions">
                     <button id="refreshSocialConnectorsBtn" type="button">Refresh Social Connectors</button>
+                    <button id="downloadSocialConnectorsExportBtn" type="button">Download Connector Export</button>
                 </div>
                 <pre id="socialConnectors">Loading...</pre>
                 <form id="socialConnectorDetailForm" class="inline-form">
