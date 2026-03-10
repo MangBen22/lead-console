@@ -2103,6 +2103,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadSeoOperationsSnapshotBtn" type="button">Download SEO Snapshot</button>
                 </form>
                 <pre id="seoOperationsSnapshotView">Loading...</pre>
+                <pre id="seoOperationsHistoryView">Loading...</pre>
             </section>
 
             <section class="api-status">

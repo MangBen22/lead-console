@@ -516,6 +516,7 @@
   const seoCompareView = document.getElementById("seoCompareView");
   const seoOperationsSnapshotView = document.getElementById("seoOperationsSnapshotView");
   const downloadSeoOperationsSnapshotBtn = document.getElementById("downloadSeoOperationsSnapshotBtn");
+  const seoOperationsHistoryView = document.getElementById("seoOperationsHistoryView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -4933,6 +4934,19 @@
     }
   }
 
+  async function loadSeoOperationsHistory() {
+    if (!seoOperationsHistoryView) return;
+    const limit = document.getElementById("seoOperationsSnapshotLimit");
+    try {
+      const data = await apiGetWithParams("seo.operations.history", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      seoOperationsHistoryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      seoOperationsHistoryView.textContent = "Failed to load SEO operations history.";
+    }
+  }
+
   async function downloadSeoOperationsSnapshot() {
     const limit = document.getElementById("seoOperationsSnapshotLimit");
     const data = await apiGetWithParams("seo.operations.export", {
@@ -5024,6 +5038,7 @@
     await loadSeoUrlHistory();
     await loadSeoCompare();
     await loadSeoOperationsSnapshot();
+    await loadSeoOperationsHistory();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7872,6 +7887,7 @@
   if (refreshSeoOperationsSnapshotBtn) {
     refreshSeoOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadSeoOperationsSnapshot();
+      await loadSeoOperationsHistory();
     });
   }
 
