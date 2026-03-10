@@ -237,6 +237,7 @@ class LC_Plugin
             'message' => 'Not checked yet.',
             'checked_at' => '',
         ]);
+        add_option('lc_email_template_test_log', []);
         update_option('lc_schema_version', '7');
     }
 
@@ -1259,6 +1260,12 @@ class LC_Plugin
             'permission_callback' => [$this, 'rest_bridge_permission'],
         ]);
 
+        register_rest_route('lc/v1', '/bridge/email-templates/test-log', [
+            'methods' => 'GET',
+            'callback' => [$this, 'rest_bridge_email_templates_test_log'],
+            'permission_callback' => [$this, 'rest_bridge_permission'],
+        ]);
+
         register_rest_route('lc/v1', '/bridge/crm-intake', [
             'methods' => 'POST',
             'callback' => [$this, 'rest_bridge_crm_intake'],
@@ -1524,6 +1531,7 @@ class LC_Plugin
         $to_email = sanitize_email((string) ($payload['to_email'] ?? ''));
         $vars = isset($payload['vars']) && is_array($payload['vars']) ? $payload['vars'] : [];
         $result = $this->send_templated_test_email($to_email, $template_key, $vars);
+        $log = $this->append_email_template_test_log($template_key, $to_email, $result);
         $this->log_system_event('bridge', !empty($result['success']) ? 'info' : 'error', 'Bridge email template test send executed.', [
             'template_key' => $template_key,
             'to_email' => $to_email,
@@ -1533,6 +1541,27 @@ class LC_Plugin
         return rest_ensure_response([
             'ok' => !empty($result['success']),
             'result' => $result,
+            'log' => $log,
+            'time' => current_time('mysql'),
+        ]);
+    }
+
+    public function rest_bridge_email_templates_test_log($request)
+    {
+        $limit = (int) $request->get_param('limit');
+        if ($limit <= 0) {
+            $limit = 25;
+        }
+        $items = $this->get_email_template_test_log($limit);
+        $this->log_system_event('bridge', 'info', 'Bridge email template test log requested.', [
+            'count' => count($items),
+            'limit' => $limit,
+        ]);
+
+        return rest_ensure_response([
+            'ok' => true,
+            'items' => $items,
+            'count' => count($items),
             'time' => current_time('mysql'),
         ]);
     }
@@ -1903,6 +1932,21 @@ class LC_Plugin
         return $this->get_email_templates_snapshot();
     }
 
+    public function get_email_template_test_log($limit = 25)
+    {
+        $rows = get_option('lc_email_template_test_log', []);
+        if (!is_array($rows)) {
+            $rows = [];
+        }
+        $rows = array_values(array_filter($rows, static function ($row) {
+            return is_array($row);
+        }));
+        if ($limit > 0) {
+            $rows = array_slice($rows, 0, $limit);
+        }
+        return $rows;
+    }
+
     public function send_templated_test_email($to_email, $template_key, $vars = [])
     {
         $to = sanitize_email((string) $to_email);
@@ -1925,6 +1969,30 @@ class LC_Plugin
         $result['template_key'] = sanitize_key((string) $template_key);
         $result['preview'] = $preview;
         return $result;
+    }
+
+    private function append_email_template_test_log($template_key, $to_email, $result)
+    {
+        $rows = get_option('lc_email_template_test_log', []);
+        if (!is_array($rows)) {
+            $rows = [];
+        }
+        $preview = (isset($result['preview']) && is_array($result['preview'])) ? $result['preview'] : [];
+        $entry = [
+            'log_id' => 'email_tpl_test_' . gmdate('Ymd_His') . '_' . substr(wp_generate_password(8, false, false), 0, 6),
+            'created_at' => current_time('mysql'),
+            'template_key' => sanitize_key((string) $template_key),
+            'label' => sanitize_text_field((string) ($preview['label'] ?? $template_key)),
+            'to_email' => sanitize_email((string) $to_email),
+            'success' => !empty($result['success']),
+            'error_code' => sanitize_key((string) ($result['error_code'] ?? '')),
+            'message' => sanitize_text_field((string) ($result['message'] ?? '')),
+            'subject' => sanitize_text_field((string) ($preview['subject'] ?? '')),
+        ];
+        array_unshift($rows, $entry);
+        $rows = array_slice($rows, 0, 50);
+        update_option('lc_email_template_test_log', $rows);
+        return $entry;
     }
 
     private function email_template_placeholders()
