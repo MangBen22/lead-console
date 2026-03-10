@@ -408,6 +408,7 @@
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
+  const downloadSeoAuditsExportBtn = document.getElementById("downloadSeoAuditsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
@@ -4042,6 +4043,26 @@
     }
   }
 
+  async function downloadSeoAuditsExport() {
+    const detailId = document.getElementById("seoAuditDetailId");
+    const auditId = detailId && detailId.value ? detailId.value.trim() : "";
+    const data = await apiGetWithParams("seo.audits.export", {
+      project_id: seoAuditFilterProjectId && seoAuditFilterProjectId.value ? seoAuditFilterProjectId.value.trim() : "",
+      source: seoAuditFilterSource && seoAuditFilterSource.value ? seoAuditFilterSource.value.trim() : "",
+      search: seoAuditFilterSearch && seoAuditFilterSearch.value ? seoAuditFilterSearch.value.trim() : "",
+      min_score: seoAuditFilterMinScore && seoAuditFilterMinScore.value ? seoAuditFilterMinScore.value : "",
+      max_score: seoAuditFilterMaxScore && seoAuditFilterMaxScore.value ? seoAuditFilterMaxScore.value : "",
+      page: seoAuditFilterPage && seoAuditFilterPage.value ? seoAuditFilterPage.value : 1,
+      limit: seoAuditFilterLimit && seoAuditFilterLimit.value ? seoAuditFilterLimit.value : 10,
+      audit_id: auditId,
+      include_detail: auditId ? 1 : "",
+    });
+    downloadJsonFile(data.filename || "seo-audits-export.json", data.export || data);
+    if (seoResult) {
+      seoResult.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadSeoIssuesSummary() {
     if (!seoIssuesSummary) return;
     try {
@@ -6828,6 +6849,12 @@
   if (loadSeoAuditDetailBtn) {
     loadSeoAuditDetailBtn.addEventListener("click", async function () {
       await loadSeoAuditDetail();
+    });
+  }
+
+  if (downloadSeoAuditsExportBtn) {
+    downloadSeoAuditsExportBtn.addEventListener("click", async function () {
+      await downloadSeoAuditsExport();
     });
   }
 

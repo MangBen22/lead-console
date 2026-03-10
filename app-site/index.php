@@ -1609,6 +1609,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="seoAuditFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSeoAuditsBtn" type="button">Refresh SEO Audits</button>
+                    <button id="downloadSeoAuditsExportBtn" type="button">Download SEO Audits</button>
                 </div>
                 <h3>Issue Summary</h3>
                 <pre id="seoIssuesSummary">Loading...</pre>
