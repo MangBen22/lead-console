@@ -729,7 +729,6 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="saveCrmEmailTemplateBtn" type="button">Save Selected Template</button>
                     <button id="previewCrmEmailTemplateBtn" type="button">Preview Template</button>
                     <button id="sendCrmEmailTemplateTestBtn" type="button">Send Template Test</button>
-                    <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
                 </div>
                 <form id="crmEmailTemplateSitesForm" class="inline-form">
                     <div class="form-row">
@@ -782,6 +781,41 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="crmEmailTemplatesSummary">Loading...</pre>
                 <pre id="crmEmailTemplatesResult">No email template action yet.</pre>
                 <pre id="crmEmailTemplatePreview">No preview yet.</pre>
+                <form id="crmEmailTemplateLogFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogSiteId">Log Site ID</label>
+                        <input id="crmEmailTemplateLogSiteId" type="text" placeholder="hq-main">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogSuccess">Log Status</label>
+                        <select id="crmEmailTemplateLogSuccess">
+                            <option value="">all</option>
+                            <option value="success">success</option>
+                            <option value="failed">failed</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogKey">Log Template Key</label>
+                        <input id="crmEmailTemplateLogKey" type="text" placeholder="registration_approved">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogErrorCode">Log Error Code</label>
+                        <input id="crmEmailTemplateLogErrorCode" type="text" placeholder="invalid_email">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogSearch">Log Search</label>
+                        <input id="crmEmailTemplateLogSearch" type="text" placeholder="log id, subject, or email">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogPage">Log Page</label>
+                        <input id="crmEmailTemplateLogPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmEmailTemplateLogLimit">Log Limit</label>
+                        <input id="crmEmailTemplateLogLimit" type="number" min="1" max="100" value="15">
+                    </div>
+                    <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
+                </form>
                 <pre id="crmEmailTemplateTestLog">Loading test log...</pre>
             </section>
 

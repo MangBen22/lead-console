@@ -3081,9 +3081,21 @@
     if (!crmEmailTemplateTestLog) return null;
     try {
       const siteId = document.getElementById("crmEmailTemplateSiteId");
+      const filterSiteId = document.getElementById("crmEmailTemplateLogSiteId");
+      const success = document.getElementById("crmEmailTemplateLogSuccess");
+      const templateKey = document.getElementById("crmEmailTemplateLogKey");
+      const errorCode = document.getElementById("crmEmailTemplateLogErrorCode");
+      const search = document.getElementById("crmEmailTemplateLogSearch");
+      const page = document.getElementById("crmEmailTemplateLogPage");
+      const limit = document.getElementById("crmEmailTemplateLogLimit");
       const data = await apiGetWithParams("crm.email_templates.test_log", {
-        site_id: siteId && siteId.value ? siteId.value.trim() : "",
-        limit: 15,
+        site_id: filterSiteId && filterSiteId.value ? filterSiteId.value.trim() : (siteId && siteId.value ? siteId.value.trim() : ""),
+        success: success && success.value ? success.value : "",
+        template_key: templateKey && templateKey.value ? templateKey.value.trim() : "",
+        error_code: errorCode && errorCode.value ? errorCode.value.trim() : "",
+        search: search && search.value ? search.value.trim() : "",
+        page: page && page.value ? Number(page.value) : 1,
+        limit: limit && limit.value ? Number(limit.value) : 15,
       });
       crmEmailTemplateTestLog.textContent = JSON.stringify(data, null, 2);
       return data;

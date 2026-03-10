@@ -957,6 +957,121 @@ function crm_email_template_test_log_fetch($site, $limit = 25)
     ];
 }
 
+function crm_email_template_test_log_snapshot($query = [])
+{
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 15;
+    if ($limit <= 0) {
+        $limit = 15;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $siteId = strtolower(trim((string) ($query['site_id'] ?? '')));
+    $success = strtolower(trim((string) ($query['success'] ?? '')));
+    $templateKey = strtolower(trim((string) ($query['template_key'] ?? '')));
+    $errorCode = strtolower(trim((string) ($query['error_code'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $sites = [];
+    if ($siteId !== '') {
+        $site = site_by_id($siteId);
+        if (is_array($site)) {
+            $sites[] = $site;
+        }
+    } else {
+        $sites = all_sites();
+    }
+
+    $items = [];
+    $summary = [
+        'total_count' => 0,
+        'filtered_count' => 0,
+        'page' => $page,
+        'limit' => $limit,
+        'site_id' => $siteId,
+        'success' => $success,
+        'template_key' => $templateKey,
+        'error_code' => $errorCode,
+        'search' => $search,
+        'success_count' => 0,
+        'failed_count' => 0,
+        'site_count' => 0,
+    ];
+
+    foreach ($sites as $site) {
+        if (!is_array($site)) {
+            continue;
+        }
+        $summary['site_count']++;
+        $snapshot = crm_email_template_test_log_fetch($site, 50);
+        $rows = isset($snapshot['items']) && is_array($snapshot['items']) ? $snapshot['items'] : [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $item = $row;
+            $item['site_id'] = (string) ($site['site_id'] ?? '');
+            $item['site_label'] = (string) ($site['label'] ?? $site['base_url']);
+            $itemSuccess = !empty($item['success']);
+            $summary['total_count']++;
+            if ($itemSuccess) {
+                $summary['success_count']++;
+            } else {
+                $summary['failed_count']++;
+            }
+
+            if ($success !== '') {
+                $successKey = $itemSuccess ? 'success' : 'failed';
+                if ($successKey !== $success) {
+                    continue;
+                }
+            }
+            if ($templateKey !== '' && strpos(strtolower((string) ($item['template_key'] ?? '')), $templateKey) === false) {
+                continue;
+            }
+            if ($errorCode !== '' && strpos(strtolower((string) ($item['error_code'] ?? '')), $errorCode) === false) {
+                continue;
+            }
+            if ($search !== '') {
+                $matched = false;
+                foreach ([
+                    (string) ($item['log_id'] ?? ''),
+                    (string) ($item['template_key'] ?? ''),
+                    (string) ($item['label'] ?? ''),
+                    (string) ($item['to_email'] ?? ''),
+                    (string) ($item['message'] ?? ''),
+                    (string) ($item['subject'] ?? ''),
+                    (string) ($item['site_id'] ?? ''),
+                    (string) ($item['site_label'] ?? ''),
+                ] as $haystack) {
+                    if (strpos(strtolower($haystack), $search) !== false) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    continue;
+                }
+            }
+
+            $items[] = $item;
+        }
+    }
+
+    usort($items, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $summary['filtered_count'] = count($items);
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => $summary,
+        'items' => array_slice($items, $offset, $limit),
+    ];
+}
+
 function crm_smtp_watch_snapshot($source = 'manual', $emitNotifications = true)
 {
     $snapshot = crm_smtp_sites_snapshot();
@@ -7304,7 +7419,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.15-crm-email-template-export',
+        'phase' => '5.16-crm-email-template-test-log-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13155,7 +13270,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.15-crm-email-template-export',
+        'phase' => '5.16-crm-email-template-test-log-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15889,29 +16004,13 @@ if ($action === 'crm.email_templates.export') {
 }
 
 if ($action === 'crm.email_templates.test_log') {
-    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
-    $site = $siteId !== '' ? site_by_id($siteId) : null;
-    if (!is_array($site)) {
-        $sites = all_sites();
-        $site = isset($sites[0]) ? $sites[0] : null;
-    }
-    if (!is_array($site)) {
-        out_json(['ok' => true, 'site' => null, 'items' => [], 'count' => 0, 'message' => 'No bridge site configured.']);
-    }
-    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 25;
-    $snapshot = crm_email_template_test_log_fetch($site, $limit);
+    $snapshot = crm_email_template_test_log_snapshot($_GET);
     out_json([
-        'ok' => !empty($snapshot['ok']),
-        'site' => [
-            'site_id' => (string) ($site['site_id'] ?? ''),
-            'label' => (string) ($site['label'] ?? $site['base_url']),
-            'base_url' => (string) ($site['base_url'] ?? ''),
-        ],
+        'ok' => true,
+        'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
-        'count' => (int) ($snapshot['count'] ?? count($snapshot['items'])),
-        'bridge_status' => $snapshot['status'],
-        'bridge_error' => $snapshot['error'],
-    ], !empty($snapshot['ok']) ? 200 : 502);
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? count($snapshot['items'])),
+    ]);
 }
 
 if ($action === 'crm.email_templates.save') {
