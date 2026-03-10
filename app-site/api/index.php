@@ -3170,6 +3170,60 @@ function social_operations_history_snapshot($limit = 10)
     ];
 }
 
+function social_operations_history_summary($limit = 20)
+{
+    $history = social_operations_history_snapshot($limit);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $runsCount = count($items);
+    $latest = $runsCount > 0 ? $items[0] : null;
+    $oldest = $runsCount > 0 ? $items[$runsCount - 1] : null;
+    $totals = [
+        'watch_blocked_connectors' => 0,
+        'watch_expired_connectors' => 0,
+        'draft_validation_blocked_connectors' => 0,
+        'schedule_due_items' => 0,
+        'schedule_failed_items' => 0,
+        'retry_backlog' => 0,
+        'draft_ready_pairs' => 0,
+        'draft_blocked_pairs' => 0,
+        'open_inbox_threads' => 0,
+        'pending_inbox_threads' => 0,
+        'inbox_backlog_threads' => 0,
+        'high_priority_inbox_backlog' => 0,
+        'unassigned_inbox_backlog' => 0,
+    ];
+    foreach ($items as $item) {
+        $summary = isset($item['summary']) && is_array($item['summary']) ? $item['summary'] : [];
+        foreach (array_keys($totals) as $key) {
+            $totals[$key] += (int) ($summary[$key] ?? 0);
+        }
+    }
+    $averages = [];
+    foreach ($totals as $key => $total) {
+        $averages[$key] = $runsCount > 0 ? round($total / $runsCount, 2) : 0;
+    }
+
+    $latestSummary = isset($latest['summary']) && is_array($latest['summary']) ? $latest['summary'] : [];
+    $oldestSummary = isset($oldest['summary']) && is_array($oldest['summary']) ? $oldest['summary'] : [];
+    $changes = [];
+    foreach (array_keys($totals) as $key) {
+        $changes[$key] = (int) ($latestSummary[$key] ?? 0) - (int) ($oldestSummary[$key] ?? 0);
+    }
+
+    return [
+        'summary' => [
+            'runs_count' => $runsCount,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'oldest_created_at' => (string) ($oldest['created_at'] ?? ''),
+            'averages' => $averages,
+            'changes' => $changes,
+        ],
+        'latest' => $latest,
+        'oldest' => $oldest,
+        'history' => $items,
+    ];
+}
+
 function social_inbox_workload_snapshot($limit = 10)
 {
     $rows = social_inbox_threads_rows(true);
@@ -7759,7 +7813,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.27-social-operations-history',
+        'phase' => '5.28-social-operations-history-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -13610,7 +13664,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.27-social-operations-history',
+        'phase' => '5.28-social-operations-history-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16719,6 +16773,21 @@ if ($action === 'social.operations.history') {
         'ok' => true,
         'summary' => $history['summary'],
         'items' => $history['items'],
+    ]);
+}
+
+if ($action === 'social.operations.history_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $summary = social_operations_history_summary($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $summary['summary'],
+        'latest' => $summary['latest'],
+        'oldest' => $summary['oldest'],
+        'history' => $summary['history'],
     ]);
 }
 
