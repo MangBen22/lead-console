@@ -982,6 +982,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="refreshSocialActivityBtn" type="button">Refresh Social Activity</button>
                 </div>
                 <pre id="socialActivityFeed">Loading...</pre>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="socialActivityDetailId">Activity ID</label>
+                        <input id="socialActivityDetailId" type="text" placeholder="social_activity_abc123">
+                    </div>
+                    <button id="loadSocialActivityDetailBtn" type="button">Load Activity Detail</button>
+                </div>
+                <pre id="socialActivityDetail">No social activity detail loaded.</pre>
             </section>
 
             <section class="api-status">

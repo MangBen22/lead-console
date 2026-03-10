@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '3.04-social-activity-filters',
+        'phase' => '3.05-social-activity-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8759,6 +8759,47 @@ function social_activity_list_snapshot($query = [])
     ];
 }
 
+function social_activity_detail_snapshot($activityId)
+{
+    $id = trim((string) $activityId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'activity_id is required.'];
+    }
+    $rows = app_read_json_file(social_activity_feed_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['activity_id'] ?? '') !== $id) {
+            continue;
+        }
+        $item = $row;
+        $item['meta'] = isset($row['meta']) && is_array($row['meta']) ? $row['meta'] : [];
+        $connectorId = trim((string) ($item['meta']['connector_id'] ?? ''));
+        $syncId = trim((string) ($item['meta']['sync_id'] ?? ''));
+        $retryId = trim((string) ($item['meta']['retry_id'] ?? ''));
+        $scheduleId = trim((string) ($item['meta']['schedule_id'] ?? ''));
+        $threadId = trim((string) ($item['meta']['thread_id'] ?? ''));
+        return [
+            'ok' => true,
+            'item' => $item,
+            'meta' => [
+                'meta_count' => count($item['meta']),
+                'has_connector_id' => $connectorId !== '' ? 1 : 0,
+                'has_sync_id' => $syncId !== '' ? 1 : 0,
+                'has_retry_id' => $retryId !== '' ? 1 : 0,
+                'has_schedule_id' => $scheduleId !== '' ? 1 : 0,
+                'has_thread_id' => $threadId !== '' ? 1 : 0,
+            ],
+            'links' => [
+                'connector' => $connectorId !== '' ? social_connector_detail_snapshot($connectorId, 5) : null,
+                'sync' => $syncId !== '' ? social_sync_log_detail_snapshot($syncId) : null,
+                'retry' => $retryId !== '' ? social_retry_detail_snapshot($retryId) : null,
+                'schedule' => $scheduleId !== '' ? social_schedule_detail_snapshot($scheduleId) : null,
+                'thread' => $threadId !== '' ? social_inbox_thread_detail_snapshot($threadId) : null,
+            ],
+        ];
+    }
+    return ['ok' => false, 'error' => 'Activity item not found.'];
+}
+
 function social_retry_list_snapshot($query = [])
 {
     $rows = app_read_json_file(social_retry_queue_path(), []);
@@ -11097,7 +11138,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '3.04-social-activity-filters',
+        'phase' => '3.05-social-activity-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -14285,6 +14326,12 @@ if ($action === 'social.activity.list') {
         'summary' => $snapshot['summary'],
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.activity.detail') {
+    $activityId = isset($_GET['activity_id']) ? (string) $_GET['activity_id'] : '';
+    $snapshot = social_activity_detail_snapshot($activityId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.inbox.list') {
