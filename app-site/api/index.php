@@ -424,6 +424,99 @@ function crm_sync_log_detail_snapshot($syncId)
     return ['ok' => false, 'error' => 'CRM sync log item not found.'];
 }
 
+function crm_retry_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(retry_queue_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $connectorId = strtolower(trim((string) ($query['connector_id'] ?? '')));
+    $provider = strtolower(trim((string) ($query['provider'] ?? '')));
+    $errorCode = strtolower(trim((string) ($query['error_code'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    $filtered = [];
+    $statusCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $itemStatus = strtolower((string) ($item['status'] ?? 'queued'));
+        if (!isset($statusCounts[$itemStatus])) {
+            $statusCounts[$itemStatus] = 0;
+        }
+        $statusCounts[$itemStatus]++;
+        if ($status !== '' && $itemStatus !== $status) {
+            continue;
+        }
+        if ($connectorId !== '' && strpos(strtolower((string) ($item['connector_id'] ?? '')), $connectorId) === false) {
+            continue;
+        }
+        if ($provider !== '' && strpos(strtolower((string) ($item['provider'] ?? '')), $provider) === false) {
+            continue;
+        }
+        if ($errorCode !== '') {
+            $matchedCode = false;
+            foreach ((array) ($item['error_codes'] ?? []) as $code) {
+                if (strpos(strtolower((string) $code), $errorCode) !== false) {
+                    $matchedCode = true;
+                    break;
+                }
+            }
+            if (!$matchedCode) {
+                continue;
+            }
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['retry_id'] ?? ''),
+                (string) ($item['connector_id'] ?? ''),
+                (string) ($item['provider'] ?? ''),
+                json_encode($item['errors'] ?? []),
+            ] as $haystack) {
+                if (strpos(strtolower((string) $haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'status' => $status,
+            'connector_id' => $connectorId,
+            'provider' => $provider,
+            'error_code' => $errorCode,
+            'search' => $search,
+            'status_counts' => $statusCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function crm_smtp_sites_snapshot()
 {
     $rows = [];
@@ -6878,7 +6971,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.07-crm-sync-log-export',
+        'phase' => '5.08-crm-retry-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12729,7 +12822,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.07-crm-sync-log-export',
+        'phase' => '5.08-crm-retry-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15102,11 +15195,12 @@ if ($action === 'crm.delivery.watch.run') {
 }
 
 if ($action === 'crm.retry.list') {
-    $queue = app_read_json_file(retry_queue_path(), []);
+    $snapshot = crm_retry_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($queue),
-        'items' => $queue,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

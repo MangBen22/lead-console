@@ -596,6 +596,41 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </form>
                 <pre id="crmSyncDetail">No CRM sync detail loaded.</pre>
                 <h3>Retry Queue</h3>
+                <form id="crmRetryFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="crmRetryFilterStatus">Retry Status</label>
+                        <select id="crmRetryFilterStatus">
+                            <option value="">all</option>
+                            <option value="queued">queued</option>
+                            <option value="failed_missing_connector">failed_missing_connector</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterConnector">Connector ID</label>
+                        <input id="crmRetryFilterConnector" type="text" placeholder="connector_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterProvider">Provider</label>
+                        <input id="crmRetryFilterProvider" type="text" placeholder="hubspot">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterErrorCode">Error Code</label>
+                        <input id="crmRetryFilterErrorCode" type="text" placeholder="missing_webhook_url">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterSearch">Retry Search</label>
+                        <input id="crmRetryFilterSearch" type="text" placeholder="retry id or error">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterPage">Retry Page</label>
+                        <input id="crmRetryFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="crmRetryFilterLimit">Retry Limit</label>
+                        <input id="crmRetryFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshCrmRetryQueueBtn" type="button">Refresh Retry Queue</button>
+                </form>
                 <pre id="crmRetryQueue">Loading...</pre>
             </section>
 

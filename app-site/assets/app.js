@@ -268,6 +268,7 @@
   const refreshCrmSyncLogBtn = document.getElementById("refreshCrmSyncLogBtn");
   const loadCrmSyncDetailBtn = document.getElementById("loadCrmSyncDetailBtn");
   const downloadCrmSyncExportBtn = document.getElementById("downloadCrmSyncExportBtn");
+  const refreshCrmRetryQueueBtn = document.getElementById("refreshCrmRetryQueueBtn");
   const crmSyncLog = document.getElementById("crmSyncLog");
   const crmSyncDetail = document.getElementById("crmSyncDetail");
   const crmRetryQueue = document.getElementById("crmRetryQueue");
@@ -2871,10 +2872,29 @@
     downloadJsonFile(filename, data);
   }
 
+  function crmRetryFilters() {
+    const status = document.getElementById("crmRetryFilterStatus");
+    const connector = document.getElementById("crmRetryFilterConnector");
+    const provider = document.getElementById("crmRetryFilterProvider");
+    const errorCode = document.getElementById("crmRetryFilterErrorCode");
+    const search = document.getElementById("crmRetryFilterSearch");
+    const page = document.getElementById("crmRetryFilterPage");
+    const limit = document.getElementById("crmRetryFilterLimit");
+    return {
+      status: status && status.value ? status.value.trim() : "",
+      connector_id: connector && connector.value ? connector.value.trim() : "",
+      provider: provider && provider.value ? provider.value.trim() : "",
+      error_code: errorCode && errorCode.value ? errorCode.value.trim() : "",
+      search: search && search.value ? search.value.trim() : "",
+      page: page && page.value ? Number(page.value) : 1,
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    };
+  }
+
   async function loadRetryQueue() {
     if (!crmRetryQueue) return;
     try {
-      const data = await apiGet("crm.retry.list");
+      const data = await apiGetWithParams("crm.retry.list", crmRetryFilters());
       crmRetryQueue.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       crmRetryQueue.textContent = "Failed to load retry queue.";
@@ -4716,6 +4736,12 @@
   if (refreshCrmSyncLogBtn) {
     refreshCrmSyncLogBtn.addEventListener("click", async function () {
       await loadCrmSyncLog();
+    });
+  }
+
+  if (refreshCrmRetryQueueBtn) {
+    refreshCrmRetryQueueBtn.addEventListener("click", async function () {
+      await loadRetryQueue();
     });
   }
 
