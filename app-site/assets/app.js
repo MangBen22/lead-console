@@ -254,6 +254,8 @@
   const socialScheduleQueue = document.getElementById("socialScheduleQueue");
   const socialScheduleForm = document.getElementById("socialScheduleForm");
   const socialActivityFeed = document.getElementById("socialActivityFeed");
+  const refreshSocialInboxSummaryBtn = document.getElementById("refreshSocialInboxSummaryBtn");
+  const socialInboxSummary = document.getElementById("socialInboxSummary");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
@@ -2337,6 +2339,16 @@
     }
   }
 
+  async function loadSocialInboxSummary() {
+    if (!socialInboxSummary) return;
+    try {
+      const data = await apiGetWithParams("social.inbox.summary", { limit: 8 });
+      socialInboxSummary.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialInboxSummary.textContent = "Failed to load social inbox summary.";
+    }
+  }
+
   async function loadSocialPlatforms() {
     if (!socialPlatforms) return;
     try {
@@ -2686,6 +2698,7 @@
     await loadSocialScheduleSummary();
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
+    await loadSocialInboxSummary();
     await loadSocialInboxThreads();
     await loadSocialSyncLog();
     await loadSocialRetryQueue();
@@ -3308,6 +3321,7 @@
         if (socialSyncResult) {
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
+        await loadSocialInboxSummary();
         await loadSocialInboxThreads();
         await loadSocialActivityFeed();
         const socialData = await apiGet("social.summary");
@@ -3368,6 +3382,12 @@
   if (refreshSocialInboxBtn) {
     refreshSocialInboxBtn.addEventListener("click", async function () {
       await loadSocialInboxThreads();
+    });
+  }
+
+  if (refreshSocialInboxSummaryBtn) {
+    refreshSocialInboxSummaryBtn.addEventListener("click", async function () {
+      await loadSocialInboxSummary();
     });
   }
 

@@ -581,6 +581,58 @@ function social_schedule_snapshot($limit = 10)
     ];
 }
 
+function social_inbox_summary_snapshot($limit = 10)
+{
+    $rows = social_inbox_threads_rows(true);
+    $summary = [
+        'total' => count($rows),
+        'open' => 0,
+        'replied' => 0,
+    ];
+    $providerMap = [];
+    $openThreads = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $status = strtolower((string) ($row['status'] ?? 'open'));
+        $provider = (string) ($row['provider'] ?? 'unknown');
+        if (!isset($providerMap[$provider])) {
+            $providerMap[$provider] = [
+                'provider' => $provider,
+                'total' => 0,
+                'open' => 0,
+                'replied' => 0,
+            ];
+        }
+        $providerMap[$provider]['total']++;
+        if ($status === 'replied') {
+            $summary['replied']++;
+            $providerMap[$provider]['replied']++;
+        } else {
+            $summary['open']++;
+            $providerMap[$provider]['open']++;
+            $openThreads[] = [
+                'thread_id' => (string) ($row['thread_id'] ?? ''),
+                'provider' => $provider,
+                'account_label' => (string) ($row['account_label'] ?? ''),
+                'subject' => (string) ($row['subject'] ?? ''),
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+            ];
+        }
+    }
+    usort($openThreads, static function ($a, $b) {
+        return strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
+    });
+    return [
+        'summary' => $summary,
+        'providers' => array_values($providerMap),
+        'oldest_open' => isset($openThreads[0]) ? $openThreads[0] : null,
+        'open_threads' => array_slice($openThreads, 0, $limit),
+    ];
+}
+
 function social_platform_catalog()
 {
     return [
@@ -4387,7 +4439,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.43-social-retry-automation',
+        'phase' => '2.44-social-inbox-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7469,7 +7521,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.43-social-retry-automation',
+        'phase' => '2.44-social-inbox-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10217,6 +10269,21 @@ if ($action === 'social.inbox.list') {
         'ok' => true,
         'count' => count($rows),
         'items' => $rows,
+    ]);
+}
+
+if ($action === 'social.inbox.summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = social_inbox_summary_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'providers' => $snapshot['providers'],
+        'oldest_open' => $snapshot['oldest_open'],
+        'open_threads' => $snapshot['open_threads'],
     ]);
 }
 
