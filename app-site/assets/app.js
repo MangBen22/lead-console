@@ -280,6 +280,7 @@
   const runCrmSmtpWatchBtn = document.getElementById("runCrmSmtpWatchBtn");
   const crmSmtpForm = document.getElementById("crmSmtpForm");
   const crmSmtpSummary = document.getElementById("crmSmtpSummary");
+  const crmSmtpDetail = document.getElementById("crmSmtpDetail");
   const crmSmtpResult = document.getElementById("crmSmtpResult");
   const crmSmtpWatchView = document.getElementById("crmSmtpWatchView");
   const refreshCrmEmailTemplatesBtn = document.getElementById("refreshCrmEmailTemplatesBtn");
@@ -2965,6 +2966,31 @@
     }
   }
 
+  async function loadCrmSmtpDetail() {
+    if (!crmSmtpDetail) return;
+    const siteId = document.getElementById("crmSmtpDetailSiteId");
+    const limit = document.getElementById("crmSmtpDetailLimit");
+    if (!siteId || !siteId.value) {
+      crmSmtpDetail.textContent = "Enter a site ID to load SMTP detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("crm.smtp.detail", {
+        site_id: siteId.value.trim(),
+        limit: limit && limit.value ? Number(limit.value) : 10,
+      });
+      crmSmtpDetail.textContent = JSON.stringify(data, null, 2);
+      if (data && data.site) {
+        const smtpSiteId = document.getElementById("crmSmtpSiteId");
+        const templateSiteId = document.getElementById("crmEmailTemplateSiteId");
+        if (smtpSiteId) smtpSiteId.value = data.site.site_id || "";
+        if (templateSiteId) templateSiteId.value = data.site.site_id || "";
+      }
+    } catch (err) {
+      crmSmtpDetail.textContent = "Failed to load CRM SMTP detail.";
+    }
+  }
+
   async function loadCrmSmtpWatch() {
     if (!crmSmtpWatchView) return;
     try {
@@ -4802,6 +4828,13 @@
   if (loadCrmRetryDetailBtn) {
     loadCrmRetryDetailBtn.addEventListener("click", async function () {
       await loadCrmRetryDetail();
+    });
+  }
+
+  const loadCrmSmtpDetailBtn = document.getElementById("loadCrmSmtpDetailBtn");
+  if (loadCrmSmtpDetailBtn) {
+    loadCrmSmtpDetailBtn.addEventListener("click", async function () {
+      await loadCrmSmtpDetail();
     });
   }
 

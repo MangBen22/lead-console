@@ -726,6 +726,70 @@ function crm_smtp_summary_snapshot($query = [])
     ];
 }
 
+function crm_smtp_detail_snapshot($siteId, $limit = 10)
+{
+    $id = trim((string) $siteId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'site_id is required.'];
+    }
+    $site = site_by_id($id);
+    if (!is_array($site)) {
+        return ['ok' => false, 'error' => 'Site not found.'];
+    }
+
+    $res = app_bridge_request($site, 'GET', 'bridge/smtp-health');
+    $health = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['smtp_health']) && is_array($res['data']['smtp_health']))
+        ? $res['data']['smtp_health']
+        : [];
+    $confirmation = (!empty($res['ok']) && is_array($res['data']) && isset($res['data']['test_confirmation']) && is_array($res['data']['test_confirmation']))
+        ? $res['data']['test_confirmation']
+        : [];
+
+    $state = app_read_json_file(crm_smtp_watch_state_path(), []);
+    $runs = app_read_json_file(crm_smtp_watch_runs_path(), []);
+    $siteState = isset($state['sites'][$id]) && is_array($state['sites'][$id]) ? $state['sites'][$id] : [];
+    $siteRuns = [];
+    foreach ($runs as $run) {
+        if (!is_array($run) || empty($run['items']) || !is_array($run['items'])) {
+            continue;
+        }
+        foreach ($run['items'] as $item) {
+            if (!is_array($item) || (string) ($item['site_id'] ?? '') !== $id) {
+                continue;
+            }
+            $siteRuns[] = [
+                'run_id' => (string) ($run['run_id'] ?? ''),
+                'source' => (string) ($run['source'] ?? ''),
+                'created_at' => (string) ($run['created_at'] ?? ''),
+                'item' => $item,
+            ];
+            break;
+        }
+    }
+
+    return [
+        'ok' => true,
+        'site' => [
+            'site_id' => (string) ($site['site_id'] ?? ''),
+            'label' => (string) ($site['label'] ?? $site['base_url']),
+            'base_url' => (string) ($site['base_url'] ?? ''),
+        ],
+        'meta' => [
+            'bridge_ok' => !empty($res['ok']) ? 1 : 0,
+            'bridge_status' => (int) ($res['status'] ?? 0),
+            'bridge_error' => (string) ($res['error'] ?? ''),
+            'connected' => !empty($health['connected']) ? 1 : 0,
+            'pending_confirmation' => !empty($confirmation['pending']) ? 1 : 0,
+            'confirmed' => !empty($confirmation['confirmed']) ? 1 : 0,
+            'watch_runs_count' => count($siteRuns),
+        ],
+        'smtp_health' => $health,
+        'test_confirmation' => $confirmation,
+        'watch_state' => $siteState,
+        'watch_runs' => array_slice($siteRuns, 0, max(1, $limit)),
+    ];
+}
+
 function crm_email_templates_fetch($site)
 {
     $res = app_bridge_request($site, 'GET', 'bridge/email-templates');
@@ -7130,7 +7194,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.11-crm-smtp-filters',
+        'phase' => '5.12-crm-smtp-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -12981,7 +13045,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.11-crm-smtp-filters',
+        'phase' => '5.12-crm-smtp-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15465,6 +15529,16 @@ if ($action === 'crm.smtp.summary') {
         'summary' => $snapshot['summary'],
         'sites' => $snapshot['sites'],
     ]);
+}
+
+if ($action === 'crm.smtp.detail') {
+    $siteId = isset($_GET['site_id']) ? (string) $_GET['site_id'] : '';
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = crm_smtp_detail_snapshot($siteId, $limit);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'crm.smtp.probe') {
