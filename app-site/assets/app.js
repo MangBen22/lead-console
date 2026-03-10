@@ -418,6 +418,7 @@
   const refreshSeoActionPlanBtn = document.getElementById("refreshSeoActionPlanBtn");
   const downloadSeoActionPlanExportBtn = document.getElementById("downloadSeoActionPlanExportBtn");
   const refreshSeoOpportunitiesBtn = document.getElementById("refreshSeoOpportunitiesBtn");
+  const downloadSeoOpportunitiesExportBtn = document.getElementById("downloadSeoOpportunitiesExportBtn");
   const refreshSeoRegressionsBtn = document.getElementById("refreshSeoRegressionsBtn");
   const runSeoRegressionsBtn = document.getElementById("runSeoRegressionsBtn");
   const downloadSeoRegressionsExportBtn = document.getElementById("downloadSeoRegressionsExportBtn");
@@ -7039,6 +7040,19 @@
   if (refreshSeoOpportunitiesBtn) {
     refreshSeoOpportunitiesBtn.addEventListener("click", async function () {
       await loadSeoOpportunities();
+    });
+  }
+
+  if (downloadSeoOpportunitiesExportBtn) {
+    downloadSeoOpportunitiesExportBtn.addEventListener("click", async function () {
+      const projectId = document.getElementById("seoProjectId");
+      const data = await apiGetWithParams("seo.opportunities.export", {
+        project_id: projectId && projectId.value ? projectId.value.trim() : "",
+      });
+      downloadJsonFile(data.filename || "seo-opportunities-export.json", data.export || data);
+      if (seoResult) {
+        seoResult.textContent = JSON.stringify(data, null, 2);
+      }
     });
   }
 
