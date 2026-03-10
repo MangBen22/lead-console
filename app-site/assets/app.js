@@ -244,6 +244,7 @@
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
   const refreshSocialInboxBtn = document.getElementById("refreshSocialInboxBtn");
+  const refreshSocialInboxWorkloadBtn = document.getElementById("refreshSocialInboxWorkloadBtn");
   const socialPlatforms = document.getElementById("socialPlatforms");
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
@@ -261,6 +262,7 @@
   const socialActivityFeed = document.getElementById("socialActivityFeed");
   const refreshSocialInboxSummaryBtn = document.getElementById("refreshSocialInboxSummaryBtn");
   const socialInboxSummary = document.getElementById("socialInboxSummary");
+  const socialInboxWorkload = document.getElementById("socialInboxWorkload");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const socialInboxUpdateForm = document.getElementById("socialInboxUpdateForm");
@@ -2371,6 +2373,16 @@
     }
   }
 
+  async function loadSocialInboxWorkload() {
+    if (!socialInboxWorkload) return;
+    try {
+      const data = await apiGetWithParams("social.inbox.workload", { limit: 8 });
+      socialInboxWorkload.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialInboxWorkload.textContent = "Failed to load social inbox workload.";
+    }
+  }
+
   async function refreshSocialModuleSummary() {
     const socialPanel = document.getElementById("modSocial");
     if (!socialPanel) return;
@@ -2754,6 +2766,7 @@
     await loadSocialScheduleQueue();
     await loadSocialActivityFeed();
     await loadSocialInboxSummary();
+    await loadSocialInboxWorkload();
     await loadSocialInboxThreads();
     await loadSocialSyncLog();
     await loadSocialRetryQueue();
@@ -3388,6 +3401,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialInboxSummary();
+        await loadSocialInboxWorkload();
         await loadSocialInboxThreads();
         await loadSocialActivityFeed();
         await refreshSocialModuleSummary();
@@ -3440,6 +3454,7 @@
           socialSyncResult.textContent = JSON.stringify(result, null, 2);
         }
         await loadSocialInboxSummary();
+        await loadSocialInboxWorkload();
         await loadSocialInboxThreads();
         await loadSocialActivityFeed();
         await refreshSocialModuleSummary();
@@ -3515,6 +3530,12 @@
   if (refreshSocialInboxSummaryBtn) {
     refreshSocialInboxSummaryBtn.addEventListener("click", async function () {
       await loadSocialInboxSummary();
+    });
+  }
+
+  if (refreshSocialInboxWorkloadBtn) {
+    refreshSocialInboxWorkloadBtn.addEventListener("click", async function () {
+      await loadSocialInboxWorkload();
     });
   }
 

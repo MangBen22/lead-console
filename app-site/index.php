@@ -560,9 +560,11 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <h2>Social Inbox</h2>
                 <div class="actions">
                     <button id="refreshSocialInboxSummaryBtn" type="button">Refresh Inbox Summary</button>
+                    <button id="refreshSocialInboxWorkloadBtn" type="button">Refresh Inbox Workload</button>
                     <button id="refreshSocialInboxBtn" type="button">Refresh Social Inbox</button>
                 </div>
                 <pre id="socialInboxSummary">Loading...</pre>
+                <pre id="socialInboxWorkload">Loading...</pre>
                 <pre id="socialInboxThreads">Loading...</pre>
                 <form id="socialInboxReplyForm" class="inline-form">
                     <div class="form-row">

@@ -731,6 +731,7 @@ function social_operations_snapshot($limit = 5)
     $watchRuns = app_read_json_file(social_watch_runs_path(), []);
     $schedule = social_schedule_snapshot($limit);
     $inbox = social_inbox_summary_snapshot($limit);
+    $inboxWorkload = social_inbox_workload_snapshot($limit);
     $draftValidation = social_draft_validation_snapshot(collect_social_drafts());
     $retryQueue = app_read_json_file(social_retry_queue_path(), []);
     $syncLog = app_read_json_file(social_sync_log_path(), []);
@@ -747,13 +748,116 @@ function social_operations_snapshot($limit = 5)
             'open_inbox_threads' => (int) (($inbox['summary']['open'] ?? 0)),
             'pending_inbox_threads' => (int) (($inbox['summary']['pending'] ?? 0)),
             'inbox_backlog_threads' => (int) (($inbox['summary']['backlog'] ?? 0)),
+            'high_priority_inbox_backlog' => (int) (($inboxWorkload['summary']['high_priority_backlog'] ?? 0)),
+            'unassigned_inbox_backlog' => (int) (($inboxWorkload['summary']['unassigned_backlog'] ?? 0)),
         ],
         'latest_watch_run' => isset($watchRuns[0]) && is_array($watchRuns[0]) ? $watchRuns[0] : null,
         'latest_sync' => isset($syncLog[0]) && is_array($syncLog[0]) ? $syncLog[0] : null,
         'schedule' => $schedule,
         'inbox' => $inbox,
+        'inbox_workload' => $inboxWorkload,
         'draft_validation' => $draftValidation,
         'retry_queue_count' => count($retryQueue),
+    ];
+}
+
+function social_inbox_workload_snapshot($limit = 10)
+{
+    $rows = social_inbox_threads_rows(true);
+    $summary = [
+        'backlog_total' => 0,
+        'high_priority_backlog' => 0,
+        'unassigned_backlog' => 0,
+    ];
+    $priorityCounts = [
+        'high' => 0,
+        'normal' => 0,
+        'low' => 0,
+    ];
+    $ownerMap = [];
+    $unassigned = [];
+
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $row = social_normalize_inbox_thread($row);
+        $status = (string) ($row['status'] ?? 'open');
+        if (!in_array($status, ['open', 'pending'], true)) {
+            continue;
+        }
+        $summary['backlog_total']++;
+        $priority = (string) ($row['priority'] ?? 'normal');
+        if (!isset($priorityCounts[$priority])) {
+            $priorityCounts[$priority] = 0;
+        }
+        $priorityCounts[$priority]++;
+        if ($priority === 'high') {
+            $summary['high_priority_backlog']++;
+        }
+
+        $owner = trim((string) ($row['owner'] ?? ''));
+        $ownerKey = $owner !== '' ? strtolower($owner) : '';
+        if ($ownerKey === '') {
+            $summary['unassigned_backlog']++;
+            $unassigned[] = [
+                'thread_id' => (string) ($row['thread_id'] ?? ''),
+                'provider' => (string) ($row['provider'] ?? ''),
+                'account_label' => (string) ($row['account_label'] ?? ''),
+                'subject' => (string) ($row['subject'] ?? ''),
+                'priority' => $priority,
+                'status' => $status,
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+            ];
+            continue;
+        }
+        if (!isset($ownerMap[$ownerKey])) {
+            $ownerMap[$ownerKey] = [
+                'owner' => $owner,
+                'backlog' => 0,
+                'high_priority' => 0,
+                'open' => 0,
+                'pending' => 0,
+            ];
+        }
+        $ownerMap[$ownerKey]['backlog']++;
+        if ($priority === 'high') {
+            $ownerMap[$ownerKey]['high_priority']++;
+        }
+        if ($status === 'pending') {
+            $ownerMap[$ownerKey]['pending']++;
+        } else {
+            $ownerMap[$ownerKey]['open']++;
+        }
+    }
+
+    $owners = array_values($ownerMap);
+    usort($owners, static function ($a, $b) {
+        $left = (int) ($a['backlog'] ?? 0);
+        $right = (int) ($b['backlog'] ?? 0);
+        if ($left === $right) {
+            return strcmp((string) ($a['owner'] ?? ''), (string) ($b['owner'] ?? ''));
+        }
+        return ($left < $right) ? 1 : -1;
+    });
+    usort($unassigned, static function ($a, $b) {
+        $leftPriority = (string) ($a['priority'] ?? 'normal');
+        $rightPriority = (string) ($b['priority'] ?? 'normal');
+        $priorityOrder = ['high' => 3, 'normal' => 2, 'low' => 1];
+        $leftScore = isset($priorityOrder[$leftPriority]) ? $priorityOrder[$leftPriority] : 0;
+        $rightScore = isset($priorityOrder[$rightPriority]) ? $priorityOrder[$rightPriority] : 0;
+        if ($leftScore === $rightScore) {
+            return strcmp((string) ($a['created_at'] ?? ''), (string) ($b['created_at'] ?? ''));
+        }
+        return ($leftScore < $rightScore) ? 1 : -1;
+    });
+
+    return [
+        'summary' => $summary,
+        'priority_counts' => $priorityCounts,
+        'owners' => array_slice($owners, 0, $limit),
+        'unassigned_threads' => array_slice($unassigned, 0, $limit),
     ];
 }
 
@@ -4661,7 +4765,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.50-social-inbox-status-summary',
+        'phase' => '2.51-social-inbox-workload-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7950,7 +8054,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.50-social-inbox-status-summary',
+        'phase' => '2.51-social-inbox-workload-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10757,6 +10861,21 @@ if ($action === 'social.inbox.summary') {
         'oldest_backlog' => $snapshot['oldest_backlog'],
         'open_threads' => $snapshot['open_threads'],
         'backlog_threads' => $snapshot['backlog_threads'],
+    ]);
+}
+
+if ($action === 'social.inbox.workload') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = social_inbox_workload_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'priority_counts' => $snapshot['priority_counts'],
+        'owners' => $snapshot['owners'],
+        'unassigned_threads' => $snapshot['unassigned_threads'],
     ]);
 }
 
