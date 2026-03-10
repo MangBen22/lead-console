@@ -633,6 +633,36 @@ function social_inbox_summary_snapshot($limit = 10)
     ];
 }
 
+function social_operations_snapshot($limit = 5)
+{
+    $watchState = app_read_json_file(social_watch_state_path(), []);
+    $watchRuns = app_read_json_file(social_watch_runs_path(), []);
+    $schedule = social_schedule_snapshot($limit);
+    $inbox = social_inbox_summary_snapshot($limit);
+    $draftValidation = social_draft_validation_snapshot(collect_social_drafts());
+    $retryQueue = app_read_json_file(social_retry_queue_path(), []);
+    $syncLog = app_read_json_file(social_sync_log_path(), []);
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'watch_blocked_connectors' => (int) (($watchState['summary']['blocked_connectors'] ?? 0)),
+            'watch_expired_connectors' => (int) (($watchState['summary']['expired_connectors'] ?? 0)),
+            'draft_validation_blocked_connectors' => (int) (($draftValidation['summary']['blocked_connectors'] ?? 0)),
+            'schedule_due_items' => (int) (($schedule['summary']['due'] ?? 0)),
+            'schedule_failed_items' => (int) (($schedule['summary']['failed'] ?? 0)),
+            'retry_backlog' => count($retryQueue),
+            'open_inbox_threads' => (int) (($inbox['summary']['open'] ?? 0)),
+        ],
+        'latest_watch_run' => isset($watchRuns[0]) && is_array($watchRuns[0]) ? $watchRuns[0] : null,
+        'latest_sync' => isset($syncLog[0]) && is_array($syncLog[0]) ? $syncLog[0] : null,
+        'schedule' => $schedule,
+        'inbox' => $inbox,
+        'draft_validation' => $draftValidation,
+        'retry_queue_count' => count($retryQueue),
+    ];
+}
+
 function social_schedule_target_validation_snapshot($connectorIds)
 {
     $ids = [];
@@ -4537,7 +4567,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.47-social-schedule-target-validation',
+        'phase' => '2.48-social-operations-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7805,7 +7835,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.47-social-schedule-target-validation',
+        'phase' => '2.48-social-operations-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10201,6 +10231,18 @@ if ($action === 'social.summary') {
         ],
         'last_sync' => $lastSync,
         'last_activity' => $lastActivity,
+    ]);
+}
+
+if ($action === 'social.operations.snapshot') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 5;
+    if ($limit <= 0) {
+        $limit = 5;
+    }
+    $snapshot = social_operations_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'snapshot' => $snapshot,
     ]);
 }
 

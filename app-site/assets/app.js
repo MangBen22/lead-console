@@ -239,6 +239,7 @@
   const refreshSocialCapabilitiesBtn = document.getElementById("refreshSocialCapabilitiesBtn");
   const refreshSocialWatchBtn = document.getElementById("refreshSocialWatchBtn");
   const runSocialWatchBtn = document.getElementById("runSocialWatchBtn");
+  const refreshSocialOpsSnapshotBtn = document.getElementById("refreshSocialOpsSnapshotBtn");
   const refreshSocialDraftsBtn = document.getElementById("refreshSocialDraftsBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialActivityBtn = document.getElementById("refreshSocialActivityBtn");
@@ -246,6 +247,7 @@
   const socialPlatforms = document.getElementById("socialPlatforms");
   const socialCapabilitiesSummary = document.getElementById("socialCapabilitiesSummary");
   const socialWatchView = document.getElementById("socialWatchView");
+  const socialOpsSnapshotView = document.getElementById("socialOpsSnapshotView");
   const socialProviderProfile = document.getElementById("socialProviderProfile");
   const socialDraftsPreview = document.getElementById("socialDraftsPreview");
   const socialDraftValidationView = document.getElementById("socialDraftValidationView");
@@ -2444,6 +2446,16 @@
     }
   }
 
+  async function loadSocialOperationsSnapshot() {
+    if (!socialOpsSnapshotView) return;
+    try {
+      const data = await apiGetWithParams("social.operations.snapshot", { limit: 5 });
+      socialOpsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialOpsSnapshotView.textContent = "Failed to load social operations snapshot.";
+    }
+  }
+
   async function loadSocialDraftsPreview() {
     if (!socialDraftsPreview) return;
     try {
@@ -2716,6 +2728,7 @@
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
     await loadSocialWatch();
+    await loadSocialOperationsSnapshot();
     await loadSocialDraftsPreview();
     await loadSocialDraftValidation();
     await loadCrmSyncLog();
@@ -3202,6 +3215,7 @@
         await loadSocialConnectors();
         await loadSocialCapabilitiesSummary();
         await loadSocialWatch();
+        await loadSocialOperationsSnapshot();
         await loadSocialDraftsPreview();
         await loadSocialDraftValidation();
         await loadSocialActivityFeed();
@@ -3227,6 +3241,7 @@
         await loadSocialConnectors();
         await loadSocialCapabilitiesSummary();
         await loadSocialWatch();
+        await loadSocialOperationsSnapshot();
         await loadSocialDraftsPreview();
         await loadSocialDraftValidation();
         await loadSocialActivityFeed();
@@ -3387,6 +3402,13 @@
   if (refreshSocialWatchBtn) {
     refreshSocialWatchBtn.addEventListener("click", async function () {
       await loadSocialWatch();
+      await loadSocialOperationsSnapshot();
+    });
+  }
+
+  if (refreshSocialOpsSnapshotBtn) {
+    refreshSocialOpsSnapshotBtn.addEventListener("click", async function () {
+      await loadSocialOperationsSnapshot();
     });
   }
 
