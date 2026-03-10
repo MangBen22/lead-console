@@ -215,6 +215,7 @@
   const refreshLeadsListBtn = document.getElementById("refreshLeadsListBtn");
   const refreshLeadsPushPlanBtn = document.getElementById("refreshLeadsPushPlanBtn");
   const refreshLeadsQualityBtn = document.getElementById("refreshLeadsQualityBtn");
+  const refreshLeadsDeliveryHistoryBtn = document.getElementById("refreshLeadsDeliveryHistoryBtn");
   const runLeadsCrmSyncBtn = document.getElementById("runLeadsCrmSyncBtn");
   const runLeadsRetryQueueBtn = document.getElementById("runLeadsRetryQueueBtn");
   const downloadLeadsExportBtn = document.getElementById("downloadLeadsExportBtn");
@@ -223,6 +224,7 @@
   const leadsPushPlanView = document.getElementById("leadsPushPlanView");
   const leadsPushResultView = document.getElementById("leadsPushResultView");
   const leadsQualityView = document.getElementById("leadsQualityView");
+  const leadsDeliveryHistoryView = document.getElementById("leadsDeliveryHistoryView");
   const crmConnectors = document.getElementById("crmConnectors");
   const crmConnectorForm = document.getElementById("crmConnectorForm");
   const runCrmSyncBtn = document.getElementById("runCrmSyncBtn");
@@ -2287,6 +2289,16 @@
     }
   }
 
+  async function loadLeadsDeliveryHistory() {
+    if (!leadsDeliveryHistoryView) return;
+    try {
+      const data = await apiGetWithParams("leads.delivery.history", { limit: 8 });
+      leadsDeliveryHistoryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      leadsDeliveryHistoryView.textContent = "Failed to load leads delivery history.";
+    }
+  }
+
   async function refreshLeadsAndCrmModuleCards() {
     const leadsPanel = document.getElementById("modLeads");
     const crmPanel = document.getElementById("modCrm");
@@ -2860,6 +2872,7 @@
     await loadLeadsList();
     await loadLeadsPushPlan();
     await loadLeadsQuality();
+    await loadLeadsDeliveryHistory();
     await loadCrmConnectors();
     await loadSocialPlatforms();
     await loadSocialCapabilitiesSummary();
@@ -4097,6 +4110,12 @@
     });
   }
 
+  if (refreshLeadsDeliveryHistoryBtn) {
+    refreshLeadsDeliveryHistoryBtn.addEventListener("click", async function () {
+      await loadLeadsDeliveryHistory();
+    });
+  }
+
   if (runLeadsCrmSyncBtn) {
     runLeadsCrmSyncBtn.addEventListener("click", async function () {
       const result = await apiPost("crm.push.sync", {});
@@ -4110,6 +4129,7 @@
       await loadLeadsInventory();
       await loadLeadsList();
       await loadLeadsQuality();
+      await loadLeadsDeliveryHistory();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();
@@ -4127,6 +4147,7 @@
       }
       await loadLeadsPushPlan();
       await loadLeadsQuality();
+      await loadLeadsDeliveryHistory();
       await loadCrmSyncLog();
       await loadRetryQueue();
       await refreshLeadsAndCrmModuleCards();

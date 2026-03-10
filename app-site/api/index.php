@@ -715,6 +715,37 @@ function leads_quality_snapshot($limit = 10)
     ];
 }
 
+function leads_delivery_history_snapshot($limit = 10)
+{
+    $syncLog = app_read_json_file(app_storage_path('crm_sync_log.json'), []);
+    $retryQueue = app_read_json_file(retry_queue_path(), []);
+    $items = [];
+    foreach ($syncLog as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $items[] = [
+            'sync_id' => (string) ($row['sync_id'] ?? ''),
+            'created_at' => (string) ($row['created_at'] ?? ''),
+            'status' => (string) ($row['status'] ?? ''),
+            'approved_total' => (int) ($row['approved_total'] ?? 0),
+            'connector_count' => (int) ($row['connector_count'] ?? 0),
+            'site_count' => (int) ($row['site_count'] ?? 0),
+        ];
+    }
+
+    return [
+        'summary' => [
+            'sync_count' => count($syncLog),
+            'retry_queue_count' => count($retryQueue),
+            'last_sync_id' => isset($items[0]) ? (string) ($items[0]['sync_id'] ?? '') : '',
+            'last_sync_status' => isset($items[0]) ? (string) ($items[0]['status'] ?? '') : '',
+        ],
+        'items' => array_slice($items, 0, $limit),
+        'retry_queue' => array_slice($retryQueue, 0, $limit),
+    ];
+}
+
 function normalize_error_code($message)
 {
     $m = strtolower((string) $message);
@@ -5226,7 +5257,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.58-leads-export',
+        'phase' => '2.59-leads-delivery-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -8617,7 +8648,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.58-leads-export',
+        'phase' => '2.59-leads-delivery-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -10505,6 +10536,20 @@ if ($action === 'leads.export') {
         'ok' => true,
         'filename' => 'leads_export_' . gmdate('Ymd_His') . '.json',
         'export' => $payload,
+    ]);
+}
+
+if ($action === 'leads.delivery.history') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $snapshot = leads_delivery_history_snapshot($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
+        'retry_queue' => $snapshot['retry_queue'],
     ]);
 }
 

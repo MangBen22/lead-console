@@ -284,8 +284,10 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="leadsPushResultView">No leads push action yet.</pre>
                 <div class="actions">
                     <button id="refreshLeadsQualityBtn" type="button">Refresh Leads Quality</button>
+                    <button id="refreshLeadsDeliveryHistoryBtn" type="button">Refresh Delivery History</button>
                 </div>
                 <pre id="leadsQualityView">Loading...</pre>
+                <pre id="leadsDeliveryHistoryView">Loading...</pre>
             </section>
 
             <section class="api-status">
