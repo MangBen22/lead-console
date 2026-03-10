@@ -5850,7 +5850,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.69-crm-delivery-connector-detail',
+        'phase' => '2.70-crm-delivery-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9241,7 +9241,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.69-crm-delivery-connector-detail',
+        'phase' => '2.70-crm-delivery-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -11479,6 +11479,30 @@ if ($action === 'crm.delivery.connector_detail') {
     }
     $snapshot = crm_delivery_connector_detail_snapshot($connectorId, $limit);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 400);
+}
+
+if ($action === 'crm.delivery.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    $connectorId = isset($_GET['connector_id']) ? trim((string) $_GET['connector_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'summary' => crm_delivery_summary_snapshot($limit),
+    ];
+    if ($connectorId !== '') {
+        $payload['connector_detail'] = crm_delivery_connector_detail_snapshot($connectorId, $limit);
+    }
+    audit_event('crm', 'delivery.export', [
+        'connector_id' => $connectorId,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'crm_delivery_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'crm.retry.list') {

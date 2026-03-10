@@ -245,6 +245,7 @@
   const runRetryQueueBtn = document.getElementById("runRetryQueueBtn");
   const refreshCrmDeliverySummaryBtn = document.getElementById("refreshCrmDeliverySummaryBtn");
   const refreshCrmDeliveryDetailBtn = document.getElementById("refreshCrmDeliveryDetailBtn");
+  const downloadCrmDeliveryExportBtn = document.getElementById("downloadCrmDeliveryExportBtn");
   const crmSyncResult = document.getElementById("crmSyncResult");
   const crmDeliverySummary = document.getElementById("crmDeliverySummary");
   const crmDeliveryConnectorDetail = document.getElementById("crmDeliveryConnectorDetail");
@@ -2582,6 +2583,20 @@
     }
   }
 
+  async function downloadCrmDeliveryExport() {
+    const connectorId = document.getElementById("crmDeliveryConnectorId");
+    const limit = document.getElementById("crmDeliveryConnectorLimit");
+    const params = {
+      limit: limit && limit.value ? limit.value.trim() : "10",
+    };
+    if (connectorId && connectorId.value) {
+      params.connector_id = connectorId.value.trim();
+    }
+    const data = await apiGetWithParams("crm.delivery.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("crm-delivery-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   async function loadRetryQueue() {
     if (!crmRetryQueue) return;
     try {
@@ -3328,6 +3343,12 @@
   if (refreshCrmDeliveryDetailBtn) {
     refreshCrmDeliveryDetailBtn.addEventListener("click", async function () {
       await loadCrmDeliveryConnectorDetail();
+    });
+  }
+
+  if (downloadCrmDeliveryExportBtn) {
+    downloadCrmDeliveryExportBtn.addEventListener("click", async function () {
+      await downloadCrmDeliveryExport();
     });
   }
 
