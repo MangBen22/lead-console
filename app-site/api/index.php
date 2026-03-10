@@ -4923,6 +4923,76 @@ function seo_operations_history_summary($limit = 20)
     ];
 }
 
+function seo_operations_issues_summary($limit = 10)
+{
+    $snapshot = seo_operations_snapshot($limit);
+    $summary = isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [];
+    $issues = [];
+
+    if ((int) ($summary['latest_critical_issues'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'critical',
+            'category' => 'audits',
+            'message' => 'Latest SEO audit still contains critical issues.',
+            'count' => (int) ($summary['latest_critical_issues'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['regression_projects'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'regressions',
+            'message' => 'SEO regression watch reports active regressions.',
+            'count' => (int) ($summary['regression_projects'] ?? 0),
+        ];
+    }
+    if ((float) ($summary['latest_audit_score'] ?? 0) > 0 && (float) ($summary['latest_audit_score'] ?? 0) < 70) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'audits',
+            'message' => 'Latest SEO audit score is below target.',
+            'count' => (int) ($summary['latest_audit_score'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['active_projects'] ?? 0) === 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'category' => 'projects',
+            'message' => 'No active SEO projects are configured.',
+            'count' => 0,
+        ];
+    }
+    if ((int) ($summary['active_extension_sessions'] ?? 0) === 0 && (int) ($summary['project_count'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'info',
+            'category' => 'extension_sessions',
+            'message' => 'No active SEO extension sessions are available.',
+            'count' => 0,
+        ];
+    }
+
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($issues as $issue) {
+        $severity = (string) ($issue['severity'] ?? 'info');
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+        ],
+        'issues' => $issues,
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8312,7 +8382,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.39-seo-operations-history-summary',
+        'phase' => '5.40-seo-operations-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14163,7 +14233,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.39-seo-operations-history-summary',
+        'phase' => '5.40-seo-operations-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17519,6 +17589,20 @@ if ($action === 'seo.operations.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+    ]);
+}
+
+if ($action === 'seo.operations.issues_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $issues = seo_operations_issues_summary($limit);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
     ]);
 }
 
