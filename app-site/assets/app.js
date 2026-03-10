@@ -408,6 +408,7 @@
   const refreshSeoHistoryBtn = document.getElementById("refreshSeoHistoryBtn");
   const refreshSeoExtensionSummaryBtn = document.getElementById("refreshSeoExtensionSummaryBtn");
   const refreshSeoAuditsBtn = document.getElementById("refreshSeoAuditsBtn");
+  const refreshSeoExtensionEventsBtn = document.getElementById("refreshSeoExtensionEventsBtn");
   const downloadSeoAuditsExportBtn = document.getElementById("downloadSeoAuditsExportBtn");
   const downloadSeoReportBtn = document.getElementById("downloadSeoReportBtn");
   const refreshSeoProjectSnapshotBtn = document.getElementById("refreshSeoProjectSnapshotBtn");
@@ -430,6 +431,13 @@
   const seoAudits = document.getElementById("seoAudits");
   const loadSeoAuditDetailBtn = document.getElementById("loadSeoAuditDetailBtn");
   const seoAuditDetail = document.getElementById("seoAuditDetail");
+  const seoExtensionEventFilterProjectId = document.getElementById("seoExtensionEventFilterProjectId");
+  const seoExtensionEventFilterSessionId = document.getElementById("seoExtensionEventFilterSessionId");
+  const seoExtensionEventFilterSearch = document.getElementById("seoExtensionEventFilterSearch");
+  const seoExtensionEventFilterMinScore = document.getElementById("seoExtensionEventFilterMinScore");
+  const seoExtensionEventFilterMaxScore = document.getElementById("seoExtensionEventFilterMaxScore");
+  const seoExtensionEventFilterPage = document.getElementById("seoExtensionEventFilterPage");
+  const seoExtensionEventFilterLimit = document.getElementById("seoExtensionEventFilterLimit");
   const seoExtensionEvents = document.getElementById("seoExtensionEvents");
   const seoExtensionSessions = document.getElementById("seoExtensionSessions");
   const seoExtensionSessionForm = document.getElementById("seoExtensionSessionForm");
@@ -4096,7 +4104,15 @@
   async function loadSeoExtensionEvents() {
     if (!seoExtensionEvents) return;
     try {
-      const data = await apiGet("seo.extension.events.list");
+      const data = await apiGetWithParams("seo.extension.events.list", {
+        project_id: seoExtensionEventFilterProjectId && seoExtensionEventFilterProjectId.value ? seoExtensionEventFilterProjectId.value.trim() : "",
+        session_id: seoExtensionEventFilterSessionId && seoExtensionEventFilterSessionId.value ? seoExtensionEventFilterSessionId.value.trim() : "",
+        search: seoExtensionEventFilterSearch && seoExtensionEventFilterSearch.value ? seoExtensionEventFilterSearch.value.trim() : "",
+        min_score: seoExtensionEventFilterMinScore && seoExtensionEventFilterMinScore.value ? seoExtensionEventFilterMinScore.value : "",
+        max_score: seoExtensionEventFilterMaxScore && seoExtensionEventFilterMaxScore.value ? seoExtensionEventFilterMaxScore.value : "",
+        page: seoExtensionEventFilterPage && seoExtensionEventFilterPage.value ? seoExtensionEventFilterPage.value : 1,
+        limit: seoExtensionEventFilterLimit && seoExtensionEventFilterLimit.value ? seoExtensionEventFilterLimit.value : 10,
+      });
       seoExtensionEvents.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       seoExtensionEvents.textContent = "Failed to load extension events.";
@@ -6843,6 +6859,12 @@
   if (refreshSeoAuditsBtn) {
     refreshSeoAuditsBtn.addEventListener("click", async function () {
       await loadSeoAudits();
+    });
+  }
+
+  if (refreshSeoExtensionEventsBtn) {
+    refreshSeoExtensionEventsBtn.addEventListener("click", async function () {
+      await loadSeoExtensionEvents();
     });
   }
 

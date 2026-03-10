@@ -6534,7 +6534,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '4.06-seo-audit-export',
+        'phase' => '4.07-seo-extension-event-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -7471,6 +7471,104 @@ function seo_audit_detail_snapshot($auditId = '')
         'issue_rollup' => array_values($issues),
         'page_signals' => seo_normalize_page_signals(isset($item['page_signals']) && is_array($item['page_signals']) ? $item['page_signals'] : []),
         'previous_audit' => $previous,
+    ];
+}
+
+function seo_extension_events_list_snapshot($query = [])
+{
+    $rows = app_read_json_file(seo_extension_events_path(), []);
+    $limit = isset($query['limit']) ? (int) $query['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $limit = min($limit, 100);
+    $page = isset($query['page']) ? (int) $query['page'] : 1;
+    if ($page <= 0) {
+        $page = 1;
+    }
+    $projectId = trim((string) ($query['project_id'] ?? ''));
+    $sessionId = trim((string) ($query['session_id'] ?? ''));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    $minScore = isset($query['min_score']) && $query['min_score'] !== '' ? max(0, min(100, (int) $query['min_score'])) : null;
+    $maxScore = isset($query['max_score']) && $query['max_score'] !== '' ? max(0, min(100, (int) $query['max_score'])) : null;
+
+    $filtered = [];
+    $scoreTotal = 0;
+    $sessionCounts = [];
+    $projectCounts = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $item = $row;
+        $score = isset($item['score']) ? (int) $item['score'] : 0;
+        $itemProjectId = (string) ($item['project_id'] ?? '');
+        $itemSessionId = (string) ($item['session_id'] ?? '');
+        $sessionKey = $itemSessionId !== '' ? $itemSessionId : 'unassigned';
+        $projectKey = $itemProjectId !== '' ? $itemProjectId : 'unassigned';
+        if (!isset($sessionCounts[$sessionKey])) {
+            $sessionCounts[$sessionKey] = 0;
+        }
+        if (!isset($projectCounts[$projectKey])) {
+            $projectCounts[$projectKey] = 0;
+        }
+        $sessionCounts[$sessionKey]++;
+        $projectCounts[$projectKey]++;
+        if ($projectId !== '' && $itemProjectId !== $projectId) {
+            continue;
+        }
+        if ($sessionId !== '' && $itemSessionId !== $sessionId) {
+            continue;
+        }
+        if ($minScore !== null && $score < $minScore) {
+            continue;
+        }
+        if ($maxScore !== null && $score > $maxScore) {
+            continue;
+        }
+        if ($search !== '') {
+            $matched = false;
+            foreach ([
+                (string) ($item['event_id'] ?? ''),
+                $itemProjectId,
+                (string) ($item['url'] ?? ''),
+                (string) ($item['title'] ?? ''),
+                $itemSessionId,
+            ] as $haystack) {
+                if (strpos(strtolower($haystack), $search) !== false) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+        }
+        $filtered[] = $item;
+        $scoreTotal += $score;
+    }
+
+    usort($filtered, static function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'project_id' => $projectId,
+            'session_id' => $sessionId,
+            'search' => $search,
+            'min_score' => $minScore,
+            'max_score' => $maxScore,
+            'average_score' => count($filtered) > 0 ? round($scoreTotal / count($filtered), 2) : 0,
+            'session_counts' => $sessionCounts,
+            'project_counts' => $projectCounts,
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
     ];
 }
 
@@ -12096,7 +12194,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '4.06-seo-audit-export',
+        'phase' => '4.07-seo-extension-event-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16138,11 +16236,12 @@ if ($action === 'seo.extension.intake') {
 }
 
 if ($action === 'seo.extension.events.list') {
-    $events = app_read_json_file(seo_extension_events_path(), []);
+    $snapshot = seo_extension_events_list_snapshot($_GET);
     out_json([
         'ok' => true,
-        'count' => count($events),
-        'items' => $events,
+        'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
+        'summary' => $snapshot['summary'],
+        'items' => $snapshot['items'],
     ]);
 }
 

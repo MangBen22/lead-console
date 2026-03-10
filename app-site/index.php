@@ -1628,6 +1628,37 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="seoAuditDetail">No SEO audit detail loaded.</pre>
                 <h3>Extension Events</h3>
+                <div class="inline-form">
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterProjectId">Event Project ID</label>
+                        <input id="seoExtensionEventFilterProjectId" type="text" placeholder="seo_project_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterSessionId">Event Session ID</label>
+                        <input id="seoExtensionEventFilterSessionId" type="text" placeholder="seo_ext_session_abc123">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterSearch">Event Search</label>
+                        <input id="seoExtensionEventFilterSearch" type="text" placeholder="event id, url, title">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterMinScore">Min Score</label>
+                        <input id="seoExtensionEventFilterMinScore" type="number" min="0" max="100" placeholder="0">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterMaxScore">Max Score</label>
+                        <input id="seoExtensionEventFilterMaxScore" type="number" min="0" max="100" placeholder="100">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterPage">Event Page</label>
+                        <input id="seoExtensionEventFilterPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="seoExtensionEventFilterLimit">Event Limit</label>
+                        <input id="seoExtensionEventFilterLimit" type="number" min="1" max="100" value="10">
+                    </div>
+                    <button id="refreshSeoExtensionEventsBtn" type="button">Refresh Extension Events</button>
+                </div>
                 <pre id="seoExtensionEvents">Loading...</pre>
             </section>
 
