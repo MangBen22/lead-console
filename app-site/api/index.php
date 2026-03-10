@@ -6277,7 +6277,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.98-social-retry-detail',
+        'phase' => '2.99-social-retry-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -10776,7 +10776,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.98-social-retry-detail',
+        'phase' => '2.99-social-retry-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15456,6 +15456,39 @@ if ($action === 'social.retry.detail') {
     $retryId = isset($_GET['retry_id']) ? (string) $_GET['retry_id'] : '';
     $snapshot = social_retry_detail_snapshot($retryId);
     out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
+}
+
+if ($action === 'social.retry.export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $filters = [
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'connector_id' => isset($_GET['connector_id']) ? (string) $_GET['connector_id'] : '',
+        'source' => isset($_GET['source']) ? (string) $_GET['source'] : '',
+        'error_code' => isset($_GET['error_code']) ? (string) $_GET['error_code'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => $limit,
+    ];
+    $retryId = isset($_GET['retry_id']) ? trim((string) $_GET['retry_id']) : '';
+    $payload = [
+        'exported_at' => gmdate('c'),
+        'retry_queue' => social_retry_list_snapshot($filters),
+    ];
+    if ($retryId !== '') {
+        $payload['retry_detail'] = social_retry_detail_snapshot($retryId);
+    }
+    audit_event('social', 'retry.export', [
+        'retry_id' => $retryId,
+        'limit' => $limit,
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'social_retry_export_' . gmdate('Ymd_His') . '.json',
+        'export' => $payload,
+    ]);
 }
 
 if ($action === 'social.retry.run') {

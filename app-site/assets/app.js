@@ -288,6 +288,7 @@
   const runSocialConnectorBulkUpdateBtn = document.getElementById("runSocialConnectorBulkUpdateBtn");
   const refreshSocialRetryQueueBtn = document.getElementById("refreshSocialRetryQueueBtn");
   const loadSocialRetryDetailBtn = document.getElementById("loadSocialRetryDetailBtn");
+  const downloadSocialRetryExportBtn = document.getElementById("downloadSocialRetryExportBtn");
   const downloadSocialDraftsExportBtn = document.getElementById("downloadSocialDraftsExportBtn");
   const refreshSocialDraftValidationBtn = document.getElementById("refreshSocialDraftValidationBtn");
   const refreshSocialDraftPlanBtn = document.getElementById("refreshSocialDraftPlanBtn");
@@ -3414,6 +3415,17 @@
     }
   }
 
+  async function downloadSocialRetryExport() {
+    const params = socialRetryFilters();
+    const retryId = document.getElementById("socialRetryDetailId");
+    if (retryId && retryId.value) {
+      params.retry_id = retryId.value.trim();
+    }
+    const data = await apiGetWithParams("social.retry.export", params);
+    const filename = data && data.filename ? String(data.filename) : ("social-retry-export-" + Date.now() + ".json");
+    downloadJsonFile(filename, data);
+  }
+
   function socialRetryFilters() {
     const status = document.getElementById("socialRetryFilterStatus");
     const connector = document.getElementById("socialRetryFilterConnector");
@@ -4596,6 +4608,12 @@
   if (loadSocialRetryDetailBtn) {
     loadSocialRetryDetailBtn.addEventListener("click", async function () {
       await loadSocialRetryDetail();
+    });
+  }
+
+  if (downloadSocialRetryExportBtn) {
+    downloadSocialRetryExportBtn.addEventListener("click", async function () {
+      await downloadSocialRetryExport();
     });
   }
 

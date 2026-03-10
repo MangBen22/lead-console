@@ -1170,6 +1170,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="socialRetryFilterLimit" type="number" min="1" max="100" value="10">
                     </div>
                     <button id="refreshSocialRetryQueueBtn" type="button">Refresh Retry Queue</button>
+                    <button id="downloadSocialRetryExportBtn" type="button">Download Retry Export</button>
                 </div>
                 <pre id="socialRetryQueue">Loading...</pre>
                 <div class="inline-form">
