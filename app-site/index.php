@@ -769,6 +769,14 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="socialInboxWorkload">Loading...</pre>
                 <pre id="socialInboxWatchView">Loading...</pre>
                 <pre id="socialInboxThreads">Loading...</pre>
+                <form id="socialInboxDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="socialInboxDetailThreadId">Detail Thread ID</label>
+                        <input id="socialInboxDetailThreadId" type="text" placeholder="social_thread_abc123">
+                    </div>
+                    <button id="loadSocialInboxDetailBtn" type="button">Load Thread Detail</button>
+                </form>
+                <pre id="socialInboxThreadDetail">No thread detail loaded.</pre>
                 <form id="socialInboxReplyForm" class="inline-form">
                     <div class="form-row">
                         <label for="socialInboxThreadId">Thread ID</label>

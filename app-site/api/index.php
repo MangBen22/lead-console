@@ -1959,6 +1959,36 @@ function social_inbox_list_snapshot($query = [])
     ];
 }
 
+function social_inbox_thread_detail_snapshot($threadId)
+{
+    $id = trim((string) $threadId);
+    if ($id === '') {
+        return ['ok' => false, 'error' => 'thread_id is required.'];
+    }
+    $rows = social_inbox_threads_rows(true);
+    foreach ($rows as $row) {
+        if (!is_array($row) || (string) ($row['thread_id'] ?? '') !== $id) {
+            continue;
+        }
+        $thread = social_normalize_inbox_thread($row);
+        $connector = social_connector_by_id((string) ($thread['connector_id'] ?? ''));
+        $decorated = is_array($connector) ? decorate_social_connector($connector) : null;
+        $createdAt = strtotime((string) ($thread['created_at'] ?? ''));
+        $updatedAt = strtotime((string) ($thread['updated_at'] ?? ''));
+        return [
+            'ok' => true,
+            'thread' => $thread,
+            'connector' => $decorated,
+            'meta' => [
+                'age_hours' => $createdAt ? round(max(0, time() - $createdAt) / 3600, 2) : 0,
+                'updated_hours' => $updatedAt ? round(max(0, time() - $updatedAt) / 3600, 2) : 0,
+                'can_reply' => is_array($decorated) && in_array('can_reply_inbox', (array) ($decorated['capabilities_enabled'] ?? []), true) ? 1 : 0,
+            ],
+        ];
+    }
+    return ['ok' => false, 'error' => 'Inbox thread not found.'];
+}
+
 function social_inbox_watch_snapshot($source = 'manual', $emitNotifications = true, $staleAfterHours = 24)
 {
     $rows = social_inbox_threads_rows(true);
@@ -5997,7 +6027,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '2.73-social-inbox-filters',
+        'phase' => '2.74-social-inbox-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -9391,7 +9421,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '2.73-social-inbox-filters',
+        'phase' => '2.74-social-inbox-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -12487,6 +12517,12 @@ if ($action === 'social.inbox.list') {
         'count' => (int) ($snapshot['summary']['filtered_count'] ?? 0),
         'items' => $snapshot['items'],
     ]);
+}
+
+if ($action === 'social.inbox.detail') {
+    $threadId = isset($_GET['thread_id']) ? (string) $_GET['thread_id'] : '';
+    $snapshot = social_inbox_thread_detail_snapshot($threadId);
+    out_json($snapshot, !empty($snapshot['ok']) ? 200 : 404);
 }
 
 if ($action === 'social.inbox.summary') {

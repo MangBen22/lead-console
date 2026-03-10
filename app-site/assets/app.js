@@ -305,6 +305,7 @@
   const socialInboxWorkload = document.getElementById("socialInboxWorkload");
   const socialInboxWatchView = document.getElementById("socialInboxWatchView");
   const socialInboxThreads = document.getElementById("socialInboxThreads");
+  const socialInboxThreadDetail = document.getElementById("socialInboxThreadDetail");
   const socialInboxReplyForm = document.getElementById("socialInboxReplyForm");
   const socialInboxUpdateForm = document.getElementById("socialInboxUpdateForm");
   const refreshWebopsTypesBtn = document.getElementById("refreshWebopsTypesBtn");
@@ -2756,6 +2757,35 @@
     }
   }
 
+  async function loadSocialInboxDetail() {
+    if (!socialInboxThreadDetail) return;
+    const detailThread = document.getElementById("socialInboxDetailThreadId");
+    const threadId = detailThread && detailThread.value ? detailThread.value.trim() : "";
+    if (!threadId) {
+      socialInboxThreadDetail.textContent = "Enter a thread ID to load detail.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("social.inbox.detail", { thread_id: threadId });
+      socialInboxThreadDetail.textContent = JSON.stringify(data, null, 2);
+      const replyThread = document.getElementById("socialInboxThreadId");
+      const updateThread = document.getElementById("socialInboxUpdateThreadId");
+      const owner = document.getElementById("socialInboxOwner");
+      const note = document.getElementById("socialInboxInternalNote");
+      const status = document.getElementById("socialInboxStatus");
+      const priority = document.getElementById("socialInboxPriority");
+      const thread = data && data.thread ? data.thread : null;
+      if (replyThread) replyThread.value = thread && thread.thread_id ? thread.thread_id : threadId;
+      if (updateThread) updateThread.value = thread && thread.thread_id ? thread.thread_id : threadId;
+      if (owner) owner.value = thread && thread.owner ? thread.owner : "";
+      if (note) note.value = thread && thread.internal_note ? thread.internal_note : "";
+      if (status) status.value = thread && thread.status ? thread.status : "";
+      if (priority) priority.value = thread && thread.priority ? thread.priority : "";
+    } catch (err) {
+      socialInboxThreadDetail.textContent = "Failed to load social inbox thread detail.";
+    }
+  }
+
   async function loadSocialInboxSummary() {
     if (!socialInboxSummary) return;
     try {
@@ -3995,6 +4025,13 @@
   if (refreshSocialInboxBtn) {
     refreshSocialInboxBtn.addEventListener("click", async function () {
       await loadSocialInboxThreads();
+    });
+  }
+
+  const loadSocialInboxDetailBtn = document.getElementById("loadSocialInboxDetailBtn");
+  if (loadSocialInboxDetailBtn) {
+    loadSocialInboxDetailBtn.addEventListener("click", async function () {
+      await loadSocialInboxDetail();
     });
   }
 
