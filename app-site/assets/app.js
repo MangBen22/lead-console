@@ -320,9 +320,12 @@
   const refreshSocialDeliverySummaryBtn = document.getElementById("refreshSocialDeliverySummaryBtn");
   const refreshSocialDeliveryDetailBtn = document.getElementById("refreshSocialDeliveryDetailBtn");
   const downloadSocialDeliveryExportBtn = document.getElementById("downloadSocialDeliveryExportBtn");
+  const refreshSocialDeliveryWatchBtn = document.getElementById("refreshSocialDeliveryWatchBtn");
+  const runSocialDeliveryWatchBtn = document.getElementById("runSocialDeliveryWatchBtn");
   const socialSyncResult = document.getElementById("socialSyncResult");
   const socialDeliverySummary = document.getElementById("socialDeliverySummary");
   const socialDeliveryConnectorDetail = document.getElementById("socialDeliveryConnectorDetail");
+  const socialDeliveryWatchView = document.getElementById("socialDeliveryWatchView");
   const socialSyncLog = document.getElementById("socialSyncLog");
   const socialRetryQueue = document.getElementById("socialRetryQueue");
   const webopsMonitors = document.getElementById("webopsMonitors");
@@ -3060,6 +3063,16 @@
     downloadJsonFile(filename, data);
   }
 
+  async function loadSocialDeliveryWatch() {
+    if (!socialDeliveryWatchView) return;
+    try {
+      const data = await apiGet("social.delivery.watch.summary");
+      socialDeliveryWatchView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      socialDeliveryWatchView.textContent = "Failed to load social delivery watch.";
+    }
+  }
+
   async function loadWebopsMonitors() {
     if (!webopsMonitors) return;
     try {
@@ -3303,6 +3316,7 @@
     await loadSocialDraftValidation();
     await loadSocialDraftPlan();
     await loadSocialDeliverySummary();
+    await loadSocialDeliveryWatch();
     await loadCrmDeliverySummary();
     await loadCrmDeliveryWatch();
     await loadCrmSyncLog();
@@ -4185,6 +4199,7 @@
         socialSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadSocialDeliverySummary();
+      await loadSocialDeliveryWatch();
       await loadSocialSyncLog();
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
@@ -4199,6 +4214,7 @@
         socialSyncResult.textContent = JSON.stringify(result, null, 2);
       }
       await loadSocialDeliverySummary();
+      await loadSocialDeliveryWatch();
       await loadSocialRetryQueue();
       await loadSocialActivityFeed();
       await refreshSocialModuleSummary();
@@ -4220,6 +4236,22 @@
   if (downloadSocialDeliveryExportBtn) {
     downloadSocialDeliveryExportBtn.addEventListener("click", async function () {
       await downloadSocialDeliveryExport();
+    });
+  }
+
+  if (refreshSocialDeliveryWatchBtn) {
+    refreshSocialDeliveryWatchBtn.addEventListener("click", async function () {
+      await loadSocialDeliveryWatch();
+    });
+  }
+
+  if (runSocialDeliveryWatchBtn) {
+    runSocialDeliveryWatchBtn.addEventListener("click", async function () {
+      const result = await apiPost("social.delivery.watch.run", {});
+      if (socialDeliveryWatchView) {
+        socialDeliveryWatchView.textContent = JSON.stringify(result, null, 2);
+      }
+      await loadNotifications();
     });
   }
 

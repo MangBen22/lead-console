@@ -862,6 +862,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="runSocialRetryQueueBtn" type="button">Run Social Retry Queue</button>
                     <button id="refreshSocialDeliverySummaryBtn" type="button">Refresh Delivery Summary</button>
                     <button id="downloadSocialDeliveryExportBtn" type="button">Download Delivery Export</button>
+                    <button id="refreshSocialDeliveryWatchBtn" type="button">Refresh Delivery Watch</button>
+                    <button id="runSocialDeliveryWatchBtn" type="button">Run Delivery Watch</button>
                 </div>
                 <pre id="socialSyncResult">No social sync yet.</pre>
                 <h3>Social Delivery Summary</h3>
@@ -879,6 +881,8 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <h3>Social Delivery Connector Detail</h3>
                 <pre id="socialDeliveryConnectorDetail">No connector detail loaded.</pre>
+                <h3>Social Delivery Watch</h3>
+                <pre id="socialDeliveryWatchView">Loading...</pre>
                 <h3>Social Sync Log</h3>
                 <pre id="socialSyncLog">Loading...</pre>
                 <h3>Social Retry Queue</h3>
