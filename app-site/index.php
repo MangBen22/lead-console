@@ -815,6 +815,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="crmEmailTemplateLogLimit" type="number" min="1" max="100" value="15">
                     </div>
                     <button id="refreshCrmEmailTemplateLogBtn" type="button">Refresh Test Log</button>
+                    <button id="downloadCrmEmailTemplateLogExportBtn" type="button">Download Test Log Export</button>
                 </form>
                 <pre id="crmEmailTemplateTestLog">Loading test log...</pre>
                 <form id="crmEmailTemplateLogDetailForm" class="inline-form">
