@@ -6216,6 +6216,57 @@ function deployment_release_decision_source_summary_snapshot($query = [])
     ];
 }
 
+function deployment_release_decision_issues_summary($freshnessMinutes = null)
+{
+    $snapshot = deployment_release_decision_snapshot($freshnessMinutes);
+    $checks = isset($snapshot['checks']) && is_array($snapshot['checks']) ? $snapshot['checks'] : [];
+    $moduleMap = [
+        'release_gate_allowed' => 'deployment',
+        'cutover_readiness_ready' => 'deployment',
+        'launch_operations_ready' => 'launch',
+        'latest_release_candidate_ready' => 'deployment',
+        'active_signoff_present' => 'deployment',
+    ];
+    $issues = [];
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($checks as $check) {
+        if (!is_array($check) || !empty($check['ok'])) {
+            continue;
+        }
+        $severity = strtolower((string) ($check['severity'] ?? 'warning'));
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+        $item = (string) ($check['item'] ?? 'check');
+        $issues[] = [
+            'severity' => $severity,
+            'module' => (string) ($moduleMap[$item] ?? 'deployment'),
+            'category' => $item,
+            'message' => (string) ($check['message'] ?? 'Release decision check failed.'),
+            'count' => 1,
+        ];
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'decision' => (string) ($snapshot['decision'] ?? 'review'),
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+            'freshness_minutes' => (int) ($snapshot['freshness_minutes'] ?? 30),
+            'launch_state' => (string) ($snapshot['summary']['launch_state'] ?? ''),
+            'latest_candidate_id' => (string) ($snapshot['summary']['latest_candidate_id'] ?? ''),
+        ],
+        'issues' => $issues,
+        'snapshot' => $snapshot,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9568,7 +9619,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.78-release-decision-source-summary-export',
+        'phase' => '5.79-release-decision-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15436,7 +15487,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.78-release-decision-source-summary-export',
+        'phase' => '5.79-release-decision-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16747,6 +16798,22 @@ if ($action === 'deployment.release.decision.source_summary_export') {
         'ok' => true,
         'filename' => 'release_decision_source_summary_' . gmdate('Ymd_His') . '.json',
         'export' => $summary,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.issues_summary') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $issues = deployment_release_decision_issues_summary($freshness);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
+        'snapshot' => $issues['snapshot'],
         'time' => gmdate('c'),
     ]);
 }
