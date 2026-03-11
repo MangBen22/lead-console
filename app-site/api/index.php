@@ -5256,6 +5256,62 @@ function launch_operations_history_summary($limit = 20)
     ];
 }
 
+function launch_operations_latest_compare()
+{
+    $history = launch_operations_history_snapshot(2);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $latest = isset($items[0]) && is_array($items[0]) ? $items[0] : null;
+    $previous = isset($items[1]) && is_array($items[1]) ? $items[1] : null;
+    $keys = [
+        'release_gate_allowed',
+        'release_gate_failed_items',
+        'open_incidents',
+        'readiness_critical_failed',
+        'readiness_warning_failed',
+        'watchdogs_critical_count',
+        'watchdogs_warning_count',
+        'blocked_modules',
+        'review_modules',
+        'ready_modules',
+        'automation_due_now',
+    ];
+    $nestedKeys = [
+        'module_critical_issues' => ['module_issue_totals', 'critical'],
+        'module_warning_issues' => ['module_issue_totals', 'warning'],
+        'module_info_issues' => ['module_issue_totals', 'info'],
+    ];
+    $changes = [];
+    foreach ($keys as $key) {
+        $changes[$key] = [
+            'latest' => (int) (($latest['summary'][$key] ?? 0)),
+            'previous' => (int) (($previous['summary'][$key] ?? 0)),
+            'delta' => (int) (($latest['summary'][$key] ?? 0)) - (int) (($previous['summary'][$key] ?? 0)),
+        ];
+    }
+    foreach ($nestedKeys as $key => $path) {
+        $first = (string) ($path[0] ?? '');
+        $second = (string) ($path[1] ?? '');
+        $changes[$key] = [
+            'latest' => (int) (($latest['summary'][$first][$second] ?? 0)),
+            'previous' => (int) (($previous['summary'][$first][$second] ?? 0)),
+            'delta' => (int) (($latest['summary'][$first][$second] ?? 0)) - (int) (($previous['summary'][$first][$second] ?? 0)),
+        ];
+    }
+    return [
+        'summary' => [
+            'has_latest' => is_array($latest) ? 1 : 0,
+            'has_previous' => is_array($previous) ? 1 : 0,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'previous_created_at' => (string) ($previous['created_at'] ?? ''),
+            'latest_launch_state' => (string) (($latest['summary']['launch_state'] ?? '')),
+            'previous_launch_state' => (string) (($previous['summary']['launch_state'] ?? '')),
+        ],
+        'latest' => $latest,
+        'previous' => $previous,
+        'changes' => $changes,
+    ];
+}
+
 function launch_operations_issues_summary($limit = 10, $freshnessMinutes = null)
 {
     $snapshot = launch_operations_snapshot($limit, $freshnessMinutes);
@@ -8764,7 +8820,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.45-launch-operations-issues-summary',
+        'phase' => '5.46-launch-operations-latest-compare',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14615,7 +14671,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.45-launch-operations-issues-summary',
+        'phase' => '5.46-launch-operations-latest-compare',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18054,6 +18110,17 @@ if ($action === 'launch.operations.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+    ]);
+}
+
+if ($action === 'launch.operations.latest_compare') {
+    $compare = launch_operations_latest_compare();
+    out_json([
+        'ok' => true,
+        'summary' => $compare['summary'],
+        'latest' => $compare['latest'],
+        'previous' => $compare['previous'],
+        'changes' => $compare['changes'],
     ]);
 }
 

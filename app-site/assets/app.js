@@ -524,6 +524,7 @@
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
+  const launchOperationsLatestCompareView = document.getElementById("launchOperationsLatestCompareView");
   const launchOperationsIssuesSummaryView = document.getElementById("launchOperationsIssuesSummaryView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
@@ -5022,6 +5023,16 @@
     }
   }
 
+  async function loadLaunchOperationsLatestCompare() {
+    if (!launchOperationsLatestCompareView) return;
+    try {
+      const data = await apiGet("launch.operations.latest_compare");
+      launchOperationsLatestCompareView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsLatestCompareView.textContent = "Failed to load launch operations latest compare.";
+    }
+  }
+
   async function loadLaunchOperationsIssuesSummary() {
     if (!launchOperationsIssuesSummaryView) return;
     const limit = document.getElementById("launchOperationsSnapshotLimit");
@@ -5148,6 +5159,7 @@
     await loadLaunchOperationsSnapshot();
     await loadLaunchOperationsHistory();
     await loadLaunchOperationsHistorySummary();
+    await loadLaunchOperationsLatestCompare();
     await loadLaunchOperationsIssuesSummary();
     await loadNotifications();
     await loadAutomationRuns();
@@ -8014,6 +8026,7 @@
       await loadLaunchOperationsSnapshot();
       await loadLaunchOperationsHistory();
       await loadLaunchOperationsHistorySummary();
+      await loadLaunchOperationsLatestCompare();
       await loadLaunchOperationsIssuesSummary();
     });
   }
