@@ -2209,6 +2209,26 @@
     }
   }
 
+  async function downloadReleaseDecisionHistoryDetail() {
+    const releaseDecisionHistoryDetailView = document.getElementById("releaseDecisionHistoryDetailView");
+    const snapshotId = document.getElementById("releaseDecisionHistoryDetailId");
+    const id = snapshotId && snapshotId.value ? snapshotId.value.trim() : "";
+    if (!id) {
+      if (releaseDecisionHistoryDetailView) {
+        releaseDecisionHistoryDetailView.textContent = "Enter a release decision snapshot ID.";
+      }
+      return;
+    }
+    const data = await apiGetWithParams("deployment.release.decision.history.detail_export", {
+      snapshot_id: id,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-history-detail-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionHistoryDetailView) {
+      releaseDecisionHistoryDetailView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseLogLatestCompare() {
     const releaseLogLatestCompareView = document.getElementById("releaseLogLatestCompareView");
     const data = await apiGet("deployment.release.log.latest_compare_export");
@@ -8547,6 +8567,13 @@
   if (loadReleaseDecisionHistoryDetailBtn) {
     loadReleaseDecisionHistoryDetailBtn.addEventListener("click", async function () {
       await loadReleaseDecisionHistoryDetail();
+    });
+  }
+
+  const downloadReleaseDecisionHistoryDetailBtn = document.getElementById("downloadReleaseDecisionHistoryDetailBtn");
+  if (downloadReleaseDecisionHistoryDetailBtn) {
+    downloadReleaseDecisionHistoryDetailBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionHistoryDetail();
     });
   }
 

@@ -9508,7 +9508,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.74-release-decision-history-export',
+        'phase' => '5.75-release-decision-history-detail-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15376,7 +15376,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.74-release-decision-history-export',
+        'phase' => '5.75-release-decision-history-detail-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16574,6 +16574,28 @@ if ($action === 'deployment.release.decision.history.detail') {
     out_json([
         'ok' => true,
         'item' => $detail,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.history.detail_export') {
+    $snapshotId = isset($_GET['snapshot_id']) ? (string) $_GET['snapshot_id'] : '';
+    $detail = deployment_release_decision_history_detail_snapshot($snapshotId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Release decision history item not found.',
+        ], 404);
+    }
+    audit_event('deployment', 'release.decision.history.detail.export', [
+        'snapshot_id' => (string) ($detail['snapshot_id'] ?? $snapshotId),
+        'decision' => (string) ($detail['decision'] ?? ''),
+        'launch_state' => (string) ($detail['summary']['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_history_detail_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($detail['snapshot_id'] ?? $snapshotId)) . '.json',
+        'export' => $detail,
         'time' => gmdate('c'),
     ]);
 }

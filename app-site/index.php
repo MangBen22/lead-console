@@ -2394,6 +2394,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="releaseDecisionHistoryDetailId" type="text" placeholder="release_decision_YYYYMMDD_HHMMSS_xxxxxx">
                     </div>
                     <button id="loadReleaseDecisionHistoryDetailBtn" type="button">Load Release Decision Detail</button>
+                    <button id="downloadReleaseDecisionHistoryDetailBtn" type="button">Download Release Decision Detail</button>
                 </form>
                 <pre id="releaseDecisionHistoryDetailView">No release decision history detail loaded.</pre>
                 <h3>Artifact Manifest</h3>
