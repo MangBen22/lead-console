@@ -9619,7 +9619,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.79-release-decision-issues-summary',
+        'phase' => '5.80-release-decision-issues-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15487,7 +15487,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.79-release-decision-issues-summary',
+        'phase' => '5.80-release-decision-issues-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16814,6 +16814,25 @@ if ($action === 'deployment.release.decision.issues_summary') {
         'summary' => $issues['summary'],
         'issues' => $issues['issues'],
         'snapshot' => $issues['snapshot'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.issues_export') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $issues = deployment_release_decision_issues_summary($freshness);
+    audit_event('deployment', 'release.decision.issues.export', [
+        'decision' => (string) ($issues['summary']['decision'] ?? 'review'),
+        'issue_count' => (int) ($issues['summary']['issue_count'] ?? 0),
+        'latest_candidate_id' => (string) ($issues['summary']['latest_candidate_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_issues_' . gmdate('Ymd_His') . '.json',
+        'export' => $issues,
         'time' => gmdate('c'),
     ]);
 }
