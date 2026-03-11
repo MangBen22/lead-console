@@ -8950,7 +8950,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.55-launch-operations-history-detail',
+        'phase' => '5.56-launch-operations-history-detail-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14818,7 +14818,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.55-launch-operations-history-detail',
+        'phase' => '5.56-launch-operations-history-detail-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18288,6 +18288,27 @@ if ($action === 'launch.operations.history_detail') {
     out_json([
         'ok' => true,
         'item' => $detail,
+    ]);
+}
+
+if ($action === 'launch.operations.history_detail_export') {
+    $snapshotId = isset($_GET['snapshot_id']) ? (string) $_GET['snapshot_id'] : '';
+    $detail = launch_operations_history_detail_snapshot($snapshotId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Launch operations history detail not found.',
+        ], 404);
+    }
+    audit_event('launch', 'operations.history_detail.export', [
+        'snapshot_id' => (string) ($detail['snapshot_id'] ?? $snapshotId),
+        'launch_state' => (string) (($detail['summary']['launch_state'] ?? '')),
+        'source' => (string) ($detail['source'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'launch_operations_history_detail_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($detail['snapshot_id'] ?? $snapshotId)) . '.json',
+        'export' => $detail,
     ]);
 }
 

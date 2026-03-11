@@ -5055,6 +5055,25 @@
     }
   }
 
+  async function downloadLaunchOperationsHistoryDetail() {
+    const snapshotId = document.getElementById("launchOperationsHistoryDetailId");
+    const id = snapshotId && snapshotId.value ? snapshotId.value.trim() : "";
+    if (!id) {
+      if (launchOperationsHistoryDetailView) {
+        launchOperationsHistoryDetailView.textContent = "Enter a launch history snapshot ID.";
+      }
+      return;
+    }
+    const data = await apiGetWithParams("launch.operations.history_detail_export", {
+      snapshot_id: id,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-history-detail-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsHistoryDetailView) {
+      launchOperationsHistoryDetailView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadLaunchOperationsLatestCompare() {
     if (!launchOperationsLatestCompareView) return;
     try {
@@ -8158,6 +8177,13 @@
   if (loadLaunchOperationsHistoryDetailBtn) {
     loadLaunchOperationsHistoryDetailBtn.addEventListener("click", async function () {
       await loadLaunchOperationsHistoryDetail();
+    });
+  }
+
+  const downloadLaunchOperationsHistoryDetailBtn = document.getElementById("downloadLaunchOperationsHistoryDetailBtn");
+  if (downloadLaunchOperationsHistoryDetailBtn) {
+    downloadLaunchOperationsHistoryDetailBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsHistoryDetail();
     });
   }
 
