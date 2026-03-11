@@ -2233,6 +2233,18 @@
     }
   }
 
+  async function downloadReleaseDecisionActionPlan() {
+    const releaseDecisionActionPlanView = document.getElementById("releaseDecisionActionPlanView");
+    const data = await apiGetWithParams("deployment.release.decision.action_plan_export", {
+      freshness_minutes: releaseGateFreshnessInput && releaseGateFreshnessInput.value ? Number(releaseGateFreshnessInput.value) : 30,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-action-plan-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionActionPlanView) {
+      releaseDecisionActionPlanView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseDecisionIssues() {
     const releaseDecisionIssuesSummaryView = document.getElementById("releaseDecisionIssuesSummaryView");
     const data = await apiGetWithParams("deployment.release.decision.issues_export", {
@@ -8686,6 +8698,13 @@
   if (downloadReleaseDecisionIssuesBtn) {
     downloadReleaseDecisionIssuesBtn.addEventListener("click", async function () {
       await downloadReleaseDecisionIssues();
+    });
+  }
+
+  const downloadReleaseDecisionActionPlanBtn = document.getElementById("downloadReleaseDecisionActionPlanBtn");
+  if (downloadReleaseDecisionActionPlanBtn) {
+    downloadReleaseDecisionActionPlanBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionActionPlan();
     });
   }
 

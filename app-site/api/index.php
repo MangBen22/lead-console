@@ -9701,7 +9701,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.82-release-decision-action-plan',
+        'phase' => '5.83-release-decision-action-plan-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15569,7 +15569,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.82-release-decision-action-plan',
+        'phase' => '5.83-release-decision-action-plan-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16978,6 +16978,25 @@ if ($action === 'deployment.release.decision.action_plan') {
         'summary' => $plan['summary'],
         'actions' => $plan['actions'],
         'issues' => $plan['issues'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.action_plan_export') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $plan = deployment_release_decision_action_plan($freshness);
+    audit_event('deployment', 'release.decision.action_plan.export', [
+        'decision' => (string) ($plan['summary']['decision'] ?? 'review'),
+        'action_count' => (int) ($plan['summary']['action_count'] ?? 0),
+        'latest_candidate_id' => (string) ($plan['summary']['latest_candidate_id'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_action_plan_' . gmdate('Ymd_His') . '.json',
+        'export' => $plan,
         'time' => gmdate('c'),
     ]);
 }
