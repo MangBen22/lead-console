@@ -2063,6 +2063,25 @@
     }
   }
 
+  async function loadReleaseLogDetail() {
+    const releaseLogDetailView = document.getElementById("releaseLogDetailView");
+    if (!releaseLogDetailView) return;
+    const candidateId = document.getElementById("releaseLogDetailId");
+    const id = candidateId && candidateId.value ? candidateId.value.trim() : "";
+    if (!id) {
+      releaseLogDetailView.textContent = "Enter a release candidate ID.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("deployment.release.log.detail", {
+        candidate_id: id,
+      });
+      releaseLogDetailView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseLogDetailView.textContent = "Failed to load release log detail.";
+    }
+  }
+
   async function loadArtifactManifest() {
     if (!artifactManifestView) return;
     try {
@@ -8257,6 +8276,13 @@
   if (downloadLaunchOperationsReviewBundleBtn) {
     downloadLaunchOperationsReviewBundleBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsReviewBundle();
+    });
+  }
+
+  const loadReleaseLogDetailBtn = document.getElementById("loadReleaseLogDetailBtn");
+  if (loadReleaseLogDetailBtn) {
+    loadReleaseLogDetailBtn.addEventListener("click", async function () {
+      await loadReleaseLogDetail();
     });
   }
 

@@ -5731,6 +5731,21 @@ function deployment_release_log_list_snapshot($query = [])
     ];
 }
 
+function deployment_release_log_detail_snapshot($candidateId = '')
+{
+    $target = trim((string) $candidateId);
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['candidate_id'] ?? '') === $target) {
+            return $row;
+        }
+    }
+    return null;
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9083,7 +9098,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.60-release-log-filters',
+        'phase' => '5.61-release-log-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14951,7 +14966,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.60-release-log-filters',
+        'phase' => '5.61-release-log-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15851,6 +15866,22 @@ if ($action === 'deployment.release.log') {
         'ok' => true,
         'summary' => $rows['summary'],
         'items' => $rows['items'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.detail') {
+    $candidateId = isset($_GET['candidate_id']) ? (string) $_GET['candidate_id'] : '';
+    $detail = deployment_release_log_detail_snapshot($candidateId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Release log item not found.',
+        ], 404);
+    }
+    out_json([
+        'ok' => true,
+        'item' => $detail,
         'time' => gmdate('c'),
     ]);
 }
