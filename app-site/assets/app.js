@@ -2153,6 +2153,17 @@
     }
   }
 
+  async function loadReleaseDecisionLatestCompare() {
+    const releaseDecisionLatestCompareView = document.getElementById("releaseDecisionLatestCompareView");
+    if (!releaseDecisionLatestCompareView) return;
+    try {
+      const data = await apiGet("deployment.release.decision.latest_compare");
+      releaseDecisionLatestCompareView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseDecisionLatestCompareView.textContent = "Failed to load release decision latest compare.";
+    }
+  }
+
   async function loadReleaseDecisionHistoryDetail() {
     const releaseDecisionHistoryDetailView = document.getElementById("releaseDecisionHistoryDetailView");
     if (!releaseDecisionHistoryDetailView) return;
@@ -5551,6 +5562,7 @@
     await loadReleaseDecision();
     await loadReleaseDecisionHistory();
     await loadReleaseDecisionHistorySummary();
+    await loadReleaseDecisionLatestCompare();
   })();
 
   if (crmConnectorForm) {
@@ -7675,6 +7687,7 @@
       await loadReleaseDecision();
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
+      await loadReleaseDecisionLatestCompare();
     });
   }
 
@@ -7684,6 +7697,7 @@
       await downloadReleaseDecision();
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
+      await loadReleaseDecisionLatestCompare();
     });
   }
 
@@ -8485,6 +8499,7 @@
     refreshReleaseDecisionHistoryBtn.addEventListener("click", async function () {
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
+      await loadReleaseDecisionLatestCompare();
     });
   }
 
