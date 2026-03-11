@@ -2385,6 +2385,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="releaseLogLimit">Release Limit</label>
                         <input id="releaseLogLimit" type="number" min="1" max="100" value="20">
                     </div>
+                    <button id="downloadReleaseLogSummaryBtn" type="button">Download Release Summary</button>
                     <button id="downloadReleaseLogBtn" type="button">Download Release Log</button>
                 </form>
                 <pre id="releaseLogView">Loading...</pre>

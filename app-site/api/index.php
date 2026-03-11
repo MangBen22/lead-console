@@ -9154,7 +9154,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.64-release-log-summary',
+        'phase' => '5.65-release-log-summary-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15022,7 +15022,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.64-release-log-summary',
+        'phase' => '5.65-release-log-summary-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15937,6 +15937,25 @@ if ($action === 'deployment.release.log.summary') {
         'generated_at' => $summary['generated_at'],
         'summary' => $summary['summary'],
         'latest' => $summary['latest'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.summary_export') {
+    $summary = deployment_release_log_summary_snapshot([
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    audit_event('deployment', 'release.log.summary.export', [
+        'filtered_count' => (int) ($summary['summary']['filtered_count'] ?? 0),
+        'status_filter' => (string) ($summary['summary']['filters']['status'] ?? ''),
+        'launch_state_filter' => (string) ($summary['summary']['filters']['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_log_summary_' . gmdate('Ymd_His') . '.json',
+        'export' => $summary,
         'time' => gmdate('c'),
     ]);
 }

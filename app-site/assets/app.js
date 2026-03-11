@@ -2078,6 +2078,20 @@
     }
   }
 
+  async function downloadReleaseLogSummary() {
+    const releaseLogSummaryView = document.getElementById("releaseLogSummaryView");
+    const data = await apiGetWithParams("deployment.release.log.summary_export", {
+      status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
+      launch_state: document.getElementById("releaseLogLaunchStateFilter") && document.getElementById("releaseLogLaunchStateFilter").value ? document.getElementById("releaseLogLaunchStateFilter").value : "",
+      search: document.getElementById("releaseLogSearch") && document.getElementById("releaseLogSearch").value ? document.getElementById("releaseLogSearch").value.trim() : "",
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-log-summary-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseLogSummaryView) {
+      releaseLogSummaryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseLog() {
     const data = await apiGetWithParams("deployment.release.log.export", {
       status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
@@ -8349,6 +8363,13 @@
   if (downloadReleaseLogBtn) {
     downloadReleaseLogBtn.addEventListener("click", async function () {
       await downloadReleaseLog();
+    });
+  }
+
+  const downloadReleaseLogSummaryBtn = document.getElementById("downloadReleaseLogSummaryBtn");
+  if (downloadReleaseLogSummaryBtn) {
+    downloadReleaseLogSummaryBtn.addEventListener("click", async function () {
+      await downloadReleaseLogSummary();
     });
   }
 
