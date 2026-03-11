@@ -5802,6 +5802,46 @@ function deployment_release_log_summary_snapshot($query = [])
     ];
 }
 
+function deployment_release_log_latest_compare()
+{
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    $latest = isset($rows[0]) && is_array($rows[0]) ? $rows[0] : null;
+    $previous = isset($rows[1]) && is_array($rows[1]) ? $rows[1] : null;
+    $keys = [
+        'release_gate_allowed',
+        'guard_allowed',
+        'launch_issue_count',
+        'launch_blocked_modules',
+        'launch_review_modules',
+    ];
+    $changes = [];
+    foreach ($keys as $key) {
+        $changes[$key] = [
+            'latest' => (int) (($latest[$key] ?? 0)),
+            'previous' => (int) (($previous[$key] ?? 0)),
+            'delta' => (int) (($latest[$key] ?? 0)) - (int) (($previous[$key] ?? 0)),
+        ];
+    }
+    return [
+        'summary' => [
+            'has_latest' => is_array($latest) ? 1 : 0,
+            'has_previous' => is_array($previous) ? 1 : 0,
+            'latest_candidate_id' => (string) ($latest['candidate_id'] ?? ''),
+            'previous_candidate_id' => (string) ($previous['candidate_id'] ?? ''),
+            'latest_status' => (string) ($latest['status'] ?? ''),
+            'previous_status' => (string) ($previous['status'] ?? ''),
+            'latest_launch_state' => (string) ($latest['launch_state'] ?? ''),
+            'previous_launch_state' => (string) ($previous['launch_state'] ?? ''),
+        ],
+        'latest' => $latest,
+        'previous' => $previous,
+        'changes' => $changes,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9154,7 +9194,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.65-release-log-summary-export',
+        'phase' => '5.66-release-log-latest-compare',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15022,7 +15062,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.65-release-log-summary-export',
+        'phase' => '5.66-release-log-latest-compare',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15937,6 +15977,18 @@ if ($action === 'deployment.release.log.summary') {
         'generated_at' => $summary['generated_at'],
         'summary' => $summary['summary'],
         'latest' => $summary['latest'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.latest_compare') {
+    $compare = deployment_release_log_latest_compare();
+    out_json([
+        'ok' => true,
+        'summary' => $compare['summary'],
+        'latest' => $compare['latest'],
+        'previous' => $compare['previous'],
+        'changes' => $compare['changes'],
         'time' => gmdate('c'),
     ]);
 }

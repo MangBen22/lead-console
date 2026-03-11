@@ -2078,6 +2078,17 @@
     }
   }
 
+  async function loadReleaseLogLatestCompare() {
+    const releaseLogLatestCompareView = document.getElementById("releaseLogLatestCompareView");
+    if (!releaseLogLatestCompareView) return;
+    try {
+      const data = await apiGet("deployment.release.log.latest_compare");
+      releaseLogLatestCompareView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseLogLatestCompareView.textContent = "Failed to load release log latest compare.";
+    }
+  }
+
   async function downloadReleaseLogSummary() {
     const releaseLogSummaryView = document.getElementById("releaseLogSummaryView");
     const data = await apiGetWithParams("deployment.release.log.summary_export", {
@@ -5443,6 +5454,7 @@
     await loadInstallCheck();
     await loadDeploymentGuard();
     await loadReleaseLogSummary();
+    await loadReleaseLogLatestCompare();
   })();
 
   if (crmConnectorForm) {
@@ -7535,6 +7547,7 @@
       }
       await loadReleaseLog();
       await loadReleaseLogSummary();
+      await loadReleaseLogLatestCompare();
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
