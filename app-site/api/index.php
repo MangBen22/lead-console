@@ -9568,7 +9568,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.77-release-decision-source-summary',
+        'phase' => '5.78-release-decision-source-summary-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15436,7 +15436,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.77-release-decision-source-summary',
+        'phase' => '5.78-release-decision-source-summary-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16728,6 +16728,25 @@ if ($action === 'deployment.release.decision.source_summary') {
         'generated_at' => $summary['generated_at'],
         'summary' => $summary['summary'],
         'sources' => $summary['sources'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.source_summary_export') {
+    $summary = deployment_release_decision_source_summary_snapshot([
+        'decision' => isset($_GET['decision']) ? (string) $_GET['decision'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    audit_event('deployment', 'release.decision.source_summary.export', [
+        'filtered_count' => (int) ($summary['summary']['filtered_count'] ?? 0),
+        'source_count' => (int) ($summary['summary']['source_count'] ?? 0),
+        'decision_filter' => (string) ($summary['summary']['filters']['decision'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_source_summary_' . gmdate('Ymd_His') . '.json',
+        'export' => $summary,
         'time' => gmdate('c'),
     ]);
 }

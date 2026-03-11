@@ -2207,6 +2207,20 @@
     }
   }
 
+  async function downloadReleaseDecisionSourceSummary() {
+    const releaseDecisionSourceSummaryView = document.getElementById("releaseDecisionSourceSummaryView");
+    const data = await apiGetWithParams("deployment.release.decision.source_summary_export", {
+      decision: document.getElementById("releaseDecisionHistoryDecisionFilter") && document.getElementById("releaseDecisionHistoryDecisionFilter").value ? document.getElementById("releaseDecisionHistoryDecisionFilter").value : "",
+      launch_state: document.getElementById("releaseDecisionHistoryLaunchStateFilter") && document.getElementById("releaseDecisionHistoryLaunchStateFilter").value ? document.getElementById("releaseDecisionHistoryLaunchStateFilter").value : "",
+      search: document.getElementById("releaseDecisionHistorySearch") && document.getElementById("releaseDecisionHistorySearch").value ? document.getElementById("releaseDecisionHistorySearch").value.trim() : "",
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-source-summary-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionSourceSummaryView) {
+      releaseDecisionSourceSummaryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseDecisionLatestCompare() {
     const releaseDecisionLatestCompareView = document.getElementById("releaseDecisionLatestCompareView");
     const data = await apiGet("deployment.release.decision.latest_compare_export");
@@ -8598,6 +8612,13 @@
   if (downloadReleaseDecisionLatestCompareBtn) {
     downloadReleaseDecisionLatestCompareBtn.addEventListener("click", async function () {
       await downloadReleaseDecisionLatestCompare();
+    });
+  }
+
+  const downloadReleaseDecisionSourceSummaryBtn = document.getElementById("downloadReleaseDecisionSourceSummaryBtn");
+  if (downloadReleaseDecisionSourceSummaryBtn) {
+    downloadReleaseDecisionSourceSummaryBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionSourceSummary();
     });
   }
 
