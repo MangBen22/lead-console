@@ -522,6 +522,7 @@
   const refreshLaunchOperationsSnapshotBtn = document.getElementById("refreshLaunchOperationsSnapshotBtn");
   const downloadLaunchOperationsSnapshotBtn = document.getElementById("downloadLaunchOperationsSnapshotBtn");
   const downloadLaunchOperationsCompareBtn = document.getElementById("downloadLaunchOperationsCompareBtn");
+  const downloadLaunchOperationsIssuesBtn = document.getElementById("downloadLaunchOperationsIssuesBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
@@ -5043,6 +5044,20 @@
     }
   }
 
+  async function downloadLaunchOperationsIssues() {
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const freshness = document.getElementById("launchOperationsFreshnessMinutes");
+    const data = await apiGetWithParams("launch.operations.issues_export", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+      freshness_minutes: freshness && freshness.value ? Number(freshness.value) : 30,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-issues-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsIssuesSummaryView) {
+      launchOperationsIssuesSummaryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadLaunchOperationsIssuesSummary() {
     if (!launchOperationsIssuesSummaryView) return;
     const limit = document.getElementById("launchOperationsSnapshotLimit");
@@ -8060,6 +8075,12 @@
   if (downloadLaunchOperationsCompareBtn) {
     downloadLaunchOperationsCompareBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsLatestCompare();
+    });
+  }
+
+  if (downloadLaunchOperationsIssuesBtn) {
+    downloadLaunchOperationsIssuesBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsIssues();
     });
   }
 
