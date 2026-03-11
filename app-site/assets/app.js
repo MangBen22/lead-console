@@ -2232,6 +2232,20 @@
     }
   }
 
+  async function downloadReleaseDecisionReviewBundle() {
+    const releaseDecisionView = document.getElementById("releaseDecisionView");
+    const decisionLimit = document.getElementById("releaseDecisionHistoryLimit");
+    const data = await apiGetWithParams("deployment.release.decision.review_bundle", {
+      limit: decisionLimit && decisionLimit.value ? Number(decisionLimit.value) : 20,
+      freshness_minutes: releaseGateFreshnessInput && releaseGateFreshnessInput.value ? Number(releaseGateFreshnessInput.value) : 30,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-review-bundle-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionView) {
+      releaseDecisionView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseDecisionSourceSummary() {
     const releaseDecisionSourceSummaryView = document.getElementById("releaseDecisionSourceSummaryView");
     const data = await apiGetWithParams("deployment.release.decision.source_summary_export", {
@@ -8655,6 +8669,13 @@
   if (downloadReleaseDecisionIssuesBtn) {
     downloadReleaseDecisionIssuesBtn.addEventListener("click", async function () {
       await downloadReleaseDecisionIssues();
+    });
+  }
+
+  const downloadReleaseDecisionReviewBundleBtn = document.getElementById("downloadReleaseDecisionReviewBundleBtn");
+  if (downloadReleaseDecisionReviewBundleBtn) {
+    downloadReleaseDecisionReviewBundleBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionReviewBundle();
     });
   }
 

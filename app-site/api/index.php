@@ -9619,7 +9619,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.80-release-decision-issues-export',
+        'phase' => '5.81-release-decision-review-bundle',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15487,7 +15487,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.80-release-decision-issues-export',
+        'phase' => '5.81-release-decision-review-bundle',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16833,6 +16833,53 @@ if ($action === 'deployment.release.decision.issues_export') {
         'ok' => true,
         'filename' => 'release_decision_issues_' . gmdate('Ymd_His') . '.json',
         'export' => $issues,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.review_bundle') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($limit <= 0) {
+        $limit = 20;
+    }
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $decision = deployment_release_decision_snapshot($freshness);
+    $history = deployment_release_decision_history_snapshot($limit);
+    $historySummary = deployment_release_decision_history_summary(max(20, $limit));
+    $compare = deployment_release_decision_latest_compare();
+    $sourceSummary = deployment_release_decision_source_summary_snapshot([]);
+    $issues = deployment_release_decision_issues_summary($freshness);
+    $bundle = [
+        'bundle_id' => 'release_decision_review_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'limit' => $limit,
+        'freshness_minutes' => $freshness,
+        'summary' => [
+            'decision' => (string) ($decision['decision'] ?? 'review'),
+            'issue_count' => (int) ($issues['summary']['issue_count'] ?? 0),
+            'history_runs' => (int) ($history['summary']['total_count'] ?? 0),
+            'latest_candidate_id' => (string) ($decision['summary']['latest_candidate_id'] ?? ''),
+            'launch_state' => (string) ($decision['summary']['launch_state'] ?? ''),
+        ],
+        'decision' => $decision,
+        'history' => $history,
+        'history_summary' => $historySummary,
+        'latest_compare' => $compare,
+        'source_summary' => $sourceSummary,
+        'issues' => $issues,
+    ];
+    audit_event('deployment', 'release.decision.review_bundle.export', [
+        'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
+        'decision' => (string) ($bundle['summary']['decision'] ?? 'review'),
+        'issue_count' => (int) ($bundle['summary']['issue_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_review_bundle_' . gmdate('Ymd_His') . '.json',
+        'export' => $bundle,
         'time' => gmdate('c'),
     ]);
 }
