@@ -9284,7 +9284,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.68-release-decision-snapshot',
+        'phase' => '5.69-release-decision-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15152,7 +15152,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.68-release-decision-snapshot',
+        'phase' => '5.69-release-decision-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16276,6 +16276,22 @@ if ($action === 'deployment.release.decision') {
     out_json([
         'ok' => true,
         'decision' => $decision,
+        'time' => gmdate('c'),
+    ], ((string) ($decision['decision'] ?? 'review') === 'hold') ? 409 : 200);
+}
+
+if ($action === 'deployment.release.decision.export') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
+    $decision = deployment_release_decision_snapshot($freshness);
+    audit_event('deployment', 'release.decision.export', [
+        'decision' => (string) ($decision['decision'] ?? 'review'),
+        'latest_candidate_id' => (string) ($decision['summary']['latest_candidate_id'] ?? ''),
+        'launch_state' => (string) ($decision['summary']['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_' . gmdate('Ymd_His') . '.json',
+        'export' => $decision,
         'time' => gmdate('c'),
     ], ((string) ($decision['decision'] ?? 'review') === 'hold') ? 409 : 200);
 }

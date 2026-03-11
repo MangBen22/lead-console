@@ -2345,6 +2345,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="generateReleaseCandidateBtn" type="button">Generate Release Candidate</button>
                     <button id="downloadArtifactManifestBtn" type="button">Download Artifact Manifest</button>
                     <button id="refreshReleaseDecisionBtn" type="button">Refresh Release Decision</button>
+                    <button id="downloadReleaseDecisionBtn" type="button">Download Release Decision</button>
                 </div>
                 <pre id="releaseCandidateView">No release candidate yet.</pre>
                 <pre id="releaseDecisionView">Loading...</pre>
