@@ -5431,6 +5431,69 @@ function launch_operations_issues_summary($limit = 10, $freshnessMinutes = null)
     ];
 }
 
+function launch_operations_automation_state_path()
+{
+    return app_storage_path('launch_operations_automation_state.json');
+}
+
+function launch_operations_automation_alert($launchSummary, $source = 'manual')
+{
+    $summary = is_array($launchSummary) ? $launchSummary : [];
+    $currentState = (string) ($summary['launch_state'] ?? 'review_required');
+    $currentIssues = (int) ($summary['issue_count'] ?? 0);
+    $snapshotId = (string) ($summary['snapshot_id'] ?? '');
+    $previous = app_read_json_file(launch_operations_automation_state_path(), []);
+    $previousState = is_array($previous) ? (string) ($previous['launch_state'] ?? '') : '';
+    $previousIssues = is_array($previous) ? (int) ($previous['issue_count'] ?? 0) : 0;
+    $send = false;
+    $type = 'info';
+    $message = 'Launch operations state recorded.';
+
+    if ($currentState === 'blocked' && ($previousState !== 'blocked' || $previousIssues !== $currentIssues)) {
+        $send = true;
+        $type = 'critical';
+        $message = 'Launch operations blocked after automation run.';
+    } elseif ($currentState === 'review_required' && ($previousState === '' || $previousState === 'ready' || $previousIssues !== $currentIssues)) {
+        $send = true;
+        $type = 'warning';
+        $message = 'Launch operations need review after automation run.';
+    } elseif ($currentState === 'ready' && $previousState !== '' && $previousState !== 'ready') {
+        $send = true;
+        $type = 'success';
+        $message = 'Launch operations recovered to ready after automation run.';
+    }
+
+    if ($send) {
+        push_notification($type, $message, [
+            'source' => (string) $source,
+            'launch_state' => $currentState,
+            'issue_count' => $currentIssues,
+            'snapshot_id' => $snapshotId,
+        ]);
+    }
+
+    $state = [
+        'launch_state' => $currentState,
+        'issue_count' => $currentIssues,
+        'snapshot_id' => $snapshotId,
+        'source' => (string) $source,
+        'last_checked_at' => gmdate('c'),
+        'last_notified_at' => $send ? gmdate('c') : (is_array($previous) ? (string) ($previous['last_notified_at'] ?? '') : ''),
+    ];
+    app_write_json_file(launch_operations_automation_state_path(), $state);
+
+    return [
+        'sent' => $send ? 1 : 0,
+        'type' => $send ? $type : 'none',
+        'message' => $send ? $message : 'No launch automation alert emitted.',
+        'previous_state' => $previousState,
+        'current_state' => $currentState,
+        'previous_issue_count' => $previousIssues,
+        'current_issue_count' => $currentIssues,
+        'snapshot_id' => $snapshotId,
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8820,7 +8883,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.47-launch-operations-automation-history',
+        'phase' => '5.48-launch-operations-automation-alerts',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14568,6 +14631,7 @@ function execute_automation_run($settings, $source = 'manual')
         'issue_count' => (int) ($launchIssueSummary['issue_count'] ?? 0),
         'snapshot_id' => (string) ($launchRecord['snapshot_id'] ?? ''),
     ];
+    $summary['launch']['automation_alert'] = launch_operations_automation_alert($summary['launch'], 'automation_' . (string) $source);
 
     $runs = app_read_json_file(automation_runs_path(), []);
     array_unshift($runs, $summary);
@@ -14687,7 +14751,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.47-launch-operations-automation-history',
+        'phase' => '5.48-launch-operations-automation-alerts',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
