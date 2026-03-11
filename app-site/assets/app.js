@@ -2089,6 +2089,19 @@
     }
   }
 
+  async function loadReleaseDecision() {
+    const releaseDecisionView = document.getElementById("releaseDecisionView");
+    if (!releaseDecisionView) return;
+    try {
+      const data = await apiGetWithParams("deployment.release.decision", {
+        freshness_minutes: releaseGateFreshnessInput && releaseGateFreshnessInput.value ? Number(releaseGateFreshnessInput.value) : 30,
+      });
+      releaseDecisionView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseDecisionView.textContent = "Failed to load release decision.";
+    }
+  }
+
   async function downloadReleaseLogLatestCompare() {
     const releaseLogLatestCompareView = document.getElementById("releaseLogLatestCompareView");
     const data = await apiGet("deployment.release.log.latest_compare_export");
@@ -5465,6 +5478,7 @@
     await loadDeploymentGuard();
     await loadReleaseLogSummary();
     await loadReleaseLogLatestCompare();
+    await loadReleaseDecision();
   })();
 
   if (crmConnectorForm) {
@@ -7558,6 +7572,7 @@
       await loadReleaseLog();
       await loadReleaseLogSummary();
       await loadReleaseLogLatestCompare();
+      await loadReleaseDecision();
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();
@@ -7579,6 +7594,13 @@
       downloadJsonFile(manifestId + ".json", data);
       await loadAuditLog();
       await loadStatus();
+    });
+  }
+
+  const refreshReleaseDecisionBtn = document.getElementById("refreshReleaseDecisionBtn");
+  if (refreshReleaseDecisionBtn) {
+    refreshReleaseDecisionBtn.addEventListener("click", async function () {
+      await loadReleaseDecision();
     });
   }
 

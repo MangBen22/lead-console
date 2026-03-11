@@ -5842,6 +5842,96 @@ function deployment_release_log_latest_compare()
     ];
 }
 
+function deployment_release_decision_snapshot($freshnessMinutes = null)
+{
+    $window = $freshnessMinutes === null ? 30 : max(5, min(1440, (int) $freshnessMinutes));
+    $gate = deployment_release_gate_snapshot($window);
+    $readiness = deployment_cutover_readiness_snapshot();
+    $launch = launch_operations_snapshot(10, $window);
+    $activeSignoff = deployment_cutover_signoff_active_snapshot();
+    $releaseRows = app_read_json_file(deployment_release_log_path(), []);
+    $latestCandidate = isset($releaseRows[0]) && is_array($releaseRows[0]) ? $releaseRows[0] : null;
+
+    $checks = [
+        [
+            'item' => 'release_gate_allowed',
+            'ok' => !empty($gate['allowed']) ? 1 : 0,
+            'severity' => 'critical',
+            'message' => 'Release gate is ' . (!empty($gate['allowed']) ? 'allowed.' : 'blocked.'),
+        ],
+        [
+            'item' => 'cutover_readiness_ready',
+            'ok' => ((string) ($readiness['status'] ?? 'review_required') === 'ready') ? 1 : 0,
+            'severity' => ((string) ($readiness['status'] ?? 'review_required') === 'blocked') ? 'critical' : 'warning',
+            'message' => 'Cutover readiness status: ' . (string) ($readiness['status'] ?? 'review_required'),
+        ],
+        [
+            'item' => 'launch_operations_ready',
+            'ok' => ((string) ($launch['summary']['launch_state'] ?? 'review_required') === 'ready') ? 1 : 0,
+            'severity' => ((string) ($launch['summary']['launch_state'] ?? 'review_required') === 'blocked') ? 'critical' : 'warning',
+            'message' => 'Launch operations state: ' . (string) ($launch['summary']['launch_state'] ?? 'review_required'),
+        ],
+        [
+            'item' => 'latest_release_candidate_ready',
+            'ok' => (is_array($latestCandidate) && (string) ($latestCandidate['status'] ?? 'blocked') === 'ready') ? 1 : 0,
+            'severity' => is_array($latestCandidate) ? 'critical' : 'warning',
+            'message' => is_array($latestCandidate)
+                ? ('Latest release candidate status: ' . (string) ($latestCandidate['status'] ?? 'blocked'))
+                : 'No release candidate has been generated.',
+        ],
+        [
+            'item' => 'active_signoff_present',
+            'ok' => is_array($activeSignoff['active'] ?? null) ? 1 : 0,
+            'severity' => 'warning',
+            'message' => is_array($activeSignoff['active'] ?? null)
+                ? ('Active signoff: ' . (string) (($activeSignoff['active']['signoff_id'] ?? '')))
+                : 'No active cutover signoff found.',
+        ],
+    ];
+
+    $criticalFailed = 0;
+    $warningFailed = 0;
+    foreach ($checks as $check) {
+        if (!empty($check['ok'])) {
+            continue;
+        }
+        if ((string) ($check['severity'] ?? 'warning') === 'critical') {
+            $criticalFailed++;
+        } else {
+            $warningFailed++;
+        }
+    }
+
+    $decision = 'launch';
+    if ($criticalFailed > 0) {
+        $decision = 'hold';
+    } elseif ($warningFailed > 0) {
+        $decision = 'review';
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'freshness_minutes' => $window,
+        'decision' => $decision,
+        'summary' => [
+            'critical_failed' => $criticalFailed,
+            'warning_failed' => $warningFailed,
+            'latest_candidate_id' => (string) ($latestCandidate['candidate_id'] ?? ''),
+            'latest_candidate_status' => (string) ($latestCandidate['status'] ?? ''),
+            'launch_state' => (string) ($launch['summary']['launch_state'] ?? 'review_required'),
+            'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
+            'release_gate_allowed' => !empty($gate['allowed']) ? 1 : 0,
+            'active_signoff_present' => is_array($activeSignoff['active'] ?? null) ? 1 : 0,
+        ],
+        'checks' => $checks,
+        'release_gate' => $gate,
+        'readiness' => $readiness,
+        'launch_operations' => $launch,
+        'latest_release_candidate' => $latestCandidate,
+        'active_signoff' => $activeSignoff,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9194,7 +9284,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.67-release-log-latest-compare-export',
+        'phase' => '5.68-release-decision-snapshot',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15062,7 +15152,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.67-release-log-latest-compare-export',
+        'phase' => '5.68-release-decision-snapshot',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16175,7 +16265,19 @@ if ($action === 'deployment.release.candidate') {
         'candidate' => $candidate,
         'bundle' => $bundle,
         'release_gate' => $gate,
+        'launch_operations' => isset($snap['launch_operations']) ? $snap['launch_operations'] : null,
+        'launch_issues' => isset($snap['launch_issues']) ? $snap['launch_issues'] : null,
     ], ((string) ($candidate['status'] ?? 'blocked') === 'ready') ? 200 : 409);
+}
+
+if ($action === 'deployment.release.decision') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
+    $decision = deployment_release_decision_snapshot($freshness);
+    out_json([
+        'ok' => true,
+        'decision' => $decision,
+        'time' => gmdate('c'),
+    ], ((string) ($decision['decision'] ?? 'review') === 'hold') ? 409 : 200);
 }
 
 if ($action === 'deployment.artifact.manifest') {
