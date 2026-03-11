@@ -523,6 +523,7 @@
   const downloadLaunchOperationsSnapshotBtn = document.getElementById("downloadLaunchOperationsSnapshotBtn");
   const downloadLaunchOperationsHistoryBtn = document.getElementById("downloadLaunchOperationsHistoryBtn");
   const downloadLaunchOperationsHistorySummaryBtn = document.getElementById("downloadLaunchOperationsHistorySummaryBtn");
+  const downloadLaunchOperationsSourceSummaryBtn = document.getElementById("downloadLaunchOperationsSourceSummaryBtn");
   const downloadLaunchOperationsCompareBtn = document.getElementById("downloadLaunchOperationsCompareBtn");
   const downloadLaunchOperationsIssuesBtn = document.getElementById("downloadLaunchOperationsIssuesBtn");
   const downloadLaunchOperationsReviewBundleBtn = document.getElementById("downloadLaunchOperationsReviewBundleBtn");
@@ -5073,6 +5074,22 @@
     }
   }
 
+  async function downloadLaunchOperationsSourceSummary() {
+    const source = document.getElementById("launchOperationsHistorySourceFilter");
+    const launchState = document.getElementById("launchOperationsHistoryStateFilter");
+    const search = document.getElementById("launchOperationsHistorySearch");
+    const data = await apiGetWithParams("launch.operations.source_summary_export", {
+      source: source && source.value ? source.value.trim() : "",
+      launch_state: launchState && launchState.value ? launchState.value : "",
+      search: search && search.value ? search.value.trim() : "",
+    });
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-source-summary-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsSourceSummaryView) {
+      launchOperationsSourceSummaryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadLaunchOperationsHistoryDetail() {
     const snapshotId = document.getElementById("launchOperationsHistoryDetailId");
     const id = snapshotId && snapshotId.value ? snapshotId.value.trim() : "";
@@ -8210,6 +8227,12 @@
   if (downloadLaunchOperationsHistorySummaryBtn) {
     downloadLaunchOperationsHistorySummaryBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsHistorySummary();
+    });
+  }
+
+  if (downloadLaunchOperationsSourceSummaryBtn) {
+    downloadLaunchOperationsSourceSummaryBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsSourceSummary();
     });
   }
 
