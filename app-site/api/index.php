@@ -6044,6 +6044,78 @@ function deployment_release_decision_history_detail_snapshot($snapshotId = '')
     return null;
 }
 
+function deployment_release_decision_history_summary($limit = 20)
+{
+    $history = deployment_release_decision_history_snapshot($limit);
+    $items = isset($history['items']) && is_array($history['items']) ? $history['items'] : [];
+    $runsCount = count($items);
+    $latest = $runsCount > 0 ? $items[0] : null;
+    $oldest = $runsCount > 0 ? $items[$runsCount - 1] : null;
+    $keys = [
+        'critical_failed',
+        'warning_failed',
+        'release_gate_allowed',
+        'active_signoff_present',
+    ];
+    $decisionCounts = [
+        'launch' => 0,
+        'review' => 0,
+        'hold' => 0,
+    ];
+    $launchStateCounts = [
+        'ready' => 0,
+        'review_required' => 0,
+        'blocked' => 0,
+    ];
+    $totals = [];
+    foreach ($keys as $key) {
+        $totals[$key] = 0;
+    }
+    foreach ($items as $item) {
+        $summary = isset($item['summary']) && is_array($item['summary']) ? $item['summary'] : [];
+        $decision = strtolower((string) ($item['decision'] ?? 'review'));
+        $launchState = strtolower((string) ($summary['launch_state'] ?? 'review_required'));
+        if (!isset($decisionCounts[$decision])) {
+            $decisionCounts[$decision] = 0;
+        }
+        if (!isset($launchStateCounts[$launchState])) {
+            $launchStateCounts[$launchState] = 0;
+        }
+        $decisionCounts[$decision]++;
+        $launchStateCounts[$launchState]++;
+        foreach ($keys as $key) {
+            $totals[$key] += (int) ($summary[$key] ?? 0);
+        }
+    }
+    $averages = [];
+    foreach ($totals as $key => $total) {
+        $averages[$key] = $runsCount > 0 ? round($total / $runsCount, 2) : 0;
+    }
+    $latestSummary = isset($latest['summary']) && is_array($latest['summary']) ? $latest['summary'] : [];
+    $oldestSummary = isset($oldest['summary']) && is_array($oldest['summary']) ? $oldest['summary'] : [];
+    $changes = [];
+    foreach ($keys as $key) {
+        $changes[$key] = (int) ($latestSummary[$key] ?? 0) - (int) ($oldestSummary[$key] ?? 0);
+    }
+
+    return [
+        'summary' => [
+            'runs_count' => $runsCount,
+            'latest_created_at' => (string) ($latest['created_at'] ?? ''),
+            'oldest_created_at' => (string) ($oldest['created_at'] ?? ''),
+            'latest_decision' => (string) ($latest['decision'] ?? ''),
+            'oldest_decision' => (string) ($oldest['decision'] ?? ''),
+            'decision_counts' => $decisionCounts,
+            'launch_state_counts' => $launchStateCounts,
+            'averages' => $averages,
+            'changes' => $changes,
+        ],
+        'latest' => $latest,
+        'oldest' => $oldest,
+        'history' => $items,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9396,7 +9468,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.70-release-decision-history',
+        'phase' => '5.71-release-decision-history-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15264,7 +15336,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.70-release-decision-history',
+        'phase' => '5.71-release-decision-history-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16441,6 +16513,19 @@ if ($action === 'deployment.release.decision.history.detail') {
     out_json([
         'ok' => true,
         'item' => $detail,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.history_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    $summary = deployment_release_decision_history_summary($limit);
+    out_json([
+        'ok' => true,
+        'summary' => $summary['summary'],
+        'latest' => $summary['latest'],
+        'oldest' => $summary['oldest'],
+        'history' => $summary['history'],
         'time' => gmdate('c'),
     ]);
 }
