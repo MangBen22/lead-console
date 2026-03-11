@@ -2246,6 +2246,18 @@
     }
   }
 
+  async function downloadReleaseDecisionCheckMatrix() {
+    const releaseDecisionCheckMatrixView = document.getElementById("releaseDecisionCheckMatrixView");
+    const data = await apiGetWithParams("deployment.release.decision.check_matrix_export", {
+      freshness_minutes: releaseGateFreshnessInput && releaseGateFreshnessInput.value ? Number(releaseGateFreshnessInput.value) : 30,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-check-matrix-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionCheckMatrixView) {
+      releaseDecisionCheckMatrixView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadReleaseDecisionActionPlan() {
     const releaseDecisionActionPlanView = document.getElementById("releaseDecisionActionPlanView");
     const data = await apiGetWithParams("deployment.release.decision.action_plan_export", {
@@ -8722,6 +8734,13 @@
   if (downloadReleaseDecisionActionPlanBtn) {
     downloadReleaseDecisionActionPlanBtn.addEventListener("click", async function () {
       await downloadReleaseDecisionActionPlan();
+    });
+  }
+
+  const downloadReleaseDecisionCheckMatrixBtn = document.getElementById("downloadReleaseDecisionCheckMatrixBtn");
+  if (downloadReleaseDecisionCheckMatrixBtn) {
+    downloadReleaseDecisionCheckMatrixBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionCheckMatrix();
     });
   }
 

@@ -9767,7 +9767,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.84-release-decision-check-matrix',
+        'phase' => '5.85-release-decision-check-matrix-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15635,7 +15635,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.84-release-decision-check-matrix',
+        'phase' => '5.85-release-decision-check-matrix-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17079,6 +17079,25 @@ if ($action === 'deployment.release.decision.check_matrix') {
         'summary' => $matrix['summary'],
         'items' => $matrix['items'],
         'snapshot' => $matrix['snapshot'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.check_matrix_export') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $matrix = deployment_release_decision_check_matrix_snapshot($freshness);
+    audit_event('deployment', 'release.decision.check_matrix.export', [
+        'decision' => (string) ($matrix['summary']['decision'] ?? 'review'),
+        'total_checks' => (int) ($matrix['summary']['total_checks'] ?? 0),
+        'failed_count' => (int) ($matrix['summary']['failed_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_check_matrix_' . gmdate('Ymd_His') . '.json',
+        'export' => $matrix,
         'time' => gmdate('c'),
     ]);
 }
