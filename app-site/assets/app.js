@@ -2063,6 +2063,21 @@
     }
   }
 
+  async function loadReleaseLogSummary() {
+    const releaseLogSummaryView = document.getElementById("releaseLogSummaryView");
+    if (!releaseLogSummaryView) return;
+    try {
+      const data = await apiGetWithParams("deployment.release.log.summary", {
+        status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
+        launch_state: document.getElementById("releaseLogLaunchStateFilter") && document.getElementById("releaseLogLaunchStateFilter").value ? document.getElementById("releaseLogLaunchStateFilter").value : "",
+        search: document.getElementById("releaseLogSearch") && document.getElementById("releaseLogSearch").value ? document.getElementById("releaseLogSearch").value.trim() : "",
+      });
+      releaseLogSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseLogSummaryView.textContent = "Failed to load release log summary.";
+    }
+  }
+
   async function downloadReleaseLog() {
     const data = await apiGetWithParams("deployment.release.log.export", {
       status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
@@ -5413,6 +5428,7 @@
     await loadPreflight();
     await loadInstallCheck();
     await loadDeploymentGuard();
+    await loadReleaseLogSummary();
   })();
 
   if (crmConnectorForm) {
@@ -7504,6 +7520,7 @@
         releaseCandidateView.textContent = JSON.stringify(result, null, 2);
       }
       await loadReleaseLog();
+      await loadReleaseLogSummary();
       await loadNotifications();
       await loadAuditLog();
       await loadStatus();

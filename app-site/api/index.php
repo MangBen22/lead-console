@@ -5746,6 +5746,62 @@ function deployment_release_log_detail_snapshot($candidateId = '')
     return null;
 }
 
+function deployment_release_log_summary_snapshot($query = [])
+{
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    $filtered = deployment_release_log_apply_filters($rows, $query);
+    $statusCounts = [
+        'ready' => 0,
+        'blocked' => 0,
+    ];
+    $launchStateCounts = [
+        'ready' => 0,
+        'review_required' => 0,
+        'blocked' => 0,
+    ];
+    $launchIssueTotal = 0;
+    $releaseGateAllowedCount = 0;
+    $guardAllowedCount = 0;
+    foreach ($filtered as $row) {
+        $status = strtolower((string) ($row['status'] ?? ''));
+        $launchState = strtolower((string) ($row['launch_state'] ?? ''));
+        if (!isset($statusCounts[$status])) {
+            $statusCounts[$status] = 0;
+        }
+        $statusCounts[$status]++;
+        if (!isset($launchStateCounts[$launchState])) {
+            $launchStateCounts[$launchState] = 0;
+        }
+        $launchStateCounts[$launchState]++;
+        $launchIssueTotal += (int) ($row['launch_issue_count'] ?? 0);
+        $releaseGateAllowedCount += !empty($row['release_gate_allowed']) ? 1 : 0;
+        $guardAllowedCount += !empty($row['guard_allowed']) ? 1 : 0;
+    }
+    $latest = isset($filtered[0]) && is_array($filtered[0]) ? $filtered[0] : null;
+    $filteredCount = count($filtered);
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => $filteredCount,
+            'status_counts' => $statusCounts,
+            'launch_state_counts' => $launchStateCounts,
+            'average_launch_issue_count' => $filteredCount > 0 ? round($launchIssueTotal / $filteredCount, 2) : 0,
+            'release_gate_allowed_count' => $releaseGateAllowedCount,
+            'guard_allowed_count' => $guardAllowedCount,
+            'filters' => [
+                'status' => (string) ($query['status'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
+        ],
+        'latest' => $latest,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9098,7 +9154,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.63-release-log-export',
+        'phase' => '5.64-release-log-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14966,7 +15022,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.63-release-log-export',
+        'phase' => '5.64-release-log-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15866,6 +15922,21 @@ if ($action === 'deployment.release.log') {
         'ok' => true,
         'summary' => $rows['summary'],
         'items' => $rows['items'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.summary') {
+    $summary = deployment_release_log_summary_snapshot([
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'generated_at' => $summary['generated_at'],
+        'summary' => $summary['summary'],
+        'latest' => $summary['latest'],
         'time' => gmdate('c'),
     ]);
 }
