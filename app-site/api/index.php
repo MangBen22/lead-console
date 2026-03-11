@@ -9098,7 +9098,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.62-release-log-detail-export',
+        'phase' => '5.63-release-log-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14966,7 +14966,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.62-release-log-detail-export',
+        'phase' => '5.63-release-log-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15866,6 +15866,27 @@ if ($action === 'deployment.release.log') {
         'ok' => true,
         'summary' => $rows['summary'],
         'items' => $rows['items'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.export') {
+    $rows = deployment_release_log_list_snapshot([
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 20,
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    audit_event('deployment', 'release.log.export', [
+        'filtered_count' => (int) ($rows['summary']['filtered_count'] ?? 0),
+        'status_filter' => (string) ($rows['summary']['filters']['status'] ?? ''),
+        'launch_state_filter' => (string) ($rows['summary']['filters']['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_log_' . gmdate('Ymd_His') . '.json',
+        'export' => $rows,
         'time' => gmdate('c'),
     ]);
 }

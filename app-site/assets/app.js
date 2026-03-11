@@ -2063,6 +2063,21 @@
     }
   }
 
+  async function downloadReleaseLog() {
+    const data = await apiGetWithParams("deployment.release.log.export", {
+      status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
+      launch_state: document.getElementById("releaseLogLaunchStateFilter") && document.getElementById("releaseLogLaunchStateFilter").value ? document.getElementById("releaseLogLaunchStateFilter").value : "",
+      search: document.getElementById("releaseLogSearch") && document.getElementById("releaseLogSearch").value ? document.getElementById("releaseLogSearch").value.trim() : "",
+      page: document.getElementById("releaseLogPage") && document.getElementById("releaseLogPage").value ? Number(document.getElementById("releaseLogPage").value) : 1,
+      limit: document.getElementById("releaseLogLimit") && document.getElementById("releaseLogLimit").value ? Number(document.getElementById("releaseLogLimit").value) : 20,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-log-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseLogView) {
+      releaseLogView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadReleaseLogDetail() {
     const releaseLogDetailView = document.getElementById("releaseLogDetailView");
     if (!releaseLogDetailView) return;
@@ -8310,6 +8325,13 @@
   if (downloadReleaseLogDetailBtn) {
     downloadReleaseLogDetailBtn.addEventListener("click", async function () {
       await downloadReleaseLogDetail();
+    });
+  }
+
+  const downloadReleaseLogBtn = document.getElementById("downloadReleaseLogBtn");
+  if (downloadReleaseLogBtn) {
+    downloadReleaseLogBtn.addEventListener("click", async function () {
+      await downloadReleaseLog();
     });
   }
 
