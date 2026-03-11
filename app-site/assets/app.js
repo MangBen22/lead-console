@@ -524,6 +524,7 @@
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
+  const launchOperationsIssuesSummaryView = document.getElementById("launchOperationsIssuesSummaryView");
   let lastNotificationToneKey = "";
   const releaseGateRunsFilterStorageKey = "lc_release_gate_runs_filters_v1";
   let socialPlatformCatalogItems = [];
@@ -5021,6 +5022,21 @@
     }
   }
 
+  async function loadLaunchOperationsIssuesSummary() {
+    if (!launchOperationsIssuesSummaryView) return;
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const freshness = document.getElementById("launchOperationsFreshnessMinutes");
+    try {
+      const data = await apiGetWithParams("launch.operations.issues_summary", {
+        limit: limit && limit.value ? Number(limit.value) : 10,
+        freshness_minutes: freshness && freshness.value ? Number(freshness.value) : 30,
+      });
+      launchOperationsIssuesSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsIssuesSummaryView.textContent = "Failed to load launch operations issues summary.";
+    }
+  }
+
   async function downloadLaunchOperationsSnapshot() {
     const limit = document.getElementById("launchOperationsSnapshotLimit");
     const freshness = document.getElementById("launchOperationsFreshnessMinutes");
@@ -5132,6 +5148,7 @@
     await loadLaunchOperationsSnapshot();
     await loadLaunchOperationsHistory();
     await loadLaunchOperationsHistorySummary();
+    await loadLaunchOperationsIssuesSummary();
     await loadNotifications();
     await loadAutomationRuns();
     await loadAutomationSettings();
@@ -7997,6 +8014,7 @@
       await loadLaunchOperationsSnapshot();
       await loadLaunchOperationsHistory();
       await loadLaunchOperationsHistorySummary();
+      await loadLaunchOperationsIssuesSummary();
     });
   }
 

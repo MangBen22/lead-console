@@ -5256,6 +5256,125 @@ function launch_operations_history_summary($limit = 20)
     ];
 }
 
+function launch_operations_issues_summary($limit = 10, $freshnessMinutes = null)
+{
+    $snapshot = launch_operations_snapshot($limit, $freshnessMinutes);
+    $summary = isset($snapshot['summary']) && is_array($snapshot['summary']) ? $snapshot['summary'] : [];
+    $deployment = isset($snapshot['deployment']) && is_array($snapshot['deployment']) ? $snapshot['deployment'] : [];
+    $issues = [];
+
+    if (empty($summary['release_gate_allowed'])) {
+        $issues[] = [
+            'severity' => 'critical',
+            'module' => 'deployment',
+            'category' => 'release_gate',
+            'message' => 'Release gate is blocking launch.',
+            'count' => (int) ($summary['release_gate_failed_items'] ?? 0),
+        ];
+    }
+    $readinessStatus = (string) ($summary['readiness_status'] ?? 'review_required');
+    if ($readinessStatus === 'blocked') {
+        $issues[] = [
+            'severity' => 'critical',
+            'module' => 'deployment',
+            'category' => 'readiness',
+            'message' => 'Cutover readiness is blocked.',
+            'count' => (int) ($summary['readiness_critical_failed'] ?? 0),
+        ];
+    } elseif ($readinessStatus === 'review_required') {
+        $issues[] = [
+            'severity' => 'warning',
+            'module' => 'deployment',
+            'category' => 'readiness',
+            'message' => 'Cutover readiness still needs review.',
+            'count' => (int) ($summary['readiness_warning_failed'] ?? 0),
+        ];
+    }
+    $watchdogsStatus = (string) ($summary['watchdogs_status'] ?? 'ok');
+    if ($watchdogsStatus === 'critical') {
+        $issues[] = [
+            'severity' => 'critical',
+            'module' => 'deployment',
+            'category' => 'watchdogs',
+            'message' => 'Deployment watchdogs are critical.',
+            'count' => (int) ($summary['watchdogs_critical_count'] ?? 0),
+        ];
+    } elseif ($watchdogsStatus === 'warning') {
+        $issues[] = [
+            'severity' => 'warning',
+            'module' => 'deployment',
+            'category' => 'watchdogs',
+            'message' => 'Deployment watchdogs still report warnings.',
+            'count' => (int) ($summary['watchdogs_warning_count'] ?? 0),
+        ];
+    }
+    if ((int) ($summary['open_incidents'] ?? 0) > 0) {
+        $issues[] = [
+            'severity' => 'warning',
+            'module' => 'deployment',
+            'category' => 'incidents',
+            'message' => 'Open deployment incidents still exist.',
+            'count' => (int) ($summary['open_incidents'] ?? 0),
+        ];
+    }
+    if (!empty($summary['automation_due_now'])) {
+        $issues[] = [
+            'severity' => 'info',
+            'module' => 'deployment',
+            'category' => 'automation',
+            'message' => 'Automation run is due now.',
+            'count' => 1,
+        ];
+    }
+
+    $modules = isset($snapshot['modules']) && is_array($snapshot['modules']) ? $snapshot['modules'] : [];
+    foreach ($modules as $moduleKey => $module) {
+        $moduleIssues = isset($module['issues']['issues']) && is_array($module['issues']['issues']) ? $module['issues']['issues'] : [];
+        foreach ($moduleIssues as $issue) {
+            if (!is_array($issue)) {
+                continue;
+            }
+            $issues[] = [
+                'severity' => (string) ($issue['severity'] ?? 'info'),
+                'module' => (string) $moduleKey,
+                'category' => (string) ($issue['category'] ?? 'general'),
+                'message' => strtoupper((string) $moduleKey) . ': ' . (string) ($issue['message'] ?? 'Operational issue.'),
+                'count' => (int) ($issue['count'] ?? 0),
+            ];
+        }
+    }
+
+    $severityCounts = [
+        'critical' => 0,
+        'warning' => 0,
+        'info' => 0,
+    ];
+    foreach ($issues as $issue) {
+        $severity = (string) ($issue['severity'] ?? 'info');
+        if (!isset($severityCounts[$severity])) {
+            $severityCounts[$severity] = 0;
+        }
+        $severityCounts[$severity]++;
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'launch_state' => (string) ($summary['launch_state'] ?? 'review_required'),
+            'issue_count' => count($issues),
+            'severity_counts' => $severityCounts,
+            'deployment_issue_count' => count(array_values(array_filter($issues, static function ($issue) {
+                return is_array($issue) && (string) ($issue['module'] ?? '') === 'deployment';
+            }))),
+            'module_issue_count' => count(array_values(array_filter($issues, static function ($issue) {
+                return is_array($issue) && (string) ($issue['module'] ?? '') !== 'deployment';
+            }))),
+        ],
+        'issues' => $issues,
+        'snapshot' => $snapshot,
+    ];
+}
+
 function crm_smtp_watch_state_path()
 {
     return app_storage_path('crm_smtp_watch_state.json');
@@ -8645,7 +8764,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.44-launch-operations-history-summary',
+        'phase' => '5.45-launch-operations-issues-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14496,7 +14615,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.44-launch-operations-history-summary',
+        'phase' => '5.45-launch-operations-issues-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17935,6 +18054,25 @@ if ($action === 'launch.operations.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+    ]);
+}
+
+if ($action === 'launch.operations.issues_summary') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $issues = launch_operations_issues_summary($limit, $freshness);
+    out_json([
+        'ok' => true,
+        'generated_at' => $issues['generated_at'],
+        'summary' => $issues['summary'],
+        'issues' => $issues['issues'],
+        'snapshot' => $issues['snapshot'],
     ]);
 }
 
