@@ -5247,6 +5247,67 @@ function launch_operations_history_detail_snapshot($snapshotId = '')
     return null;
 }
 
+function launch_operations_source_summary_snapshot($query = [])
+{
+    $rows = app_read_json_file(launch_operations_history_path(), []);
+    $filtered = launch_operations_history_apply_filters($rows, $query);
+    $sources = [];
+    $stateCounts = [
+        'ready' => 0,
+        'review_required' => 0,
+        'blocked' => 0,
+    ];
+    foreach ($filtered as $row) {
+        $summary = isset($row['summary']) && is_array($row['summary']) ? $row['summary'] : [];
+        $source = (string) ($row['source'] ?? 'unknown');
+        $launchState = (string) ($summary['launch_state'] ?? 'review_required');
+        if (!isset($sources[$source])) {
+            $sources[$source] = [
+                'source' => $source,
+                'count' => 0,
+                'latest_created_at' => '',
+                'latest_launch_state' => '',
+                'state_counts' => [
+                    'ready' => 0,
+                    'review_required' => 0,
+                    'blocked' => 0,
+                ],
+            ];
+        }
+        $sources[$source]['count']++;
+        if ($sources[$source]['latest_created_at'] === '') {
+            $sources[$source]['latest_created_at'] = (string) ($row['created_at'] ?? '');
+            $sources[$source]['latest_launch_state'] = $launchState;
+        }
+        if (!isset($sources[$source]['state_counts'][$launchState])) {
+            $sources[$source]['state_counts'][$launchState] = 0;
+        }
+        $sources[$source]['state_counts'][$launchState]++;
+        if (!isset($stateCounts[$launchState])) {
+            $stateCounts[$launchState] = 0;
+        }
+        $stateCounts[$launchState]++;
+    }
+    uasort($sources, static function ($left, $right) {
+        return (int) ($right['count'] ?? 0) <=> (int) ($left['count'] ?? 0);
+    });
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'filtered_count' => count($filtered),
+            'source_count' => count($sources),
+            'state_counts' => $stateCounts,
+            'filters' => [
+                'source' => (string) ($query['source'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
+        ],
+        'sources' => array_values($sources),
+    ];
+}
+
 function launch_operations_history_summary($limit = 20)
 {
     $history = launch_operations_history_snapshot($limit);
@@ -8950,7 +9011,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.56-launch-operations-history-detail-export',
+        'phase' => '5.57-launch-operations-source-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14818,7 +14879,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.56-launch-operations-history-detail-export',
+        'phase' => '5.57-launch-operations-source-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18309,6 +18370,20 @@ if ($action === 'launch.operations.history_detail_export') {
         'ok' => true,
         'filename' => 'launch_operations_history_detail_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($detail['snapshot_id'] ?? $snapshotId)) . '.json',
         'export' => $detail,
+    ]);
+}
+
+if ($action === 'launch.operations.source_summary') {
+    $summary = launch_operations_source_summary_snapshot([
+        'source' => isset($_GET['source']) ? (string) $_GET['source'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'generated_at' => $summary['generated_at'],
+        'summary' => $summary['summary'],
+        'sources' => $summary['sources'],
     ]);
 }
 

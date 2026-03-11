@@ -529,6 +529,7 @@
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistoryDetailView = document.getElementById("launchOperationsHistoryDetailView");
+  const launchOperationsSourceSummaryView = document.getElementById("launchOperationsSourceSummaryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
   const launchOperationsLatestCompareView = document.getElementById("launchOperationsLatestCompareView");
   const launchOperationsIssuesSummaryView = document.getElementById("launchOperationsIssuesSummaryView");
@@ -5055,6 +5056,23 @@
     }
   }
 
+  async function loadLaunchOperationsSourceSummary() {
+    if (!launchOperationsSourceSummaryView) return;
+    const source = document.getElementById("launchOperationsHistorySourceFilter");
+    const launchState = document.getElementById("launchOperationsHistoryStateFilter");
+    const search = document.getElementById("launchOperationsHistorySearch");
+    try {
+      const data = await apiGetWithParams("launch.operations.source_summary", {
+        source: source && source.value ? source.value.trim() : "",
+        launch_state: launchState && launchState.value ? launchState.value : "",
+        search: search && search.value ? search.value.trim() : "",
+      });
+      launchOperationsSourceSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsSourceSummaryView.textContent = "Failed to load launch operations source summary.";
+    }
+  }
+
   async function downloadLaunchOperationsHistoryDetail() {
     const snapshotId = document.getElementById("launchOperationsHistoryDetailId");
     const id = snapshotId && snapshotId.value ? snapshotId.value.trim() : "";
@@ -5278,6 +5296,7 @@
     await loadSeoOperationsIssuesSummary();
     await loadLaunchOperationsSnapshot();
     await loadLaunchOperationsHistory();
+    await loadLaunchOperationsSourceSummary();
     await loadLaunchOperationsHistorySummary();
     await loadLaunchOperationsLatestCompare();
     await loadLaunchOperationsIssuesSummary();
@@ -8155,6 +8174,7 @@
     refreshLaunchOperationsSnapshotBtn.addEventListener("click", async function () {
       await loadLaunchOperationsSnapshot();
       await loadLaunchOperationsHistory();
+      await loadLaunchOperationsSourceSummary();
       await loadLaunchOperationsHistorySummary();
       await loadLaunchOperationsLatestCompare();
       await loadLaunchOperationsIssuesSummary();

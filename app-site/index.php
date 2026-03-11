@@ -2159,6 +2159,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     <button id="downloadLaunchOperationsHistoryDetailBtn" type="button">Download Launch History Detail</button>
                 </form>
                 <pre id="launchOperationsHistoryDetailView">No launch history detail loaded.</pre>
+                <pre id="launchOperationsSourceSummaryView">Loading...</pre>
                 <pre id="launchOperationsHistorySummaryView">Loading...</pre>
                 <pre id="launchOperationsLatestCompareView">Loading...</pre>
                 <pre id="launchOperationsIssuesSummaryView">Loading...</pre>
