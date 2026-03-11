@@ -525,6 +525,7 @@
   const downloadLaunchOperationsHistorySummaryBtn = document.getElementById("downloadLaunchOperationsHistorySummaryBtn");
   const downloadLaunchOperationsCompareBtn = document.getElementById("downloadLaunchOperationsCompareBtn");
   const downloadLaunchOperationsIssuesBtn = document.getElementById("downloadLaunchOperationsIssuesBtn");
+  const downloadLaunchOperationsReviewBundleBtn = document.getElementById("downloadLaunchOperationsReviewBundleBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
@@ -5060,6 +5061,20 @@
     }
   }
 
+  async function downloadLaunchOperationsReviewBundle() {
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const freshness = document.getElementById("launchOperationsFreshnessMinutes");
+    const data = await apiGetWithParams("launch.operations.review_bundle", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+      freshness_minutes: freshness && freshness.value ? Number(freshness.value) : 30,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-review-bundle-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsSnapshotView) {
+      launchOperationsSnapshotView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadLaunchOperationsIssuesSummary() {
     if (!launchOperationsIssuesSummaryView) return;
     const limit = document.getElementById("launchOperationsSnapshotLimit");
@@ -8119,6 +8134,12 @@
   if (downloadLaunchOperationsIssuesBtn) {
     downloadLaunchOperationsIssuesBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsIssues();
+    });
+  }
+
+  if (downloadLaunchOperationsReviewBundleBtn) {
+    downloadLaunchOperationsReviewBundleBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsReviewBundle();
     });
   }
 

@@ -8883,7 +8883,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.52-launch-operations-history-summary-export',
+        'phase' => '5.53-launch-operations-review-bundle',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14751,7 +14751,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.52-launch-operations-history-summary-export',
+        'phase' => '5.53-launch-operations-review-bundle',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18290,6 +18290,49 @@ if ($action === 'launch.operations.issues_export') {
         'ok' => true,
         'filename' => 'launch_operations_issues_' . gmdate('Ymd_His') . '.json',
         'export' => $issues,
+    ]);
+}
+
+if ($action === 'launch.operations.review_bundle') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $snapshot = launch_operations_snapshot($limit, $freshness);
+    $history = launch_operations_history_snapshot($limit);
+    $historySummary = launch_operations_history_summary(max(20, $limit));
+    $compare = launch_operations_latest_compare();
+    $issues = launch_operations_issues_summary($limit, $freshness);
+    $bundle = [
+        'bundle_id' => 'launch_review_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'generated_at' => gmdate('c'),
+        'limit' => $limit,
+        'freshness_minutes' => $freshness,
+        'summary' => [
+            'launch_state' => (string) ($snapshot['summary']['launch_state'] ?? 'review_required'),
+            'issue_count' => (int) ($issues['summary']['issue_count'] ?? 0),
+            'history_runs' => (int) ($history['summary']['total_count'] ?? 0),
+            'release_gate_allowed' => (int) ($snapshot['summary']['release_gate_allowed'] ?? 0),
+        ],
+        'snapshot' => $snapshot,
+        'history' => $history,
+        'history_summary' => $historySummary,
+        'latest_compare' => $compare,
+        'issues' => $issues,
+    ];
+    audit_event('launch', 'operations.review_bundle.export', [
+        'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
+        'launch_state' => (string) ($bundle['summary']['launch_state'] ?? 'review_required'),
+        'issue_count' => (int) ($bundle['summary']['issue_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'launch_operations_review_bundle_' . gmdate('Ymd_His') . '.json',
+        'export' => $bundle,
     ]);
 }
 
