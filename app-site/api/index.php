@@ -7000,8 +7000,14 @@ function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = n
     $bundle = deployment_handoff_bundle_snapshot();
     $guardEval = deployment_guard_evaluate();
     $gate = deployment_release_gate_snapshot($freshnessMinutes);
-
-    $ready = ((string) ($bundle['status'] ?? 'review_required') === 'ready') && !empty($guardEval['allowed']) && !empty($gate['allowed']);
+    $launchSnapshot = launch_operations_snapshot(10, $freshnessMinutes === null ? 30 : $freshnessMinutes);
+    $launchRecord = launch_operations_record_snapshot($launchSnapshot, 'release_candidate');
+    $launchIssues = launch_operations_issues_summary(10, $freshnessMinutes === null ? 30 : $freshnessMinutes);
+    $launchSummary = isset($launchSnapshot['summary']) && is_array($launchSnapshot['summary']) ? $launchSnapshot['summary'] : [];
+    $ready = ((string) ($bundle['status'] ?? 'review_required') === 'ready')
+        && !empty($guardEval['allowed'])
+        && !empty($gate['allowed'])
+        && ((string) ($launchSummary['launch_state'] ?? 'review_required') === 'ready');
     $candidate = [
         'candidate_id' => 'release_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'created_at' => gmdate('c'),
@@ -7013,6 +7019,11 @@ function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = n
         'release_gate_allowed' => !empty($gate['allowed']) ? 1 : 0,
         'release_gate_reasons' => isset($gate['reasons']) && is_array($gate['reasons']) ? $gate['reasons'] : [],
         'release_gate_window_minutes' => (int) ($gate['freshness_window_minutes'] ?? 30),
+        'launch_state' => (string) ($launchSummary['launch_state'] ?? 'review_required'),
+        'launch_issue_count' => (int) (($launchIssues['summary']['issue_count'] ?? 0)),
+        'launch_blocked_modules' => (int) ($launchSummary['blocked_modules'] ?? 0),
+        'launch_review_modules' => (int) ($launchSummary['review_modules'] ?? 0),
+        'launch_snapshot_id' => (string) ($launchRecord['snapshot_id'] ?? ''),
         'failed_environment_checklist' => isset($bundle['failed_environment_checklist']) && is_array($bundle['failed_environment_checklist']) ? $bundle['failed_environment_checklist'] : [],
         'bundle_id' => (string) ($bundle['bundle_id'] ?? ''),
     ];
@@ -7026,6 +7037,8 @@ function deployment_release_candidate_snapshot($note = '', $freshnessMinutes = n
         'candidate' => $candidate,
         'bundle' => $bundle,
         'release_gate' => $gate,
+        'launch_operations' => $launchSnapshot,
+        'launch_issues' => $launchIssues,
     ];
 }
 
@@ -9011,7 +9024,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.58-launch-operations-source-summary-export',
+        'phase' => '5.59-release-candidate-launch-operations-gate',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14879,7 +14892,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.58-launch-operations-source-summary-export',
+        'phase' => '5.59-release-candidate-launch-operations-gate',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
