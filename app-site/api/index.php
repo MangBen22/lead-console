@@ -5672,6 +5672,65 @@ function deployment_release_log_path()
     return app_storage_path('deployment_releases.json');
 }
 
+function deployment_release_log_apply_filters($rows, $query = [])
+{
+    $items = array_values(array_filter(is_array($rows) ? $rows : [], static function ($row) {
+        return is_array($row);
+    }));
+    $status = strtolower(trim((string) ($query['status'] ?? '')));
+    $launchState = strtolower(trim((string) ($query['launch_state'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+    return array_values(array_filter($items, static function ($row) use ($status, $launchState, $search) {
+        $rowStatus = strtolower((string) ($row['status'] ?? ''));
+        $rowLaunchState = strtolower((string) ($row['launch_state'] ?? ''));
+        if ($status !== '' && $rowStatus !== $status) {
+            return false;
+        }
+        if ($launchState !== '' && $rowLaunchState !== $launchState) {
+            return false;
+        }
+        if ($search !== '') {
+            $haystack = strtolower(implode(' ', array_filter([
+                (string) ($row['candidate_id'] ?? ''),
+                (string) ($row['bundle_id'] ?? ''),
+                (string) ($row['launch_snapshot_id'] ?? ''),
+                (string) ($row['note'] ?? ''),
+                (string) ($row['created_at'] ?? ''),
+            ])));
+            if (strpos($haystack, $search) === false) {
+                return false;
+            }
+        }
+        return true;
+    }));
+}
+
+function deployment_release_log_list_snapshot($query = [])
+{
+    $page = max(1, (int) ($query['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($query['limit'] ?? 20)));
+    $rows = app_read_json_file(deployment_release_log_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    $filtered = deployment_release_log_apply_filters($rows, $query);
+    $offset = ($page - 1) * $limit;
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'filters' => [
+                'status' => (string) ($query['status'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9024,7 +9083,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.59-release-candidate-launch-operations-gate',
+        'phase' => '5.60-release-log-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14892,7 +14951,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.59-release-candidate-launch-operations-gate',
+        'phase' => '5.60-release-log-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15781,11 +15840,17 @@ if ($action === 'deployment.watchdogs.incident.reopen') {
 }
 
 if ($action === 'deployment.release.log') {
-    $rows = app_read_json_file(deployment_release_log_path(), []);
+    $rows = deployment_release_log_list_snapshot([
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 20,
+        'status' => isset($_GET['status']) ? (string) $_GET['status'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
     out_json([
         'ok' => true,
-        'count' => count($rows),
-        'items' => $rows,
+        'summary' => $rows['summary'],
+        'items' => $rows['items'],
         'time' => gmdate('c'),
     ]);
 }

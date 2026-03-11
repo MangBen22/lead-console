@@ -2355,6 +2355,37 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="artifactVerifyView">No artifact verification yet.</pre>
                 <h3>Release Log</h3>
+                <form id="releaseLogFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="releaseLogStatusFilter">Release Status</label>
+                        <select id="releaseLogStatusFilter">
+                            <option value="">any</option>
+                            <option value="ready">ready</option>
+                            <option value="blocked">blocked</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseLogLaunchStateFilter">Launch State</label>
+                        <select id="releaseLogLaunchStateFilter">
+                            <option value="">any</option>
+                            <option value="ready">ready</option>
+                            <option value="review_required">review_required</option>
+                            <option value="blocked">blocked</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseLogSearch">Release Search</label>
+                        <input id="releaseLogSearch" type="text" placeholder="candidate, bundle, or note">
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseLogPage">Release Page</label>
+                        <input id="releaseLogPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseLogLimit">Release Limit</label>
+                        <input id="releaseLogLimit" type="number" min="1" max="100" value="20">
+                    </div>
+                </form>
                 <pre id="releaseLogView">Loading...</pre>
             </section>
 

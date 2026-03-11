@@ -2050,7 +2050,13 @@
   async function loadReleaseLog() {
     if (!releaseLogView) return;
     try {
-      const data = await apiGet("deployment.release.log");
+      const data = await apiGetWithParams("deployment.release.log", {
+        status: document.getElementById("releaseLogStatusFilter") && document.getElementById("releaseLogStatusFilter").value ? document.getElementById("releaseLogStatusFilter").value : "",
+        launch_state: document.getElementById("releaseLogLaunchStateFilter") && document.getElementById("releaseLogLaunchStateFilter").value ? document.getElementById("releaseLogLaunchStateFilter").value : "",
+        search: document.getElementById("releaseLogSearch") && document.getElementById("releaseLogSearch").value ? document.getElementById("releaseLogSearch").value.trim() : "",
+        page: document.getElementById("releaseLogPage") && document.getElementById("releaseLogPage").value ? Number(document.getElementById("releaseLogPage").value) : 1,
+        limit: document.getElementById("releaseLogLimit") && document.getElementById("releaseLogLimit").value ? Number(document.getElementById("releaseLogLimit").value) : 20,
+      });
       releaseLogView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       releaseLogView.textContent = "Failed to load release log.";
