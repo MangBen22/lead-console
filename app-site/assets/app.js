@@ -2220,6 +2220,19 @@
     }
   }
 
+  async function loadReleaseDecisionActionPlan() {
+    const releaseDecisionActionPlanView = document.getElementById("releaseDecisionActionPlanView");
+    if (!releaseDecisionActionPlanView) return;
+    try {
+      const data = await apiGetWithParams("deployment.release.decision.action_plan", {
+        freshness_minutes: releaseGateFreshnessInput && releaseGateFreshnessInput.value ? Number(releaseGateFreshnessInput.value) : 30,
+      });
+      releaseDecisionActionPlanView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseDecisionActionPlanView.textContent = "Failed to load release decision action plan.";
+    }
+  }
+
   async function downloadReleaseDecisionIssues() {
     const releaseDecisionIssuesSummaryView = document.getElementById("releaseDecisionIssuesSummaryView");
     const data = await apiGetWithParams("deployment.release.decision.issues_export", {
@@ -5691,6 +5704,7 @@
     await loadReleaseDecisionLatestCompare();
     await loadReleaseDecisionSourceSummary();
     await loadReleaseDecisionIssuesSummary();
+    await loadReleaseDecisionActionPlan();
   })();
 
   if (crmConnectorForm) {
@@ -7818,6 +7832,7 @@
       await loadReleaseDecisionLatestCompare();
       await loadReleaseDecisionSourceSummary();
       await loadReleaseDecisionIssuesSummary();
+      await loadReleaseDecisionActionPlan();
     });
   }
 
@@ -7830,6 +7845,7 @@
       await loadReleaseDecisionLatestCompare();
       await loadReleaseDecisionSourceSummary();
       await loadReleaseDecisionIssuesSummary();
+      await loadReleaseDecisionActionPlan();
     });
   }
 
@@ -8634,6 +8650,7 @@
       await loadReleaseDecisionLatestCompare();
       await loadReleaseDecisionSourceSummary();
       await loadReleaseDecisionIssuesSummary();
+      await loadReleaseDecisionActionPlan();
     });
   }
 

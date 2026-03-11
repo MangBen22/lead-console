@@ -6267,6 +6267,88 @@ function deployment_release_decision_issues_summary($freshnessMinutes = null)
     ];
 }
 
+function deployment_release_decision_action_plan($freshnessMinutes = null)
+{
+    $issues = deployment_release_decision_issues_summary($freshnessMinutes);
+    $snapshot = isset($issues['snapshot']) && is_array($issues['snapshot']) ? $issues['snapshot'] : [];
+    $checks = isset($snapshot['checks']) && is_array($snapshot['checks']) ? $snapshot['checks'] : [];
+    $remediationMap = [
+        'release_gate_allowed' => [
+            'owner' => 'deployment',
+            'step' => 'Resolve the current release-gate blockers, then rerun the release gate and release decision.',
+        ],
+        'cutover_readiness_ready' => [
+            'owner' => 'deployment',
+            'step' => 'Clear cutover readiness failures, rerun smoke checks, and confirm readiness is ready.',
+        ],
+        'launch_operations_ready' => [
+            'owner' => 'operations',
+            'step' => 'Resolve blocked or review-required launch modules, then refresh launch operations.',
+        ],
+        'latest_release_candidate_ready' => [
+            'owner' => 'release',
+            'step' => 'Generate a fresh release candidate after upstream blockers are cleared.',
+        ],
+        'active_signoff_present' => [
+            'owner' => 'approvals',
+            'step' => 'Create or activate a valid cutover signoff before approving launch.',
+        ],
+    ];
+    $priorityCounts = [
+        'P1' => 0,
+        'P2' => 0,
+        'P3' => 0,
+    ];
+    $actions = [];
+
+    foreach ($checks as $check) {
+        if (!is_array($check) || !empty($check['ok'])) {
+            continue;
+        }
+        $item = (string) ($check['item'] ?? 'check');
+        $severity = strtolower((string) ($check['severity'] ?? 'warning'));
+        $priority = $severity === 'critical' ? 'P1' : ($severity === 'warning' ? 'P2' : 'P3');
+        $plan = isset($remediationMap[$item]) && is_array($remediationMap[$item]) ? $remediationMap[$item] : [
+            'owner' => 'deployment',
+            'step' => 'Review the failing decision check and rerun the release decision after correcting the issue.',
+        ];
+        $priorityCounts[$priority]++;
+        $actions[] = [
+            'priority' => $priority,
+            'severity' => $severity,
+            'owner' => (string) ($plan['owner'] ?? 'deployment'),
+            'category' => $item,
+            'message' => (string) ($check['message'] ?? 'Release decision check failed.'),
+            'recommended_step' => (string) ($plan['step'] ?? ''),
+            'status' => 'open',
+        ];
+    }
+
+    usort($actions, static function ($left, $right) {
+        $priorityOrder = ['P1' => 0, 'P2' => 1, 'P3' => 2];
+        $leftPriority = $priorityOrder[(string) ($left['priority'] ?? 'P3')] ?? 99;
+        $rightPriority = $priorityOrder[(string) ($right['priority'] ?? 'P3')] ?? 99;
+        if ($leftPriority !== $rightPriority) {
+            return $leftPriority <=> $rightPriority;
+        }
+        return strcmp((string) ($left['category'] ?? ''), (string) ($right['category'] ?? ''));
+    });
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'decision' => (string) ($issues['summary']['decision'] ?? 'review'),
+            'action_count' => count($actions),
+            'priority_counts' => $priorityCounts,
+            'issue_count' => (int) ($issues['summary']['issue_count'] ?? 0),
+            'launch_state' => (string) ($issues['summary']['launch_state'] ?? ''),
+            'latest_candidate_id' => (string) ($issues['summary']['latest_candidate_id'] ?? ''),
+        ],
+        'actions' => $actions,
+        'issues' => $issues,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9619,7 +9701,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.81-release-decision-review-bundle',
+        'phase' => '5.82-release-decision-action-plan',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15487,7 +15569,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.81-release-decision-review-bundle',
+        'phase' => '5.82-release-decision-action-plan',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16880,6 +16962,22 @@ if ($action === 'deployment.release.decision.review_bundle') {
         'ok' => true,
         'filename' => 'release_decision_review_bundle_' . gmdate('Ymd_His') . '.json',
         'export' => $bundle,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.action_plan') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $plan = deployment_release_decision_action_plan($freshness);
+    out_json([
+        'ok' => true,
+        'generated_at' => $plan['generated_at'],
+        'summary' => $plan['summary'],
+        'actions' => $plan['actions'],
+        'issues' => $plan['issues'],
         'time' => gmdate('c'),
     ]);
 }
