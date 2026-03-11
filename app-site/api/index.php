@@ -8883,7 +8883,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.50-launch-operations-issues-export',
+        'phase' => '5.51-launch-operations-history-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14751,7 +14751,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.50-launch-operations-issues-export',
+        'phase' => '5.51-launch-operations-history-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18175,6 +18175,23 @@ if ($action === 'launch.operations.history') {
         'ok' => true,
         'summary' => $history['summary'],
         'items' => $history['items'],
+    ]);
+}
+
+if ($action === 'launch.operations.history_export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    if ($limit <= 0) {
+        $limit = 10;
+    }
+    $history = launch_operations_history_snapshot($limit);
+    audit_event('launch', 'operations.history.export', [
+        'limit' => $limit,
+        'total_count' => (int) ($history['summary']['total_count'] ?? 0),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'launch_operations_history_' . gmdate('Ymd_His') . '.json',
+        'export' => $history,
     ]);
 }
 

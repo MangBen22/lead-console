@@ -521,6 +521,7 @@
   const seoOperationsIssuesSummaryView = document.getElementById("seoOperationsIssuesSummaryView");
   const refreshLaunchOperationsSnapshotBtn = document.getElementById("refreshLaunchOperationsSnapshotBtn");
   const downloadLaunchOperationsSnapshotBtn = document.getElementById("downloadLaunchOperationsSnapshotBtn");
+  const downloadLaunchOperationsHistoryBtn = document.getElementById("downloadLaunchOperationsHistoryBtn");
   const downloadLaunchOperationsCompareBtn = document.getElementById("downloadLaunchOperationsCompareBtn");
   const downloadLaunchOperationsIssuesBtn = document.getElementById("downloadLaunchOperationsIssuesBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
@@ -5087,6 +5088,18 @@
     }
   }
 
+  async function downloadLaunchOperationsHistory() {
+    const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const data = await apiGetWithParams("launch.operations.history_export", {
+      limit: limit && limit.value ? Number(limit.value) : 10,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-history-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsHistoryView) {
+      launchOperationsHistoryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function downloadSeoOperationsSnapshot() {
     const limit = document.getElementById("seoOperationsSnapshotLimit");
     const data = await apiGetWithParams("seo.operations.export", {
@@ -8069,6 +8082,12 @@
   if (downloadLaunchOperationsSnapshotBtn) {
     downloadLaunchOperationsSnapshotBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsSnapshot();
+    });
+  }
+
+  if (downloadLaunchOperationsHistoryBtn) {
+    downloadLaunchOperationsHistoryBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsHistory();
     });
   }
 
