@@ -2383,6 +2383,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                     </div>
                     <button id="refreshReleaseDecisionHistoryBtn" type="button">Refresh Release Decision History</button>
                     <button id="downloadReleaseDecisionHistoryBtn" type="button">Download Release Decision History</button>
+                    <button id="downloadReleaseDecisionHistorySummaryBtn" type="button">Download Release Decision Summary</button>
                     <button id="downloadReleaseDecisionLatestCompareBtn" type="button">Download Release Decision Compare</button>
                 </form>
                 <pre id="releaseDecisionHistoryView">Loading...</pre>

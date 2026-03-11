@@ -9508,7 +9508,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.75-release-decision-history-detail-export',
+        'phase' => '5.76-release-decision-history-summary-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15376,7 +15376,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.75-release-decision-history-detail-export',
+        'phase' => '5.76-release-decision-history-summary-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16609,6 +16609,22 @@ if ($action === 'deployment.release.decision.history_summary') {
         'latest' => $summary['latest'],
         'oldest' => $summary['oldest'],
         'history' => $summary['history'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.history_summary_export') {
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+    $summary = deployment_release_decision_history_summary($limit);
+    audit_event('deployment', 'release.decision.history_summary.export', [
+        'runs_count' => (int) ($summary['summary']['runs_count'] ?? 0),
+        'latest_decision' => (string) ($summary['summary']['latest_decision'] ?? ''),
+        'oldest_decision' => (string) ($summary['summary']['oldest_decision'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_history_summary_' . gmdate('Ymd_His') . '.json',
+        'export' => $summary,
         'time' => gmdate('c'),
     ]);
 }
