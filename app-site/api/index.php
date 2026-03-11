@@ -9098,7 +9098,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.61-release-log-detail',
+        'phase' => '5.62-release-log-detail-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14966,7 +14966,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.61-release-log-detail',
+        'phase' => '5.62-release-log-detail-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -15883,6 +15883,27 @@ if ($action === 'deployment.release.log.detail') {
         'ok' => true,
         'item' => $detail,
         'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.log.detail_export') {
+    $candidateId = isset($_GET['candidate_id']) ? (string) $_GET['candidate_id'] : '';
+    $detail = deployment_release_log_detail_snapshot($candidateId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Release log item not found.',
+        ], 404);
+    }
+    audit_event('deployment', 'release.log.detail.export', [
+        'candidate_id' => (string) ($detail['candidate_id'] ?? $candidateId),
+        'status' => (string) ($detail['status'] ?? ''),
+        'launch_state' => (string) ($detail['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_log_detail_' . preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string) ($detail['candidate_id'] ?? $candidateId)) . '.json',
+        'export' => $detail,
     ]);
 }
 

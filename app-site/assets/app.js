@@ -2082,6 +2082,26 @@
     }
   }
 
+  async function downloadReleaseLogDetail() {
+    const releaseLogDetailView = document.getElementById("releaseLogDetailView");
+    const candidateId = document.getElementById("releaseLogDetailId");
+    const id = candidateId && candidateId.value ? candidateId.value.trim() : "";
+    if (!id) {
+      if (releaseLogDetailView) {
+        releaseLogDetailView.textContent = "Enter a release candidate ID.";
+      }
+      return;
+    }
+    const data = await apiGetWithParams("deployment.release.log.detail_export", {
+      candidate_id: id,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-log-detail-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseLogDetailView) {
+      releaseLogDetailView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadArtifactManifest() {
     if (!artifactManifestView) return;
     try {
@@ -8283,6 +8303,13 @@
   if (loadReleaseLogDetailBtn) {
     loadReleaseLogDetailBtn.addEventListener("click", async function () {
       await loadReleaseLogDetail();
+    });
+  }
+
+  const downloadReleaseLogDetailBtn = document.getElementById("downloadReleaseLogDetailBtn");
+  if (downloadReleaseLogDetailBtn) {
+    downloadReleaseLogDetailBtn.addEventListener("click", async function () {
+      await downloadReleaseLogDetail();
     });
   }
 

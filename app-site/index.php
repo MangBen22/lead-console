@@ -2393,6 +2393,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="releaseLogDetailId" type="text" placeholder="release_YYYYMMDD_HHMMSS_xxxxxx">
                     </div>
                     <button id="loadReleaseLogDetailBtn" type="button">Load Release Detail</button>
+                    <button id="downloadReleaseLogDetailBtn" type="button">Download Release Detail</button>
                 </form>
                 <pre id="releaseLogDetailView">No release detail loaded.</pre>
             </section>
