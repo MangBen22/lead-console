@@ -2396,6 +2396,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 <pre id="releaseDecisionSourceSummaryView">Loading...</pre>
                 <pre id="releaseDecisionIssuesSummaryView">Loading...</pre>
                 <pre id="releaseDecisionActionPlanView">Loading...</pre>
+                <pre id="releaseDecisionCheckMatrixView">Loading...</pre>
                 <form id="releaseDecisionHistoryDetailForm" class="inline-form">
                     <div class="form-row">
                         <label for="releaseDecisionHistoryDetailId">Decision Snapshot ID</label>

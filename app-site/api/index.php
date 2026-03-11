@@ -6349,6 +6349,72 @@ function deployment_release_decision_action_plan($freshnessMinutes = null)
     ];
 }
 
+function deployment_release_decision_check_matrix_snapshot($freshnessMinutes = null)
+{
+    $snapshot = deployment_release_decision_snapshot($freshnessMinutes);
+    $checks = isset($snapshot['checks']) && is_array($snapshot['checks']) ? $snapshot['checks'] : [];
+    $moduleMap = [
+        'release_gate_allowed' => 'deployment',
+        'cutover_readiness_ready' => 'deployment',
+        'launch_operations_ready' => 'launch',
+        'latest_release_candidate_ready' => 'release',
+        'active_signoff_present' => 'approvals',
+    ];
+    $items = [];
+    $moduleCounts = [];
+    $passedCount = 0;
+    $failedCount = 0;
+
+    foreach ($checks as $check) {
+        if (!is_array($check)) {
+            continue;
+        }
+        $item = (string) ($check['item'] ?? 'check');
+        $module = (string) ($moduleMap[$item] ?? 'deployment');
+        $passed = !empty($check['ok']) ? 1 : 0;
+        if ($passed) {
+            $passedCount++;
+        } else {
+            $failedCount++;
+        }
+        if (!isset($moduleCounts[$module])) {
+            $moduleCounts[$module] = [
+                'passed' => 0,
+                'failed' => 0,
+            ];
+        }
+        if ($passed) {
+            $moduleCounts[$module]['passed']++;
+        } else {
+            $moduleCounts[$module]['failed']++;
+        }
+        $items[] = [
+            'item' => $item,
+            'module' => $module,
+            'severity' => (string) ($check['severity'] ?? 'warning'),
+            'status' => $passed ? 'pass' : 'fail',
+            'ok' => $passed,
+            'message' => (string) ($check['message'] ?? ''),
+        ];
+    }
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'decision' => (string) ($snapshot['decision'] ?? 'review'),
+            'launch_state' => (string) ($snapshot['summary']['launch_state'] ?? ''),
+            'total_checks' => count($items),
+            'passed_count' => $passedCount,
+            'failed_count' => $failedCount,
+            'critical_failed' => (int) ($snapshot['summary']['critical_failed'] ?? 0),
+            'warning_failed' => (int) ($snapshot['summary']['warning_failed'] ?? 0),
+            'module_counts' => $moduleCounts,
+        ],
+        'items' => $items,
+        'snapshot' => $snapshot,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9701,7 +9767,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.83-release-decision-action-plan-export',
+        'phase' => '5.84-release-decision-check-matrix',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15569,7 +15635,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.83-release-decision-action-plan-export',
+        'phase' => '5.84-release-decision-check-matrix',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16997,6 +17063,22 @@ if ($action === 'deployment.release.decision.action_plan_export') {
         'ok' => true,
         'filename' => 'release_decision_action_plan_' . gmdate('Ymd_His') . '.json',
         'export' => $plan,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.check_matrix') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $matrix = deployment_release_decision_check_matrix_snapshot($freshness);
+    out_json([
+        'ok' => true,
+        'generated_at' => $matrix['generated_at'],
+        'summary' => $matrix['summary'],
+        'items' => $matrix['items'],
+        'snapshot' => $matrix['snapshot'],
         'time' => gmdate('c'),
     ]);
 }
