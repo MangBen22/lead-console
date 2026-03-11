@@ -528,6 +528,7 @@
   const downloadLaunchOperationsReviewBundleBtn = document.getElementById("downloadLaunchOperationsReviewBundleBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
+  const launchOperationsHistoryDetailView = document.getElementById("launchOperationsHistoryDetailView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
   const launchOperationsLatestCompareView = document.getElementById("launchOperationsLatestCompareView");
   const launchOperationsIssuesSummaryView = document.getElementById("launchOperationsIssuesSummaryView");
@@ -5036,6 +5037,24 @@
     }
   }
 
+  async function loadLaunchOperationsHistoryDetail() {
+    if (!launchOperationsHistoryDetailView) return;
+    const snapshotId = document.getElementById("launchOperationsHistoryDetailId");
+    const id = snapshotId && snapshotId.value ? snapshotId.value.trim() : "";
+    if (!id) {
+      launchOperationsHistoryDetailView.textContent = "Enter a launch history snapshot ID.";
+      return;
+    }
+    try {
+      const data = await apiGetWithParams("launch.operations.history_detail", {
+        snapshot_id: id,
+      });
+      launchOperationsHistoryDetailView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      launchOperationsHistoryDetailView.textContent = "Failed to load launch operations history detail.";
+    }
+  }
+
   async function loadLaunchOperationsLatestCompare() {
     if (!launchOperationsLatestCompareView) return;
     try {
@@ -8132,6 +8151,13 @@
   if (downloadLaunchOperationsHistoryBtn) {
     downloadLaunchOperationsHistoryBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsHistory();
+    });
+  }
+
+  const loadLaunchOperationsHistoryDetailBtn = document.getElementById("loadLaunchOperationsHistoryDetailBtn");
+  if (loadLaunchOperationsHistoryDetailBtn) {
+    loadLaunchOperationsHistoryDetailBtn.addEventListener("click", async function () {
+      await loadLaunchOperationsHistoryDetail();
     });
   }
 

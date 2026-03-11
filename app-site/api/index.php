@@ -5232,6 +5232,21 @@ function launch_operations_history_list_snapshot($query = [])
     ];
 }
 
+function launch_operations_history_detail_snapshot($snapshotId = '')
+{
+    $target = trim((string) $snapshotId);
+    $rows = app_read_json_file(launch_operations_history_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['snapshot_id'] ?? '') === $target) {
+            return $row;
+        }
+    }
+    return null;
+}
+
 function launch_operations_history_summary($limit = 20)
 {
     $history = launch_operations_history_snapshot($limit);
@@ -8935,7 +8950,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.54-launch-operations-history-filters',
+        'phase' => '5.55-launch-operations-history-detail',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14803,7 +14818,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.54-launch-operations-history-filters',
+        'phase' => '5.55-launch-operations-history-detail',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18258,6 +18273,21 @@ if ($action === 'launch.operations.history_export') {
         'ok' => true,
         'filename' => 'launch_operations_history_' . gmdate('Ymd_His') . '.json',
         'export' => $history,
+    ]);
+}
+
+if ($action === 'launch.operations.history_detail') {
+    $snapshotId = isset($_GET['snapshot_id']) ? (string) $_GET['snapshot_id'] : '';
+    $detail = launch_operations_history_detail_snapshot($snapshotId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Launch operations history detail not found.',
+        ], 404);
+    }
+    out_json([
+        'ok' => true,
+        'item' => $detail,
     ]);
 }
 
