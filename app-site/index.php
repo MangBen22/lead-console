@@ -2382,6 +2382,7 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <input id="releaseDecisionHistoryLimit" type="number" min="1" max="100" value="20">
                     </div>
                     <button id="refreshReleaseDecisionHistoryBtn" type="button">Refresh Release Decision History</button>
+                    <button id="downloadReleaseDecisionHistoryBtn" type="button">Download Release Decision History</button>
                     <button id="downloadReleaseDecisionLatestCompareBtn" type="button">Download Release Decision Compare</button>
                 </form>
                 <pre id="releaseDecisionHistoryView">Loading...</pre>

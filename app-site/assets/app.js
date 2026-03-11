@@ -2140,6 +2140,22 @@
     }
   }
 
+  async function downloadReleaseDecisionHistory() {
+    const releaseDecisionHistoryView = document.getElementById("releaseDecisionHistoryView");
+    const data = await apiGetWithParams("deployment.release.decision.history_export", {
+      decision: document.getElementById("releaseDecisionHistoryDecisionFilter") && document.getElementById("releaseDecisionHistoryDecisionFilter").value ? document.getElementById("releaseDecisionHistoryDecisionFilter").value : "",
+      launch_state: document.getElementById("releaseDecisionHistoryLaunchStateFilter") && document.getElementById("releaseDecisionHistoryLaunchStateFilter").value ? document.getElementById("releaseDecisionHistoryLaunchStateFilter").value : "",
+      search: document.getElementById("releaseDecisionHistorySearch") && document.getElementById("releaseDecisionHistorySearch").value ? document.getElementById("releaseDecisionHistorySearch").value.trim() : "",
+      page: document.getElementById("releaseDecisionHistoryPage") && document.getElementById("releaseDecisionHistoryPage").value ? Number(document.getElementById("releaseDecisionHistoryPage").value) : 1,
+      limit: document.getElementById("releaseDecisionHistoryLimit") && document.getElementById("releaseDecisionHistoryLimit").value ? Number(document.getElementById("releaseDecisionHistoryLimit").value) : 20,
+    });
+    const filename = data && data.filename ? String(data.filename) : ("release-decision-history-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (releaseDecisionHistoryView) {
+      releaseDecisionHistoryView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadReleaseDecisionHistorySummary() {
     const releaseDecisionHistorySummaryView = document.getElementById("releaseDecisionHistorySummaryView");
     if (!releaseDecisionHistorySummaryView) return;
@@ -8510,6 +8526,13 @@
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
       await loadReleaseDecisionLatestCompare();
+    });
+  }
+
+  const downloadReleaseDecisionHistoryBtn = document.getElementById("downloadReleaseDecisionHistoryBtn");
+  if (downloadReleaseDecisionHistoryBtn) {
+    downloadReleaseDecisionHistoryBtn.addEventListener("click", async function () {
+      await downloadReleaseDecisionHistory();
     });
   }
 

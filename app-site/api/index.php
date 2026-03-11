@@ -9508,7 +9508,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.73-release-decision-latest-compare-export',
+        'phase' => '5.74-release-decision-history-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15376,7 +15376,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.73-release-decision-latest-compare-export',
+        'phase' => '5.74-release-decision-history-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16537,6 +16537,27 @@ if ($action === 'deployment.release.decision.history') {
         'ok' => true,
         'summary' => $history['summary'],
         'items' => $history['items'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.history_export') {
+    $history = deployment_release_decision_history_list_snapshot([
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 20,
+        'decision' => isset($_GET['decision']) ? (string) $_GET['decision'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    audit_event('deployment', 'release.decision.history.export', [
+        'filtered_count' => (int) ($history['summary']['filtered_count'] ?? 0),
+        'decision_filter' => (string) ($history['summary']['filters']['decision'] ?? ''),
+        'launch_state_filter' => (string) ($history['summary']['filters']['launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'release_decision_history_' . gmdate('Ymd_His') . '.json',
+        'export' => $history,
         'time' => gmdate('c'),
     ]);
 }
