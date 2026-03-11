@@ -2192,6 +2192,21 @@
     }
   }
 
+  async function loadReleaseDecisionSourceSummary() {
+    const releaseDecisionSourceSummaryView = document.getElementById("releaseDecisionSourceSummaryView");
+    if (!releaseDecisionSourceSummaryView) return;
+    try {
+      const data = await apiGetWithParams("deployment.release.decision.source_summary", {
+        decision: document.getElementById("releaseDecisionHistoryDecisionFilter") && document.getElementById("releaseDecisionHistoryDecisionFilter").value ? document.getElementById("releaseDecisionHistoryDecisionFilter").value : "",
+        launch_state: document.getElementById("releaseDecisionHistoryLaunchStateFilter") && document.getElementById("releaseDecisionHistoryLaunchStateFilter").value ? document.getElementById("releaseDecisionHistoryLaunchStateFilter").value : "",
+        search: document.getElementById("releaseDecisionHistorySearch") && document.getElementById("releaseDecisionHistorySearch").value ? document.getElementById("releaseDecisionHistorySearch").value.trim() : "",
+      });
+      releaseDecisionSourceSummaryView.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      releaseDecisionSourceSummaryView.textContent = "Failed to load release decision source summary.";
+    }
+  }
+
   async function downloadReleaseDecisionLatestCompare() {
     const releaseDecisionLatestCompareView = document.getElementById("releaseDecisionLatestCompareView");
     const data = await apiGet("deployment.release.decision.latest_compare_export");
@@ -5621,6 +5636,7 @@
     await loadReleaseDecisionHistory();
     await loadReleaseDecisionHistorySummary();
     await loadReleaseDecisionLatestCompare();
+    await loadReleaseDecisionSourceSummary();
   })();
 
   if (crmConnectorForm) {
@@ -7746,6 +7762,7 @@
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
       await loadReleaseDecisionLatestCompare();
+      await loadReleaseDecisionSourceSummary();
     });
   }
 
@@ -7756,6 +7773,7 @@
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
       await loadReleaseDecisionLatestCompare();
+      await loadReleaseDecisionSourceSummary();
     });
   }
 
@@ -8558,6 +8576,7 @@
       await loadReleaseDecisionHistory();
       await loadReleaseDecisionHistorySummary();
       await loadReleaseDecisionLatestCompare();
+      await loadReleaseDecisionSourceSummary();
     });
   }
 

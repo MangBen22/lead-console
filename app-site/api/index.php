@@ -6156,6 +6156,66 @@ function deployment_release_decision_latest_compare()
     ];
 }
 
+function deployment_release_decision_source_summary_snapshot($query = [])
+{
+    $rows = app_read_json_file(deployment_release_decision_history_path(), []);
+    $filtered = deployment_release_decision_history_apply_filters($rows, $query);
+    $sources = [];
+    $decisionCounts = [
+        'launch' => 0,
+        'review' => 0,
+        'hold' => 0,
+    ];
+    foreach ($filtered as $row) {
+        $source = (string) ($row['source'] ?? 'unknown');
+        $decision = strtolower((string) ($row['decision'] ?? 'review'));
+        if (!isset($sources[$source])) {
+            $sources[$source] = [
+                'source' => $source,
+                'count' => 0,
+                'latest_created_at' => '',
+                'latest_decision' => '',
+                'decision_counts' => [
+                    'launch' => 0,
+                    'review' => 0,
+                    'hold' => 0,
+                ],
+            ];
+        }
+        if (!isset($sources[$source]['decision_counts'][$decision])) {
+            $sources[$source]['decision_counts'][$decision] = 0;
+        }
+        if (!isset($decisionCounts[$decision])) {
+            $decisionCounts[$decision] = 0;
+        }
+        $sources[$source]['count']++;
+        $sources[$source]['decision_counts'][$decision]++;
+        $decisionCounts[$decision]++;
+        if ($sources[$source]['latest_created_at'] === '') {
+            $sources[$source]['latest_created_at'] = (string) ($row['created_at'] ?? '');
+            $sources[$source]['latest_decision'] = (string) ($row['decision'] ?? 'review');
+        }
+    }
+    uasort($sources, static function ($left, $right) {
+        return (int) ($right['count'] ?? 0) <=> (int) ($left['count'] ?? 0);
+    });
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'filtered_count' => count($filtered),
+            'source_count' => count($sources),
+            'decision_counts' => $decisionCounts,
+            'filters' => [
+                'decision' => (string) ($query['decision'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
+        ],
+        'sources' => array_values($sources),
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9508,7 +9568,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.76-release-decision-history-summary-export',
+        'phase' => '5.77-release-decision-source-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15376,7 +15436,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.76-release-decision-history-summary-export',
+        'phase' => '5.77-release-decision-source-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16653,6 +16713,21 @@ if ($action === 'deployment.release.decision.latest_compare_export') {
         'ok' => true,
         'filename' => 'release_decision_latest_compare_' . gmdate('Ymd_His') . '.json',
         'export' => $compare,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.source_summary') {
+    $summary = deployment_release_decision_source_summary_snapshot([
+        'decision' => isset($_GET['decision']) ? (string) $_GET['decision'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'generated_at' => $summary['generated_at'],
+        'summary' => $summary['summary'],
+        'sources' => $summary['sources'],
         'time' => gmdate('c'),
     ]);
 }
