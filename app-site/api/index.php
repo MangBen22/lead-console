@@ -6415,6 +6415,79 @@ function deployment_release_decision_check_matrix_snapshot($freshnessMinutes = n
     ];
 }
 
+function deployment_release_decision_owner_summary($freshnessMinutes = null)
+{
+    $plan = deployment_release_decision_action_plan($freshnessMinutes);
+    $actions = isset($plan['actions']) && is_array($plan['actions']) ? $plan['actions'] : [];
+    $owners = [];
+    $priorityTotals = [
+        'P1' => 0,
+        'P2' => 0,
+        'P3' => 0,
+    ];
+    foreach ($actions as $action) {
+        if (!is_array($action)) {
+            continue;
+        }
+        $owner = (string) ($action['owner'] ?? 'deployment');
+        $priority = (string) ($action['priority'] ?? 'P3');
+        if (!isset($owners[$owner])) {
+            $owners[$owner] = [
+                'owner' => $owner,
+                'action_count' => 0,
+                'priority_counts' => [
+                    'P1' => 0,
+                    'P2' => 0,
+                    'P3' => 0,
+                ],
+                'categories' => [],
+                'sample_actions' => [],
+            ];
+        }
+        if (!isset($owners[$owner]['priority_counts'][$priority])) {
+            $owners[$owner]['priority_counts'][$priority] = 0;
+        }
+        if (!isset($priorityTotals[$priority])) {
+            $priorityTotals[$priority] = 0;
+        }
+        $owners[$owner]['action_count']++;
+        $owners[$owner]['priority_counts'][$priority]++;
+        $priorityTotals[$priority]++;
+        $category = (string) ($action['category'] ?? 'check');
+        if (!in_array($category, $owners[$owner]['categories'], true)) {
+            $owners[$owner]['categories'][] = $category;
+        }
+        if (count($owners[$owner]['sample_actions']) < 3) {
+            $owners[$owner]['sample_actions'][] = [
+                'priority' => $priority,
+                'message' => (string) ($action['message'] ?? ''),
+                'recommended_step' => (string) ($action['recommended_step'] ?? ''),
+            ];
+        }
+    }
+    uasort($owners, static function ($left, $right) {
+        $countCompare = (int) ($right['action_count'] ?? 0) <=> (int) ($left['action_count'] ?? 0);
+        if ($countCompare !== 0) {
+            return $countCompare;
+        }
+        return strcmp((string) ($left['owner'] ?? ''), (string) ($right['owner'] ?? ''));
+    });
+
+    return [
+        'generated_at' => gmdate('c'),
+        'summary' => [
+            'decision' => (string) ($plan['summary']['decision'] ?? 'review'),
+            'owner_count' => count($owners),
+            'action_count' => (int) ($plan['summary']['action_count'] ?? 0),
+            'priority_totals' => $priorityTotals,
+            'launch_state' => (string) ($plan['summary']['launch_state'] ?? ''),
+            'latest_candidate_id' => (string) ($plan['summary']['latest_candidate_id'] ?? ''),
+        ],
+        'owners' => array_values($owners),
+        'action_plan' => $plan,
+    ];
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9767,7 +9840,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.85-release-decision-check-matrix-export',
+        'phase' => '5.86-release-decision-owner-summary',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15635,7 +15708,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.85-release-decision-check-matrix-export',
+        'phase' => '5.86-release-decision-owner-summary',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -17098,6 +17171,22 @@ if ($action === 'deployment.release.decision.check_matrix_export') {
         'ok' => true,
         'filename' => 'release_decision_check_matrix_' . gmdate('Ymd_His') . '.json',
         'export' => $matrix,
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.owner_summary') {
+    $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : 30;
+    if ($freshness <= 0) {
+        $freshness = 30;
+    }
+    $summary = deployment_release_decision_owner_summary($freshness);
+    out_json([
+        'ok' => true,
+        'generated_at' => $summary['generated_at'],
+        'summary' => $summary['summary'],
+        'owners' => $summary['owners'],
+        'action_plan' => $summary['action_plan'],
         'time' => gmdate('c'),
     ]);
 }
