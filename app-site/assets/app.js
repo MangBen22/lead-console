@@ -5005,9 +5005,17 @@
   async function loadLaunchOperationsHistory() {
     if (!launchOperationsHistoryView) return;
     const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const source = document.getElementById("launchOperationsHistorySourceFilter");
+    const launchState = document.getElementById("launchOperationsHistoryStateFilter");
+    const search = document.getElementById("launchOperationsHistorySearch");
+    const page = document.getElementById("launchOperationsHistoryPage");
     try {
       const data = await apiGetWithParams("launch.operations.history", {
+        page: page && page.value ? Number(page.value) : 1,
         limit: limit && limit.value ? Number(limit.value) : 10,
+        source: source && source.value ? source.value.trim() : "",
+        launch_state: launchState && launchState.value ? launchState.value : "",
+        search: search && search.value ? search.value.trim() : "",
       });
       launchOperationsHistoryView.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
@@ -5106,8 +5114,16 @@
 
   async function downloadLaunchOperationsHistory() {
     const limit = document.getElementById("launchOperationsSnapshotLimit");
+    const source = document.getElementById("launchOperationsHistorySourceFilter");
+    const launchState = document.getElementById("launchOperationsHistoryStateFilter");
+    const search = document.getElementById("launchOperationsHistorySearch");
+    const page = document.getElementById("launchOperationsHistoryPage");
     const data = await apiGetWithParams("launch.operations.history_export", {
+      page: page && page.value ? Number(page.value) : 1,
       limit: limit && limit.value ? Number(limit.value) : 10,
+      source: source && source.value ? source.value.trim() : "",
+      launch_state: launchState && launchState.value ? launchState.value : "",
+      search: search && search.value ? search.value.trim() : "",
     });
     const filename = data && data.filename ? String(data.filename) : ("launch-operations-history-" + Date.now() + ".json");
     downloadJsonFile(filename, data.export || data);

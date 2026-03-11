@@ -2119,6 +2119,27 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                         <label for="launchOperationsFreshnessMinutes">Freshness Minutes</label>
                         <input id="launchOperationsFreshnessMinutes" type="number" min="5" max="1440" value="30">
                     </div>
+                    <div class="form-row">
+                        <label for="launchOperationsHistorySourceFilter">History Source</label>
+                        <input id="launchOperationsHistorySourceFilter" type="text" placeholder="manual_view or automation_scheduler">
+                    </div>
+                    <div class="form-row">
+                        <label for="launchOperationsHistoryStateFilter">History State</label>
+                        <select id="launchOperationsHistoryStateFilter">
+                            <option value="">any</option>
+                            <option value="ready">ready</option>
+                            <option value="review_required">review_required</option>
+                            <option value="blocked">blocked</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="launchOperationsHistorySearch">History Search</label>
+                        <input id="launchOperationsHistorySearch" type="text" placeholder="snapshot id, source, or timestamp">
+                    </div>
+                    <div class="form-row">
+                        <label for="launchOperationsHistoryPage">History Page</label>
+                        <input id="launchOperationsHistoryPage" type="number" min="1" value="1">
+                    </div>
                     <button id="refreshLaunchOperationsSnapshotBtn" type="button">Refresh Launch Snapshot</button>
                     <button id="downloadLaunchOperationsSnapshotBtn" type="button">Download Launch Snapshot</button>
                     <button id="downloadLaunchOperationsHistoryBtn" type="button">Download Launch History</button>

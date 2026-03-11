@@ -5145,6 +5145,40 @@ function launch_operations_history_path()
     return app_storage_path('launch_operations_history.json');
 }
 
+function launch_operations_history_apply_filters($rows, $query = [])
+{
+    $items = array_values(array_filter(is_array($rows) ? $rows : [], static function ($row) {
+        return is_array($row);
+    }));
+    $source = strtolower(trim((string) ($query['source'] ?? '')));
+    $launchState = strtolower(trim((string) ($query['launch_state'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    return array_values(array_filter($items, static function ($row) use ($source, $launchState, $search) {
+        $rowSource = strtolower((string) ($row['source'] ?? ''));
+        $summary = isset($row['summary']) && is_array($row['summary']) ? $row['summary'] : [];
+        $rowState = strtolower((string) ($summary['launch_state'] ?? ''));
+        if ($source !== '' && $rowSource !== $source) {
+            return false;
+        }
+        if ($launchState !== '' && $rowState !== $launchState) {
+            return false;
+        }
+        if ($search !== '') {
+            $haystack = strtolower(implode(' ', array_filter([
+                (string) ($row['snapshot_id'] ?? ''),
+                (string) ($row['created_at'] ?? ''),
+                (string) ($row['source'] ?? ''),
+                (string) ($summary['launch_state'] ?? ''),
+            ])));
+            if (strpos($haystack, $search) === false) {
+                return false;
+            }
+        }
+        return true;
+    }));
+}
+
 function launch_operations_record_snapshot($snapshot, $source = 'manual_view')
 {
     $payload = is_array($snapshot) ? $snapshot : [];
@@ -5166,17 +5200,35 @@ function launch_operations_record_snapshot($snapshot, $source = 'manual_view')
 
 function launch_operations_history_snapshot($limit = 10)
 {
-    $safeLimit = max(1, min(100, (int) $limit));
+    return launch_operations_history_list_snapshot([
+        'page' => 1,
+        'limit' => $limit,
+    ]);
+}
+
+function launch_operations_history_list_snapshot($query = [])
+{
+    $page = max(1, (int) ($query['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($query['limit'] ?? 10)));
     $rows = app_read_json_file(launch_operations_history_path(), []);
     $rows = array_values(array_filter($rows, static function ($row) {
         return is_array($row);
     }));
+    $filtered = launch_operations_history_apply_filters($rows, $query);
+    $offset = ($page - 1) * $limit;
     return [
         'summary' => [
             'total_count' => count($rows),
-            'limit' => $safeLimit,
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'filters' => [
+                'source' => (string) ($query['source'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
         ],
-        'items' => array_slice($rows, 0, $safeLimit),
+        'items' => array_slice($filtered, $offset, $limit),
     ];
 }
 
@@ -8883,7 +8935,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.53-launch-operations-review-bundle',
+        'phase' => '5.54-launch-operations-history-filters',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14751,7 +14803,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.53-launch-operations-review-bundle',
+        'phase' => '5.54-launch-operations-history-filters',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18167,10 +18219,17 @@ if ($action === 'launch.operations.export') {
 
 if ($action === 'launch.operations.history') {
     $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
     if ($limit <= 0) {
         $limit = 10;
     }
-    $history = launch_operations_history_snapshot($limit);
+    $history = launch_operations_history_list_snapshot([
+        'page' => $page,
+        'limit' => $limit,
+        'source' => isset($_GET['source']) ? (string) $_GET['source'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
     out_json([
         'ok' => true,
         'summary' => $history['summary'],
@@ -18180,13 +18239,20 @@ if ($action === 'launch.operations.history') {
 
 if ($action === 'launch.operations.history_export') {
     $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 10;
+    $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
     if ($limit <= 0) {
         $limit = 10;
     }
-    $history = launch_operations_history_snapshot($limit);
+    $history = launch_operations_history_list_snapshot([
+        'page' => $page,
+        'limit' => $limit,
+        'source' => isset($_GET['source']) ? (string) $_GET['source'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
     audit_event('launch', 'operations.history.export', [
         'limit' => $limit,
-        'total_count' => (int) ($history['summary']['total_count'] ?? 0),
+        'filtered_count' => (int) ($history['summary']['filtered_count'] ?? 0),
     ]);
     out_json([
         'ok' => true,
