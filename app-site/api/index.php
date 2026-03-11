@@ -8820,7 +8820,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.46-launch-operations-latest-compare',
+        'phase' => '5.47-launch-operations-automation-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14428,6 +14428,7 @@ function execute_automation_run($settings, $source = 'manual')
         'social' => ['processed' => 0, 'failed' => 0, 'blocked_connectors' => 0, 'expired_connectors' => 0, 'watch_run_id' => '', 'delivery_degraded_connectors' => 0, 'delivery_watch_id' => '', 'scheduled_processed' => 0, 'scheduled_sent' => 0, 'scheduled_failed' => 0, 'schedule_run_id' => '', 'retry_processed' => 0, 'retry_succeeded' => 0, 'retry_remaining' => 0, 'retry_run_id' => '', 'inbox_watch_run_id' => '', 'inbox_stale_backlog' => 0, 'inbox_unassigned_backlog' => 0, 'inbox_attention_required' => 0],
         'webops' => ['processed' => 0, 'failed' => 0],
         'seo' => ['processed' => 0, 'failed' => 0, 'regressions' => 0, 'regression_run_id' => ''],
+        'launch' => ['launch_state' => '', 'release_gate_allowed' => 0, 'blocked_modules' => 0, 'review_modules' => 0, 'open_incidents' => 0, 'issue_count' => 0, 'snapshot_id' => ''],
     ];
 
     if (!empty($settings['modules']['crm'])) {
@@ -14553,6 +14554,21 @@ function execute_automation_run($settings, $source = 'manual')
         $summary['seo']['regression_run_id'] = (string) ($watch['run']['run_id'] ?? '');
     }
 
+    $launchSnapshot = launch_operations_snapshot(10, 30);
+    $launchRecord = launch_operations_record_snapshot($launchSnapshot, 'automation_' . (string) $source);
+    $launchIssues = launch_operations_issues_summary(10, 30);
+    $launchSummary = isset($launchSnapshot['summary']) && is_array($launchSnapshot['summary']) ? $launchSnapshot['summary'] : [];
+    $launchIssueSummary = isset($launchIssues['summary']) && is_array($launchIssues['summary']) ? $launchIssues['summary'] : [];
+    $summary['launch'] = [
+        'launch_state' => (string) ($launchSummary['launch_state'] ?? 'review_required'),
+        'release_gate_allowed' => (int) ($launchSummary['release_gate_allowed'] ?? 0),
+        'blocked_modules' => (int) ($launchSummary['blocked_modules'] ?? 0),
+        'review_modules' => (int) ($launchSummary['review_modules'] ?? 0),
+        'open_incidents' => (int) ($launchSummary['open_incidents'] ?? 0),
+        'issue_count' => (int) ($launchIssueSummary['issue_count'] ?? 0),
+        'snapshot_id' => (string) ($launchRecord['snapshot_id'] ?? ''),
+    ];
+
     $runs = app_read_json_file(automation_runs_path(), []);
     array_unshift($runs, $summary);
     $runs = array_slice($runs, 0, 200);
@@ -14671,7 +14687,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.46-launch-operations-latest-compare',
+        'phase' => '5.47-launch-operations-automation-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',

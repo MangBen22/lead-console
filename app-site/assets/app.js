@@ -6639,6 +6639,11 @@
       }
       await loadAutomationSettings();
       await loadStatus();
+      await loadLaunchOperationsHistory();
+      await loadLaunchOperationsHistorySummary();
+      await loadLaunchOperationsLatestCompare();
+      await loadLaunchOperationsIssuesSummary();
+      await loadLaunchOperationsSnapshot();
     });
   }
 
@@ -6671,6 +6676,11 @@
       await loadWatchdogsIncidentSummary();
       await loadCutoverSignoffIntegrityRuns();
       await loadStatus();
+      await loadLaunchOperationsHistory();
+      await loadLaunchOperationsHistorySummary();
+      await loadLaunchOperationsLatestCompare();
+      await loadLaunchOperationsIssuesSummary();
+      await loadLaunchOperationsSnapshot();
     });
   }
 
