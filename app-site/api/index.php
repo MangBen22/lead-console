@@ -5932,6 +5932,118 @@ function deployment_release_decision_snapshot($freshnessMinutes = null)
     ];
 }
 
+function deployment_release_decision_history_path()
+{
+    return app_storage_path('deployment_release_decision_history.json');
+}
+
+function deployment_release_decision_history_apply_filters($rows, $query = [])
+{
+    $items = array_values(array_filter(is_array($rows) ? $rows : [], static function ($row) {
+        return is_array($row);
+    }));
+    $decision = strtolower(trim((string) ($query['decision'] ?? '')));
+    $launchState = strtolower(trim((string) ($query['launch_state'] ?? '')));
+    $search = strtolower(trim((string) ($query['search'] ?? '')));
+
+    return array_values(array_filter($items, static function ($row) use ($decision, $launchState, $search) {
+        $rowDecision = strtolower((string) ($row['decision'] ?? ''));
+        $summary = isset($row['summary']) && is_array($row['summary']) ? $row['summary'] : [];
+        $rowLaunchState = strtolower((string) ($summary['launch_state'] ?? ''));
+        if ($decision !== '' && $rowDecision !== $decision) {
+            return false;
+        }
+        if ($launchState !== '' && $rowLaunchState !== $launchState) {
+            return false;
+        }
+        if ($search !== '') {
+            $haystack = strtolower(implode(' ', array_filter([
+                (string) ($row['snapshot_id'] ?? ''),
+                (string) ($row['created_at'] ?? ''),
+                (string) ($row['source'] ?? ''),
+                (string) ($row['decision'] ?? ''),
+                (string) ($summary['latest_candidate_id'] ?? ''),
+                (string) ($summary['launch_state'] ?? ''),
+                (string) ($summary['readiness_status'] ?? ''),
+            ])));
+            if (strpos($haystack, $search) === false) {
+                return false;
+            }
+        }
+        return true;
+    }));
+}
+
+function deployment_release_decision_record_snapshot($snapshot, $source = 'manual_view')
+{
+    $payload = is_array($snapshot) ? $snapshot : [];
+    $entry = [
+        'snapshot_id' => 'release_decision_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
+        'created_at' => gmdate('c'),
+        'source' => (string) $source,
+        'decision' => (string) ($payload['decision'] ?? 'review'),
+        'snapshot' => $payload,
+        'summary' => isset($payload['summary']) && is_array($payload['summary']) ? $payload['summary'] : [],
+    ];
+    $rows = app_read_json_file(deployment_release_decision_history_path(), []);
+    array_unshift($rows, $entry);
+    $rows = array_slice(array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    })), 0, 200);
+    app_write_json_file(deployment_release_decision_history_path(), $rows);
+    return $entry;
+}
+
+function deployment_release_decision_history_snapshot($limit = 10)
+{
+    return deployment_release_decision_history_list_snapshot([
+        'page' => 1,
+        'limit' => $limit,
+    ]);
+}
+
+function deployment_release_decision_history_list_snapshot($query = [])
+{
+    $page = max(1, (int) ($query['page'] ?? 1));
+    $limit = max(1, min(100, (int) ($query['limit'] ?? 10)));
+    $rows = app_read_json_file(deployment_release_decision_history_path(), []);
+    $rows = array_values(array_filter($rows, static function ($row) {
+        return is_array($row);
+    }));
+    $filtered = deployment_release_decision_history_apply_filters($rows, $query);
+    $offset = ($page - 1) * $limit;
+
+    return [
+        'summary' => [
+            'total_count' => count($rows),
+            'filtered_count' => count($filtered),
+            'page' => $page,
+            'limit' => $limit,
+            'filters' => [
+                'decision' => (string) ($query['decision'] ?? ''),
+                'launch_state' => (string) ($query['launch_state'] ?? ''),
+                'search' => (string) ($query['search'] ?? ''),
+            ],
+        ],
+        'items' => array_slice($filtered, $offset, $limit),
+    ];
+}
+
+function deployment_release_decision_history_detail_snapshot($snapshotId = '')
+{
+    $target = trim((string) $snapshotId);
+    $rows = app_read_json_file(deployment_release_decision_history_path(), []);
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if ((string) ($row['snapshot_id'] ?? '') === $target) {
+            return $row;
+        }
+    }
+    return null;
+}
+
 function deployment_pipeline_runs_path()
 {
     return app_storage_path('deployment_pipeline_runs.json');
@@ -9284,7 +9396,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.69-release-decision-export',
+        'phase' => '5.70-release-decision-history',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -15152,7 +15264,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.69-release-decision-export',
+        'phase' => '5.70-release-decision-history',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -16273,9 +16385,11 @@ if ($action === 'deployment.release.candidate') {
 if ($action === 'deployment.release.decision') {
     $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
     $decision = deployment_release_decision_snapshot($freshness);
+    $history = deployment_release_decision_record_snapshot($decision, isset($_GET['source']) ? (string) $_GET['source'] : 'manual_view');
     out_json([
         'ok' => true,
         'decision' => $decision,
+        'history' => $history,
         'time' => gmdate('c'),
     ], ((string) ($decision['decision'] ?? 'review') === 'hold') ? 409 : 200);
 }
@@ -16283,17 +16397,52 @@ if ($action === 'deployment.release.decision') {
 if ($action === 'deployment.release.decision.export') {
     $freshness = isset($_GET['freshness_minutes']) ? (int) $_GET['freshness_minutes'] : null;
     $decision = deployment_release_decision_snapshot($freshness);
+    $history = deployment_release_decision_record_snapshot($decision, 'manual_export');
     audit_event('deployment', 'release.decision.export', [
         'decision' => (string) ($decision['decision'] ?? 'review'),
         'latest_candidate_id' => (string) ($decision['summary']['latest_candidate_id'] ?? ''),
         'launch_state' => (string) ($decision['summary']['launch_state'] ?? ''),
+        'snapshot_id' => (string) ($history['snapshot_id'] ?? ''),
     ]);
     out_json([
         'ok' => true,
         'filename' => 'release_decision_' . gmdate('Ymd_His') . '.json',
         'export' => $decision,
+        'history' => $history,
         'time' => gmdate('c'),
     ], ((string) ($decision['decision'] ?? 'review') === 'hold') ? 409 : 200);
+}
+
+if ($action === 'deployment.release.decision.history') {
+    $history = deployment_release_decision_history_list_snapshot([
+        'page' => isset($_GET['page']) ? (int) $_GET['page'] : 1,
+        'limit' => isset($_GET['limit']) ? (int) $_GET['limit'] : 20,
+        'decision' => isset($_GET['decision']) ? (string) $_GET['decision'] : '',
+        'launch_state' => isset($_GET['launch_state']) ? (string) $_GET['launch_state'] : '',
+        'search' => isset($_GET['search']) ? (string) $_GET['search'] : '',
+    ]);
+    out_json([
+        'ok' => true,
+        'summary' => $history['summary'],
+        'items' => $history['items'],
+        'time' => gmdate('c'),
+    ]);
+}
+
+if ($action === 'deployment.release.decision.history.detail') {
+    $snapshotId = isset($_GET['snapshot_id']) ? (string) $_GET['snapshot_id'] : '';
+    $detail = deployment_release_decision_history_detail_snapshot($snapshotId);
+    if (!is_array($detail)) {
+        out_json([
+            'ok' => false,
+            'error' => 'Release decision history item not found.',
+        ], 404);
+    }
+    out_json([
+        'ok' => true,
+        'item' => $detail,
+        'time' => gmdate('c'),
+    ]);
 }
 
 if ($action === 'deployment.artifact.manifest') {

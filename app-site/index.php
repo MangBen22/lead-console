@@ -2349,6 +2349,49 @@ $csrfToken = (string) $_SESSION['app_csrf_token'];
                 </div>
                 <pre id="releaseCandidateView">No release candidate yet.</pre>
                 <pre id="releaseDecisionView">Loading...</pre>
+                <h3>Release Decision History</h3>
+                <form id="releaseDecisionHistoryFilterForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="releaseDecisionHistoryDecisionFilter">Decision</label>
+                        <select id="releaseDecisionHistoryDecisionFilter">
+                            <option value="">any</option>
+                            <option value="launch">launch</option>
+                            <option value="review">review</option>
+                            <option value="hold">hold</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseDecisionHistoryLaunchStateFilter">Launch State</label>
+                        <select id="releaseDecisionHistoryLaunchStateFilter">
+                            <option value="">any</option>
+                            <option value="ready">ready</option>
+                            <option value="review_required">review_required</option>
+                            <option value="blocked">blocked</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseDecisionHistorySearch">Decision Search</label>
+                        <input id="releaseDecisionHistorySearch" type="text" placeholder="decision, candidate, or source">
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseDecisionHistoryPage">Decision Page</label>
+                        <input id="releaseDecisionHistoryPage" type="number" min="1" value="1">
+                    </div>
+                    <div class="form-row">
+                        <label for="releaseDecisionHistoryLimit">Decision Limit</label>
+                        <input id="releaseDecisionHistoryLimit" type="number" min="1" max="100" value="20">
+                    </div>
+                    <button id="refreshReleaseDecisionHistoryBtn" type="button">Refresh Release Decision History</button>
+                </form>
+                <pre id="releaseDecisionHistoryView">Loading...</pre>
+                <form id="releaseDecisionHistoryDetailForm" class="inline-form">
+                    <div class="form-row">
+                        <label for="releaseDecisionHistoryDetailId">Decision Snapshot ID</label>
+                        <input id="releaseDecisionHistoryDetailId" type="text" placeholder="release_decision_YYYYMMDD_HHMMSS_xxxxxx">
+                    </div>
+                    <button id="loadReleaseDecisionHistoryDetailBtn" type="button">Load Release Decision Detail</button>
+                </form>
+                <pre id="releaseDecisionHistoryDetailView">No release decision history detail loaded.</pre>
                 <h3>Artifact Manifest</h3>
                 <pre id="artifactManifestView">No artifact manifest yet.</pre>
                 <h3>Verify Uploaded Artifacts</h3>
