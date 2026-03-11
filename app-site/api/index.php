@@ -8883,7 +8883,7 @@ function deployment_cutover_evidence_bundle_snapshot($note = '')
     return [
         'bundle_id' => 'cutover_evidence_' . gmdate('Ymd_His') . '_' . substr(sha1((string) mt_rand()), 0, 6),
         'generated_at' => gmdate('c'),
-        'phase' => '5.48-launch-operations-automation-alerts',
+        'phase' => '5.49-launch-operations-latest-compare-export',
         'note' => trim((string) $note),
         'summary' => [
             'readiness_status' => (string) ($readiness['status'] ?? 'review_required'),
@@ -14751,7 +14751,7 @@ if ($action === 'status') {
     out_json([
         'ok' => true,
         'service' => '5N2 App API',
-        'phase' => '5.48-launch-operations-automation-alerts',
+        'phase' => '5.49-launch-operations-latest-compare-export',
         'modules' => [
             'leads' => 'active',
             'crm_email' => 'bootstrap',
@@ -18201,6 +18201,20 @@ if ($action === 'launch.operations.latest_compare') {
         'latest' => $compare['latest'],
         'previous' => $compare['previous'],
         'changes' => $compare['changes'],
+    ]);
+}
+
+if ($action === 'launch.operations.latest_compare_export') {
+    $compare = launch_operations_latest_compare();
+    audit_event('launch', 'operations.latest_compare.export', [
+        'has_latest' => (int) ($compare['summary']['has_latest'] ?? 0),
+        'has_previous' => (int) ($compare['summary']['has_previous'] ?? 0),
+        'latest_launch_state' => (string) ($compare['summary']['latest_launch_state'] ?? ''),
+    ]);
+    out_json([
+        'ok' => true,
+        'filename' => 'launch_operations_latest_compare_' . gmdate('Ymd_His') . '.json',
+        'export' => $compare,
     ]);
 }
 

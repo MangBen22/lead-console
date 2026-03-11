@@ -521,6 +521,7 @@
   const seoOperationsIssuesSummaryView = document.getElementById("seoOperationsIssuesSummaryView");
   const refreshLaunchOperationsSnapshotBtn = document.getElementById("refreshLaunchOperationsSnapshotBtn");
   const downloadLaunchOperationsSnapshotBtn = document.getElementById("downloadLaunchOperationsSnapshotBtn");
+  const downloadLaunchOperationsCompareBtn = document.getElementById("downloadLaunchOperationsCompareBtn");
   const launchOperationsSnapshotView = document.getElementById("launchOperationsSnapshotView");
   const launchOperationsHistoryView = document.getElementById("launchOperationsHistoryView");
   const launchOperationsHistorySummaryView = document.getElementById("launchOperationsHistorySummaryView");
@@ -5033,6 +5034,15 @@
     }
   }
 
+  async function downloadLaunchOperationsLatestCompare() {
+    const data = await apiGet("launch.operations.latest_compare_export");
+    const filename = data && data.filename ? String(data.filename) : ("launch-operations-latest-compare-" + Date.now() + ".json");
+    downloadJsonFile(filename, data.export || data);
+    if (launchOperationsLatestCompareView) {
+      launchOperationsLatestCompareView.textContent = JSON.stringify(data, null, 2);
+    }
+  }
+
   async function loadLaunchOperationsIssuesSummary() {
     if (!launchOperationsIssuesSummaryView) return;
     const limit = document.getElementById("launchOperationsSnapshotLimit");
@@ -8044,6 +8054,12 @@
   if (downloadLaunchOperationsSnapshotBtn) {
     downloadLaunchOperationsSnapshotBtn.addEventListener("click", async function () {
       await downloadLaunchOperationsSnapshot();
+    });
+  }
+
+  if (downloadLaunchOperationsCompareBtn) {
+    downloadLaunchOperationsCompareBtn.addEventListener("click", async function () {
+      await downloadLaunchOperationsLatestCompare();
     });
   }
 
